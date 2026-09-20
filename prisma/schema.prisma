@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model GuildConfig {
+  guildId           String   @id
+  guildName         String?
+  prefix            String   @default("!")
+  recruitmentEnabled Boolean @default(true)
+  eventsEnabled     Boolean  @default(true)
+  loggingEnabled    Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+}
+
+model RolePermission {
+  id               String   @id @default(cuid())
+  guildId          String
+  roleId           String
+  roleName         String?
+  // Bitwise / individual permission flags
+  manageSettings   Boolean  @default(false)
+  manageRecruiting Boolean  @default(false)
+  manageEvents     Boolean  @default(false)
+  viewLogs         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([guildId, roleId])
+}
+
+model RecruitmentConfig {
+  guildId            String   @id
+  channelId          String?  // Channel where "Apply" button is posted
+  messageId          String?  // ID of the bot announcement message with the button
+  categoryId         String?  // Category where private ticket channels are created
+  logChannelId       String?  // Channel where transcripts are stored
+  memberRoleId       String?  // Role granted upon approval
+  recruiterRoleIds   String   @default("[]") // JSON array of role IDs allowed to review
+  // Questions configuration stored as JSON array:
+  // [{ id: 'q1', label: 'Имя и Фамилия', placeholder: 'John Doe', required: true, style: 'SHORT' }, ...]
+  questionsJson      String   @default("[]")
+  welcomeMessage     String   @default("Добро пожаловать в заявку! Ожидайте ответа рекрутера.")
+  rejectionMessage   String   @default("К сожалению, вы не прошли собеседование.")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model RecruitmentApplication {
+  id               String   @id @default(cuid())
+  guildId          String
+  userId           String
+  userTag          String?
+  channelId        String?  // Private ticket channel ID
+  status           String   @default("PENDING") // PENDING, UNDER_REVIEW, ACCEPTED, REJECTED
+  recruiterId      String?
+  recruiterTag     String?
+  rejectionReason  String?
+  answersJson      String   @default("{}") // Key-value answers
+  transcriptUrl    String?  // Log link or message ID
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  closedAt         DateTime?
+}
+
+model EventGathering {
+  id                String   @id @default(cuid())
+  guildId           String
+  title             String
+  description       String?
+  type              String   // UNLIMITED, LIMITED
+  checkInTime       DateTime // Время проверки явки
+  eventTime         DateTime // Время начала мероприятия
+  partyCode         String?  // Код группы
+  voiceChannelId    String?  // Голосовой канал для сбора
+  channelId         String?  // Канал, где висит анонс
+  messageId         String?  // Сообщение анонса
+  targetRoleId      String?  // Роль для пинга
+  participantLimit  Int?     // Лимит участников для LIMITED
+  status            String   @default("ACTIVE") // ACTIVE, FINISHED, CANCELLED
+  pingIntervalsJson String   @default("[5, 3, 1]") // Минуты до начала для пингов
+  lastPingSentAt    DateTime?
+  createdById       String
+  createdByTag      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  participants      EventParticipant[]
+}
+
+model EventParticipant {
+  id           String         @id @default(cuid())
+  eventId      String
+  userId       String
+  userTag      String?
+  status       String         @default("CONFIRMED") // CONFIRMED, RESERVE
+  joinedAt     DateTime       @default(now())
+
+  event        EventGathering @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+}
+
+model LoggingConfig {
+  guildId              String   @id
+  categoryId           String?  // Category named "LOGS"
+  messageLogsChannelId String?  // #msg-logs
+  memberLogsChannelId  String?  // #member-logs
+  roleLogsChannelId    String?  // #role-logs
+  channelLogsChannelId String?  // #channel-logs
+  voiceLogsChannelId   String?  // #voice-logs
+  inviteLogsChannelId  String?  // #invite-logs
+  botLogsChannelId     String?  // #bot-actions-logs
+  // Toggles for individual log types (stored as JSON array or boolean flags)
+  enabledLogTypesJson  String   @default("[\"MESSAGES\",\"MEMBERS\",\"ROLES\",\"CHANNELS\",\"VOICE\",\"INVITES\",\"BOT\"]")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
