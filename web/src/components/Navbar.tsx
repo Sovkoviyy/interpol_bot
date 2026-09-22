@@ -23,16 +23,16 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
     : null;
 
   return (
-    <header className="h-16 bg-[#151921]/80 backdrop-blur border-b border-[#1E232F] px-8 flex items-center justify-between sticky top-0 z-30">
+    <header className="h-16 bg-[#0B0E14]/80 backdrop-blur-md border-b border-[#1E232F] px-8 flex items-center justify-between sticky top-0 z-30">
       <div>
         <h2 className="text-sm font-semibold text-slate-200">
-          Панель управления семьи <span className="text-indigo-400">#Majestic RP</span>
+          Панель управления семьи <span className="text-pink-400 font-bold">#Majestic RP</span>
         </h2>
       </div>
 
       <div className="flex items-center gap-4">
         {user?.permissions?.isAdmin && (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-pink-500/10 text-pink-400 border border-pink-500/20">
             <ShieldAlert className="w-3.5 h-3.5" />
             Администратор
           </span>
@@ -40,9 +40,9 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
 
         <div className="flex items-center gap-3 pl-3 border-l border-[#1E232F]">
           {avatarUrl ? (
-            <img src={avatarUrl} alt="Avatar" className="w-8 h-8 rounded-full border border-[#1E232F]" />
+            <img src={avatarUrl} alt="Avatar" className="w-8 h-8 rounded-full border border-pink-500/30" />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-indigo-600/30 text-indigo-400 flex items-center justify-center font-bold text-xs">
+            <div className="w-8 h-8 rounded-full bg-pink-600/20 text-pink-400 border border-pink-500/30 flex items-center justify-center font-bold text-xs">
               <User className="w-4 h-4" />
             </div>
           )}

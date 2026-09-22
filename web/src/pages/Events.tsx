@@ -13,8 +13,10 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import api from '../api/client';
+import { useModal } from '../context/ModalContext';
 
 export const Events: React.FC = () => {
+  const modal = useModal();
   const [events, setEvents] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
@@ -111,33 +113,63 @@ export const Events: React.FC = () => {
     try {
       setCreating(true);
       await api.post('/events', form);
-      alert('Сбор на мероприятие успешно создан и опубликован в Discord!');
+      modal.alert({
+        title: 'Успешно!',
+        message: 'Сбор на мероприятие успешно создан и опубликован в Discord!',
+        type: 'success',
+      });
       setModalOpen(false);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Ошибка при создании сбора');
+      modal.alert({
+        title: 'Ошибка создания',
+        message: err.response?.data?.error || 'Ошибка при создании сбора',
+        type: 'error',
+      });
     } finally {
       setCreating(false);
     }
   };
 
   const handleKickParticipant = async (eventId: string, userId: string, tag: string) => {
-    if (!confirm(`Исключить участника ${tag} из состава? (Если есть резерв, он автоматически займет его место)`)) return;
+    const confirmed = await modal.confirm({
+      title: 'Исключение из состава',
+      message: `Исключить участника ${tag} из состава?\nЕсли в резерве есть люди, первый из них автоматически перейдет в основу.`,
+      confirmText: 'Исключить',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
     try {
       await api.post(`/events/${eventId}/participants/${userId}/kick`);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Ошибка');
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось исключить участника',
+        type: 'error',
+      });
     }
   };
 
   const handleFinishEvent = async (eventId: string) => {
-    if (!confirm('Завершить сбор на это мероприятие?')) return;
+    const confirmed = await modal.confirm({
+      title: 'Завершение сбора',
+      message: 'Завершить сбор на это мероприятие? Сообщение в Discord обновится и удалится через 30 минут.',
+      confirmText: 'Завершить сбор',
+      type: 'pink',
+    });
+    if (!confirmed) return;
+
     try {
       await api.post(`/events/${eventId}/status`, { status: 'FINISHED' });
       fetchData();
-    } catch (err) {
-      alert('Ошибка');
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось завершить мероприятие',
+        type: 'error',
+      });
     }
   };
 
@@ -158,7 +190,7 @@ export const Events: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
-            <CalendarDays className="w-6 h-6 text-emerald-400" />
+            <CalendarDays className="w-6 h-6 text-pink-500" />
             Сборы на мероприятия
           </h1>
           <p className="text-xs text-slate-400 mt-1">
@@ -167,14 +199,14 @@ export const Events: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex bg-[#151921] p-1 rounded-xl border border-[#1E232F]">
+          <div className="flex bg-[#0B0E14] p-1 rounded-xl border border-[#1E232F]">
             {['ACTIVE', 'FINISHED', 'ALL'].map((st) => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                   statusFilter === st
-                    ? 'bg-emerald-600 text-white shadow-lg'
+                    ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -187,7 +219,7 @@ export const Events: React.FC = () => {
 
           <button
             onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition-all"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-semibold shadow-lg shadow-pink-600/25 transition-all"
           >
             <Plus className="w-4 h-4" />
             Объявить сбор
@@ -233,7 +265,7 @@ export const Events: React.FC = () => {
                         Организатор: @{ev.createdByTag || 'Организатор'}
                       </span>
                       <span className="text-slate-600">•</span>
-                      <span className="text-xs text-indigo-400 font-medium bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                      <span className="text-xs text-pink-400 font-medium bg-pink-500/10 px-2 py-0.5 rounded-md border border-pink-500/20">
                         🔔 {getMentionLabel(ev.targetRoleId)}
                       </span>
                     </div>
@@ -247,7 +279,7 @@ export const Events: React.FC = () => {
                   {/* Metadata cards */}
                   <div className="grid grid-cols-2 gap-2 text-xs mb-4">
                     <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                      <Clock className="w-4 h-4 text-pink-400 flex-shrink-0" />
                       <div>
                         <p className="text-[10px] text-slate-500 uppercase font-semibold">Чек-ин явки</p>
                         <p className="text-slate-200 font-medium">
@@ -257,7 +289,7 @@ export const Events: React.FC = () => {
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <Clock className="w-4 h-4 text-rose-400 flex-shrink-0" />
                       <div>
                         <p className="text-[10px] text-slate-500 uppercase font-semibold">Старт МП</p>
                         <p className="text-slate-200 font-medium">
@@ -292,7 +324,7 @@ export const Events: React.FC = () => {
                       <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F]">
                         <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
                           <span className="flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5 text-indigo-400" />
+                            <Users className="w-3.5 h-3.5 text-pink-400" />
                             Основной состав ({confirmed.length}/{ev.participantLimit})
                           </span>
                         </div>
@@ -381,7 +413,7 @@ export const Events: React.FC = () => {
           <div className="w-full max-w-lg bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4 my-8">
             <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-emerald-400" />
+                <CalendarDays className="w-5 h-5 text-pink-500" />
                 Создать сбор на мероприятие
               </h3>
               <button
@@ -441,21 +473,21 @@ export const Events: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setQuickDate(0)}
-                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-emerald-600/30 hover:border-emerald-500/50 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white font-medium transition-all"
+                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
                     >
                       Сегодня
                     </button>
                     <button
                       type="button"
                       onClick={() => setQuickDate(1)}
-                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-emerald-600/30 hover:border-emerald-500/50 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white font-medium transition-all"
+                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
                     >
                       Завтра
                     </button>
                     <button
                       type="button"
                       onClick={() => setQuickDate(2)}
-                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-emerald-600/30 hover:border-emerald-500/50 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white font-medium transition-all"
+                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
                     >
                       Послезавтра
                     </button>
@@ -580,7 +612,7 @@ export const Events: React.FC = () => {
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold shadow-lg shadow-pink-600/25 disabled:opacity-50 transition-all"
                 >
                   {creating ? 'Публикация...' : 'Опубликовать сбор'}
                 </button>

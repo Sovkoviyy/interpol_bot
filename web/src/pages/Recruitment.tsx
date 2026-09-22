@@ -13,8 +13,10 @@ import {
   Eye
 } from 'lucide-react';
 import api from '../api/client';
+import { useModal } from '../context/ModalContext';
 
 export const Recruitment: React.FC = () => {
+  const modal = useModal();
   const [tab, setTab] = useState<'applications' | 'settings'>('applications');
   const [config, setConfig] = useState<any>(null);
   const [applications, setApplications] = useState<any[]>([]);
@@ -53,9 +55,17 @@ export const Recruitment: React.FC = () => {
     try {
       setSaving(true);
       await api.post('/recruitment/config', config);
-      alert('Настройки рекрутинга успешно сохранены!');
+      modal.alert({
+        title: 'Успешно',
+        message: 'Настройки рекрутинга успешно сохранены!',
+        type: 'success',
+      });
     } catch (err) {
-      alert('Ошибка при сохранении настроек');
+      modal.alert({
+        title: 'Ошибка',
+        message: 'Ошибка при сохранении настроек',
+        type: 'error',
+      });
     } finally {
       setSaving(false);
     }
@@ -63,17 +73,35 @@ export const Recruitment: React.FC = () => {
 
   const handlePostPanel = async () => {
     if (!config?.channelId) {
-      alert('Сначала выберите канал для публикации формы и сохраните настройки!');
+      modal.alert({
+        title: 'Внимание',
+        message: 'Сначала выберите канал для публикации формы и сохраните настройки!',
+        type: 'info',
+      });
       return;
     }
-    if (!confirm('Опубликовать сообщение с кнопкой «Подать заявку» в Discord?')) return;
+    const confirmed = await modal.confirm({
+      title: 'Публикация анкеты',
+      message: 'Опубликовать сообщение с кнопкой «Подать заявку» в Discord?',
+      confirmText: 'Опубликовать',
+      type: 'pink',
+    });
+    if (!confirmed) return;
 
     try {
       setSaving(true);
       await api.post('/recruitment/post-panel');
-      alert('Объявление о наборе успешно опубликовано в канале Discord!');
+      modal.alert({
+        title: 'Успешно',
+        message: 'Объявление о наборе успешно опубликовано в канале Discord!',
+        type: 'success',
+      });
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Ошибка публикации');
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Ошибка публикации',
+        type: 'error',
+      });
     } finally {
       setSaving(false);
     }
@@ -82,7 +110,11 @@ export const Recruitment: React.FC = () => {
   const handleAddQuestion = () => {
     if (!config.questions) config.questions = [];
     if (config.questions.length >= 5) {
-      alert('В Discord можно добавить максимум 5 полей в модальное окно!');
+      modal.alert({
+        title: 'Лимит полей',
+        message: 'В Discord можно добавить максимум 5 полей в модальное окно!',
+        type: 'info',
+      });
       return;
     }
     const newQ = {
@@ -111,7 +143,7 @@ export const Recruitment: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
-            <UserPlus className="w-6 h-6 text-indigo-400" />
+            <UserPlus className="w-6 h-6 text-pink-500" />
             Заявки в семью
           </h1>
           <p className="text-xs text-slate-400 mt-1">
@@ -120,12 +152,12 @@ export const Recruitment: React.FC = () => {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex bg-[#151921] p-1 rounded-xl border border-[#1E232F]">
+        <div className="flex bg-[#0B0E14] p-1 rounded-xl border border-[#1E232F]">
           <button
             onClick={() => setTab('applications')}
             className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
               tab === 'applications'
-                ? 'bg-indigo-600 text-white shadow-lg'
+                ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -135,7 +167,7 @@ export const Recruitment: React.FC = () => {
             onClick={() => setTab('settings')}
             className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
               tab === 'settings'
-                ? 'bg-indigo-600 text-white shadow-lg'
+                ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -155,7 +187,7 @@ export const Recruitment: React.FC = () => {
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                   statusFilter === st
-                    ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40'
+                    ? 'bg-pink-600/20 text-pink-300 border-pink-500/40'
                     : 'bg-[#151921] text-slate-400 border-[#1E232F] hover:text-white'
                 }`}
               >
@@ -226,7 +258,7 @@ export const Recruitment: React.FC = () => {
                         <td className="px-6 py-4 text-right">
                           <button
                             onClick={() => setSelectedApp(app)}
-                            className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-[#2A303F] text-indigo-400 hover:text-indigo-300 transition-colors inline-flex items-center gap-1 text-xs px-2.5"
+                            className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-pink-600/20 text-pink-400 hover:text-pink-300 transition-colors inline-flex items-center gap-1 text-xs px-2.5 border border-transparent hover:border-pink-500/30"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>Анкета</span>
@@ -249,7 +281,7 @@ export const Recruitment: React.FC = () => {
               <button
                 onClick={handleSaveConfig}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs transition-all shadow-lg shadow-pink-600/25 disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
                 <span>Сохранить настройки</span>
@@ -258,9 +290,9 @@ export const Recruitment: React.FC = () => {
               <button
                 onClick={handlePostPanel}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#2A303F] text-slate-200 font-semibold text-xs border border-slate-700/50 transition-all"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#2A303F] text-slate-200 font-semibold text-xs border border-slate-700/50 transition-all hover:border-pink-500/40"
               >
-                <Send className="w-4 h-4 text-indigo-400" />
+                <Send className="w-4 h-4 text-pink-400" />
                 <span>Опубликовать анкету в Discord</span>
               </button>
             </div>
@@ -269,7 +301,7 @@ export const Recruitment: React.FC = () => {
           {/* Channels & Roles Configuration */}
           <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 space-y-4">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Settings2 className="w-4 h-4 text-indigo-400" />
+              <Settings2 className="w-4 h-4 text-pink-500" />
               Привязка ролей и каналов
             </h2>
 
@@ -279,7 +311,7 @@ export const Recruitment: React.FC = () => {
                 <select
                   value={config?.channelId || ''}
                   onChange={(e) => setConfig({ ...config, channelId: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
                 >
                   <option value="">Выберите канал...</option>
                   {textChannels.map((c) => (
@@ -293,7 +325,7 @@ export const Recruitment: React.FC = () => {
                 <select
                   value={config?.categoryId || ''}
                   onChange={(e) => setConfig({ ...config, categoryId: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
                 >
                   <option value="">Выберите категорию...</option>
                   {categories.map((c) => (
@@ -307,7 +339,7 @@ export const Recruitment: React.FC = () => {
                 <select
                   value={config?.logChannelId || ''}
                   onChange={(e) => setConfig({ ...config, logChannelId: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
                 >
                   <option value="">Выберите канал транскриптов...</option>
                   {textChannels.map((c) => (
@@ -321,7 +353,7 @@ export const Recruitment: React.FC = () => {
                 <select
                   value={config?.memberRoleId || ''}
                   onChange={(e) => setConfig({ ...config, memberRoleId: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
                 >
                   <option value="">Выберите роль...</option>
                   {roles.map((r) => (
@@ -350,7 +382,7 @@ export const Recruitment: React.FC = () => {
                       }}
                       className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
                         isSelected
-                          ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
+                          ? 'bg-pink-600/20 text-pink-300 border-pink-500/50'
                           : 'bg-[#151921] text-slate-400 border-[#1E232F] hover:text-white'
                       }`}
                     >
@@ -367,7 +399,7 @@ export const Recruitment: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-400" />
+                  <FileText className="w-4 h-4 text-pink-500" />
                   Конструктор вопросов формы (максимум 5 полей в Discord)
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -379,7 +411,7 @@ export const Recruitment: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleAddQuestion}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold hover:bg-indigo-600/30 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-600/20 text-pink-300 border border-pink-500/30 text-xs font-semibold hover:bg-pink-600/30 transition-all"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Добавить вопрос</span>
@@ -446,7 +478,7 @@ export const Recruitment: React.FC = () => {
                             updated[idx].required = e.target.checked;
                             setConfig({ ...config, questions: updated });
                           }}
-                          className="rounded border-[#1E232F] text-indigo-600 focus:ring-0"
+                          className="rounded border-[#1E232F] text-pink-600 focus:ring-0"
                         />
                         <span>Обязательный</span>
                       </label>

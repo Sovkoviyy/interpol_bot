@@ -280,6 +280,25 @@ export class RecruitmentService {
       components: [buttonsRow],
     });
 
+    // Send custom candidate greeting/instructions from BotMessagesConfig if present
+    try {
+      const botMsgConfig = await prisma.botMessagesConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
+      if (botMsgConfig && botMsgConfig.ticketGreetingDesc) {
+        const greetingTitle = botMsgConfig.ticketGreetingTitle || 'Заявка в семью INTERPOL';
+        const greetingDesc = botMsgConfig.ticketGreetingDesc
+          .replace(/{user}/g, `<@${interaction.user.id}>`)
+          .replace(/{guild}/g, guild.name);
+        
+        const greetingEmbed = new EmbedBuilder()
+          .setColor(0xEC4899)
+          .setTitle(`🌸 ${greetingTitle}`)
+          .setDescription(greetingDesc);
+        await ticketChannel.send({ embeds: [greetingEmbed] }).catch(() => null);
+      }
+    } catch (err) {
+      console.error('[Recruitment] Error sending ticket greeting:', err);
+    }
+
     await interaction.editReply({
       content: `✅ Ваша заявка успешно создана! Перейдите в канал: <#${ticketChannel.id}>`,
     });

@@ -129,7 +129,7 @@ export const Members: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
-            <Users className="w-6 h-6 text-indigo-400" />
+            <Users className="w-6 h-6 text-pink-500" />
             Состав и участники сервера
           </h1>
           <p className="text-xs text-slate-400 mt-1">
@@ -142,7 +142,7 @@ export const Members: React.FC = () => {
             Всего: <strong className="text-white">{members.length}</strong>
           </span>
           <span className="px-3 py-1.5 rounded-xl bg-[#151921] border border-[#1E232F] text-slate-300">
-            Найдено: <strong className="text-emerald-400">{filteredMembers.length}</strong>
+            Найдено: <strong className="text-pink-400">{filteredMembers.length}</strong>
           </span>
         </div>
       </div>
@@ -158,7 +158,7 @@ export const Members: React.FC = () => {
               placeholder="Поиск по нику, тегу, ID (155...) или коду ссылки..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-pink-500"
             />
           </div>
 
@@ -167,7 +167,7 @@ export const Members: React.FC = () => {
             <select
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200"
+              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-pink-500"
             >
               <option value="ALL">Все роли ({roles.length})</option>
               {roles.map((r) => (
@@ -183,7 +183,7 @@ export const Members: React.FC = () => {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200"
+              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-pink-500"
             >
               <option value="JOINED_DESC">Сначала новые на сервере</option>
               <option value="JOINED_ASC">Сначала старые на сервере</option>
@@ -206,7 +206,7 @@ export const Members: React.FC = () => {
               onClick={() => setTypeFilter(t.id as any)}
               className={`px-3 py-1 text-[11px] font-semibold rounded-lg transition-all ${
                 typeFilter === t.id
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
                   : 'bg-[#0B0E14] text-slate-400 hover:text-slate-200 border border-[#1E232F]'
               }`}
             >
@@ -220,7 +220,7 @@ export const Members: React.FC = () => {
       <div className="bg-[#151921] border border-[#1E232F] rounded-2xl overflow-hidden shadow-xl">
         {loading ? (
           <div className="flex items-center justify-center p-12 text-slate-400">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : filteredMembers.length === 0 ? (
           <div className="p-12 text-center text-slate-500 text-xs">

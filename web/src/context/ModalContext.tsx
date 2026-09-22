@@ -1,0 +1,233 @@
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import { AlertTriangle, CheckCircle2, XCircle, Info, Sparkles } from 'lucide-react';
+
+interface ConfirmOptions {
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  type?: 'danger' | 'pink';
+}
+
+interface AlertOptions {
+  title?: string;
+  message: string;
+  type?: 'success' | 'error' | 'info';
+  okText?: string;
+}
+
+interface ModalContextType {
+  confirm: (options: ConfirmOptions | string) => Promise<boolean>;
+  alert: (options: AlertOptions | string) => Promise<void>;
+}
+
+const ModalContext = createContext<ModalContextType | undefined>(undefined);
+
+export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Confirm state
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    options: ConfirmOptions;
+    resolve?: (value: boolean) => void;
+  }>({
+    isOpen: false,
+    options: { message: '' },
+  });
+
+  // Alert state
+  const [alertState, setAlertState] = useState<{
+    isOpen: boolean;
+    options: AlertOptions;
+    resolve?: () => void;
+  }>({
+    isOpen: false,
+    options: { message: '' },
+  });
+
+  const confirm = useCallback((input: ConfirmOptions | string): Promise<boolean> => {
+    const options: ConfirmOptions = typeof input === 'string' ? { message: input } : input;
+    return new Promise((resolve) => {
+      setConfirmState({
+        isOpen: true,
+        options: {
+          title: options.title || 'Подтверждение действия',
+          message: options.message,
+          confirmText: options.confirmText || 'Подтвердить',
+          cancelText: options.cancelText || 'Отмена',
+          type: options.type || 'pink',
+        },
+        resolve,
+      });
+    });
+  }, []);
+
+  const alert = useCallback((input: AlertOptions | string): Promise<void> => {
+    const options: AlertOptions = typeof input === 'string' ? { message: input } : input;
+    return new Promise((resolve) => {
+      setAlertState({
+        isOpen: true,
+        options: {
+          title: options.title || (options.type === 'error' ? 'Ошибка' : options.type === 'success' ? 'Успешно' : 'Уведомление'),
+          message: options.message,
+          type: options.type || 'info',
+          okText: options.okText || 'Понятно',
+        },
+        resolve,
+      });
+    });
+  }, []);
+
+  const handleConfirmClose = (result: boolean) => {
+    if (confirmState.resolve) {
+      confirmState.resolve(result);
+    }
+    setConfirmState(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleAlertClose = () => {
+    if (alertState.resolve) {
+      alertState.resolve();
+    }
+    setAlertState(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Keyboard handler for Escape & Enter
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (confirmState.isOpen) {
+        if (e.key === 'Escape') handleConfirmClose(false);
+        else if (e.key === 'Enter') handleConfirmClose(true);
+      } else if (alertState.isOpen) {
+        if (e.key === 'Escape' || e.key === 'Enter') handleAlertClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [confirmState.isOpen, alertState.isOpen]);
+
+  return (
+    <ModalContext.Provider value={{ confirm, alert }}>
+      {children}
+
+      {/* Confirmation Modal */}
+      {confirmState.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[#0B0E14] border border-pink-500/20 rounded-2xl p-6 shadow-2xl shadow-pink-950/40 relative overflow-hidden"
+          >
+            {/* Ambient Pink Glow Header */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-600 via-rose-500 to-fuchsia-600" />
+
+            <div className="flex items-start gap-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                confirmState.options.type === 'danger'
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  : 'bg-pink-500/10 text-pink-400 border border-pink-500/20'
+              }`}>
+                {confirmState.options.type === 'danger' ? (
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                ) : (
+                  <Sparkles className="w-5 h-5 text-pink-400" />
+                )}
+              </div>
+
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white mb-1.5">
+                  {confirmState.options.title}
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                  {confirmState.options.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-[#1E232F]">
+              <button
+                type="button"
+                onClick={() => handleConfirmClose(false)}
+                className="px-4 py-2 rounded-xl bg-[#151922] hover:bg-[#1E232F] text-slate-300 hover:text-white font-medium text-xs transition-colors"
+              >
+                {confirmState.options.cancelText}
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => handleConfirmClose(true)}
+                className={`px-5 py-2 rounded-xl text-white font-semibold text-xs shadow-lg transition-all ${
+                  confirmState.options.type === 'danger'
+                    ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-red-600/25'
+                    : 'bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 shadow-pink-600/25'
+                }`}
+              >
+                {confirmState.options.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alert / Notification Modal */}
+      {alertState.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[#0B0E14] border border-pink-500/20 rounded-2xl p-6 shadow-2xl shadow-pink-950/40 relative overflow-hidden"
+          >
+            <div className={`absolute top-0 left-0 right-0 h-1 ${
+              alertState.options.type === 'error'
+                ? 'bg-gradient-to-r from-red-600 to-rose-600'
+                : alertState.options.type === 'success'
+                ? 'bg-gradient-to-r from-pink-600 via-rose-500 to-fuchsia-600'
+                : 'bg-gradient-to-r from-pink-500 to-purple-600'
+            }`} />
+
+            <div className="flex items-start gap-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                alertState.options.type === 'error'
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  : alertState.options.type === 'success'
+                  ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20'
+                  : 'bg-slate-700/20 text-slate-300 border border-slate-700/30'
+              }`}>
+                {alertState.options.type === 'error' && <XCircle className="w-5 h-5 text-red-400" />}
+                {alertState.options.type === 'success' && <CheckCircle2 className="w-5 h-5 text-pink-400" />}
+                {alertState.options.type === 'info' && <Info className="w-5 h-5 text-indigo-400" />}
+              </div>
+
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white mb-1.5">
+                  {alertState.options.title}
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                  {alertState.options.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end pt-3 border-t border-[#1E232F]">
+              <button
+                type="button"
+                autoFocus
+                onClick={handleAlertClose}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-lg shadow-pink-600/25 transition-all"
+              >
+                {alertState.options.okText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </ModalContext.Provider>
+  );
+};
+
+export const useModal = (): ModalContextType => {
+  const context = useContext(ModalContext);
+  if (!context) {
+    throw new Error('useModal must be used within a ModalProvider');
+  }
+  return context;
+};
+
+export default ModalProvider;

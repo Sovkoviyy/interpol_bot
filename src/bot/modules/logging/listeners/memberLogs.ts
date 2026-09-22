@@ -4,9 +4,11 @@ import {
   PartialGuildMember, 
   AuditLogEvent, 
   EmbedBuilder, 
-  GuildBan 
+  GuildBan,
+  TextChannel,
 } from 'discord.js';
 import bot from '../../../client';
+import prisma from '../../../../database/client';
 import { AuditLogger } from '../auditLogger';
 import { RolePersistenceService } from '../../roles/rolePersistenceService';
 
@@ -18,6 +20,40 @@ export function registerMemberLogs() {
 
     // Track invite link used to join
     const inviteInfo = await import('./inviteLogs').then(m => m.trackMemberJoinInvite(member)).catch(() => null);
+
+    // Send customizable welcome message if enabled
+    try {
+      const msgConfig = await prisma.botMessagesConfig.findUnique({
+        where: { guildId: member.guild.id },
+      });
+      if (msgConfig && msgConfig.welcomeEnabled && msgConfig.welcomeChannelId) {
+        const welcomeChannel = member.guild.channels.cache.get(msgConfig.welcomeChannelId) as TextChannel | undefined;
+        if (welcomeChannel && welcomeChannel.isTextBased()) {
+          const rawColor = msgConfig.welcomeEmbedColor?.replace('#', '') || 'EC4899';
+          const colorInt = parseInt(rawColor, 16) || 0xEC4899;
+          const formattedTitle = (msgConfig.welcomeTitle || 'Добро пожаловать!')
+            .replace(/{user}/g, member.user.username)
+            .replace(/{guild}/g, member.guild.name)
+            .replace(/{memberCount}/g, String(member.guild.memberCount));
+          const formattedDesc = (msgConfig.welcomeMessage || '')
+            .replace(/{user}/g, `<@${member.id}>`)
+            .replace(/{guild}/g, member.guild.name)
+            .replace(/{memberCount}/g, String(member.guild.memberCount));
+
+          const welcomeEmbed = new EmbedBuilder()
+            .setColor(colorInt)
+            .setTitle(formattedTitle)
+            .setDescription(formattedDesc)
+            .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+            .setFooter({ text: `Участник #${member.guild.memberCount}` })
+            .setTimestamp();
+
+          await welcomeChannel.send({ embeds: [welcomeEmbed] }).catch(() => null);
+        }
+      }
+    } catch (err) {
+      console.error('[BotMessages] Error dispatching welcome message:', err);
+    }
 
     const embed = new EmbedBuilder()
       .setColor(0x57F287) // Green
@@ -48,19 +84,44 @@ export function registerMemberLogs() {
 
     const isKicked = !!kickExecutor;
 
-    const embed = new EmbedBuilder()
-      .setColor(isKicked ? 0xED4245 : 0x95A5A6)
-      .setTitle(isKicked ? '🥾 Участник был кикнут' : '📤 Участник покинул сервер')
+    // Send customizable leave message if enabled
+    try {
+      const msgConfig = await prisma.botMessagesConfig.findUnique({
+        where: { guildId: member.guild.id },
+      });
+      if (msgConfig && msgConfig.leaveEnabled && msgConfig.leaveChannelId) {
+        const leaveChannel = member.guild.channels.cache.get(msgConfig.leaveChannelId) as TextChannel | undefined;
+        if (leaveChannel && leaveChannel.isTextBased()) {
+          const userTag = member.user?.tag || member.id;
+          const formattedDesc = (msgConfig.leaveMessage || '{user} покинул наш сервер.')
+            .replace(/{user}/g, `**${userTag}**`)
+            .replace(/{guild}/g, member.guild.name)
+            .replace(/{memberCount}/g, String(member.guild.memberCount));
+
+          const leaveEmbed = new EmbedBuilder()
+            .setColor(0xED4245)
+            .setDescription(`🚪 ${formattedDesc}`)
+            .setTimestamp();
+
+          await leaveChannel.send({ embeds: [leaveEmbed] }).catch(() => null);
+        }
+      }
+    } catch (err) {
+      console.error('[BotMessages] Error dispatching leave message:', err);
+    }
+
+    const logEmbed = new EmbedBuilder()
+      .setColor(isKicked ? 0xED4245 : 0xE67E22)
+      .setTitle(isKicked ? '👢 Участник был исключен (Кик)' : '📤 Участник покинул сервер')
       .setDescription(
         `**Пользователь:** ${member.user?.tag || member.id} (\`${member.id}\`)\n` +
-        (isKicked ? `**Инициатор кика:** ${kickExecutor} (\`${kickExecutor.tag}\`)\n` : '') +
+        (isKicked ? `**Исключил:** ${kickExecutor} (\`${kickExecutor.tag}\`)\n` : '') +
         `**Всего участников:** ${member.guild.memberCount}\n` +
         `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
       )
-      .setThumbnail(member.user?.displayAvatarURL({ size: 256 }) || null)
       .setTimestamp();
 
-    await AuditLogger.sendLog(member.guild, 'MEMBERS', embed);
+    await AuditLogger.sendLog(member.guild, 'MEMBERS', logEmbed);
   });
 
   // Member Ban

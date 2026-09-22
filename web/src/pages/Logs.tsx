@@ -15,8 +15,10 @@ import {
   Swords
 } from 'lucide-react';
 import api from '../api/client';
+import { useModal } from '../context/ModalContext';
 
 export const Logs: React.FC = () => {
+  const modal = useModal();
   const [config, setConfig] = useState<any>(null);
   const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export const Logs: React.FC = () => {
     { type: 'CHANNELS', key: 'channelLogsChannelId', name: 'каналы-лог', label: 'Создание, удаление, переименование каналов', icon: Hash, color: 'text-emerald-400' },
     { type: 'VOICE', key: 'voiceLogsChannelId', name: 'войс-лог', label: 'Вход/выход из войса, переходы, серверный мут', icon: Mic, color: 'text-indigo-400' },
     { type: 'INVITES', key: 'inviteLogsChannelId', name: 'инвайты-лог', label: 'Создание и удаление инвайтов сервера', icon: Link2, color: 'text-amber-400' },
-    { type: 'EVENTS', key: 'eventLogsChannelId', name: 'ивенты-лог', label: 'Создание сборов на МП, запись участников, резерв, старт, завершение и удаление сообщений', icon: Swords, color: 'text-orange-400' },
+    { type: 'EVENTS', key: 'eventLogsChannelId', name: 'ивенты-лог', label: 'Создание сборов на МП, запись участников, резерв, старт, завершение и удаление сообщений', icon: Swords, color: 'text-pink-400' },
     { type: 'BOT', key: 'botLogsChannelId', name: 'бот-лог', label: 'Действия рекрутеров, одобрения заявок, синхронизация', icon: Bot, color: 'text-teal-400' },
   ];
 
@@ -58,23 +60,46 @@ export const Logs: React.FC = () => {
     try {
       setSaving(true);
       await api.post('/logs/config', config);
-      alert('Настройки логирования успешно сохранены!');
+      modal.alert({
+        title: 'Успешно',
+        message: 'Настройки логирования успешно сохранены!',
+        type: 'success',
+      });
     } catch (err) {
-      alert('Ошибка при сохранении');
+      modal.alert({
+        title: 'Ошибка',
+        message: 'Ошибка при сохранении настроек',
+        type: 'error',
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const handleAutoSetup = async () => {
-    if (!confirm('Бот автоматически создаст закрытую категорию LOGS и все 7 каналов логов на вашем сервере Discord. Продолжить?')) return;
+    const confirmed = await modal.confirm({
+      title: 'Авто-создание каналов',
+      message: 'Бот автоматически создаст закрытую категорию LOGS и все 7 каналов логов на вашем сервере Discord. Продолжить?',
+      confirmText: 'Создать каналы',
+      type: 'pink',
+    });
+    if (!confirmed) return;
+
     try {
       setAutoSetting(true);
       await api.post('/logs/auto-setup');
-      alert('Категория LOGS и каналы успешно созданы в Discord!');
+      modal.alert({
+        title: 'Успешно',
+        message: 'Категория LOGS и каналы успешно созданы в Discord!',
+        type: 'success',
+      });
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Ошибка создания каналов');
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Ошибка создания каналов',
+        type: 'error',
+      });
     } finally {
       setAutoSetting(false);
     }
@@ -97,7 +122,7 @@ export const Logs: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
-            <ScrollText className="w-6 h-6 text-amber-400" />
+            <ScrollText className="w-6 h-6 text-pink-500" />
             Аудит и логирование сервера
           </h1>
           <p className="text-xs text-slate-400 mt-1">
@@ -118,7 +143,7 @@ export const Logs: React.FC = () => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs transition-all shadow-lg shadow-pink-600/25 disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             <span>Сохранить настройки</span>
@@ -170,7 +195,7 @@ export const Logs: React.FC = () => {
                           type="button"
                           onClick={() => toggleLogType(cat.type)}
                           className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            isEnabled ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-slate-700/60'
+                            isEnabled ? 'bg-pink-600 shadow-sm shadow-pink-500/50' : 'bg-slate-700/60'
                           }`}
                           role="switch"
                           aria-checked={isEnabled}
@@ -182,7 +207,7 @@ export const Logs: React.FC = () => {
                             }`}
                           />
                         </button>
-                        <span className={`text-[11px] font-semibold ${isEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        <span className={`text-[11px] font-semibold ${isEnabled ? 'text-pink-400' : 'text-slate-500'}`}>
                           {isEnabled ? 'Включено' : 'Выключено'}
                         </span>
                       </div>

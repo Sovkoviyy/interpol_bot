@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { ShieldCheck, Save, Plus, Trash2, Check, X, ShieldAlert } from 'lucide-react';
 import api from '../api/client';
+import { useModal } from '../context/ModalContext';
 
 export const Roles: React.FC = () => {
+  const modal = useModal();
   const [roles, setRoles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,11 @@ export const Roles: React.FC = () => {
       await api.post('/rbac', updated);
       fetchData();
     } catch (err) {
-      alert('Ошибка обновления прав');
+      modal.alert({
+        title: 'Ошибка',
+        message: 'Ошибка обновления прав',
+        type: 'error',
+      });
     }
   };
 
@@ -67,17 +73,32 @@ export const Roles: React.FC = () => {
       setSelectedRoleToAdd('');
       fetchData();
     } catch (err) {
-      alert('Ошибка добавления роли');
+      modal.alert({
+        title: 'Ошибка',
+        message: 'Ошибка добавления роли',
+        type: 'error',
+      });
     }
   };
 
   const handleDeleteRole = async (roleId: string) => {
-    if (!confirm('Удалить права доступа для этой роли?')) return;
+    const confirmed = await modal.confirm({
+      title: 'Удаление прав роли',
+      message: 'Удалить права доступа для этой роли из панели управления?',
+      confirmText: 'Удалить',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
     try {
       await api.delete(`/rbac/${roleId}`);
       fetchData();
     } catch (err) {
-      alert('Ошибка удаления');
+      modal.alert({
+        title: 'Ошибка',
+        message: 'Ошибка удаления прав роли',
+        type: 'error',
+      });
     }
   };
 
@@ -85,7 +106,7 @@ export const Roles: React.FC = () => {
     <div className="space-y-6 max-w-5xl">
       <div>
         <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
-          <ShieldCheck className="w-6 h-6 text-purple-400" />
+          <ShieldCheck className="w-6 h-6 text-pink-500" />
           Уровни доступа и права ролей (RBAC)
         </h1>
         <p className="text-xs text-slate-400 mt-1">
@@ -98,7 +119,7 @@ export const Roles: React.FC = () => {
         <select
           value={selectedRoleToAdd}
           onChange={(e) => setSelectedRoleToAdd(e.target.value)}
-          className="bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 flex-1 max-w-xs"
+          className="bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 flex-1 max-w-xs focus:outline-none focus:border-pink-500"
         >
           <option value="">Выберите роль Discord для настройки...</option>
           {roles.map((r) => (
@@ -109,7 +130,7 @@ export const Roles: React.FC = () => {
         <button
           onClick={handleAddRole}
           disabled={!selectedRoleToAdd}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all disabled:opacity-40"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs transition-all shadow-md shadow-pink-600/25 disabled:opacity-40"
         >
           <Plus className="w-4 h-4" />
           <span>Добавить роль в матрицу</span>
@@ -150,7 +171,7 @@ export const Roles: React.FC = () => {
                       onClick={() => handleTogglePerm(p.roleId, 'manageSettings', p.manageSettings)}
                       className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
                         p.manageSettings
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40'
                           : 'bg-[#0B0E14] text-slate-600 border border-[#1E232F]'
                       }`}
                     >
@@ -164,7 +185,7 @@ export const Roles: React.FC = () => {
                       onClick={() => handleTogglePerm(p.roleId, 'manageRecruiting', p.manageRecruiting)}
                       className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
                         p.manageRecruiting
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40'
                           : 'bg-[#0B0E14] text-slate-600 border border-[#1E232F]'
                       }`}
                     >
@@ -178,7 +199,7 @@ export const Roles: React.FC = () => {
                       onClick={() => handleTogglePerm(p.roleId, 'manageEvents', p.manageEvents)}
                       className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
                         p.manageEvents
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40'
                           : 'bg-[#0B0E14] text-slate-600 border border-[#1E232F]'
                       }`}
                     >
@@ -192,7 +213,7 @@ export const Roles: React.FC = () => {
                       onClick={() => handleTogglePerm(p.roleId, 'viewLogs', p.viewLogs)}
                       className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
                         p.viewLogs
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40'
                           : 'bg-[#0B0E14] text-slate-600 border border-[#1E232F]'
                       }`}
                     >

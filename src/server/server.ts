@@ -10,6 +10,8 @@ import eventsRouter from './routes/events';
 import logsRouter from './routes/logs';
 import rbacRouter from './routes/rbac';
 import statsRouter from './routes/stats';
+import botMessagesRouter from './routes/botMessages';
+import embedsRouter from './routes/embeds';
 
 export function createServer() {
   const app = express();
@@ -31,6 +33,8 @@ export function createServer() {
   app.use('/api/logs', logsRouter);
   app.use('/api/rbac', rbacRouter);
   app.use('/api/stats', statsRouter);
+  app.use('/api/bot-messages', botMessagesRouter);
+  app.use('/api/embeds', embedsRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {

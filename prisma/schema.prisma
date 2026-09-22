@@ -156,3 +156,49 @@ model SavedMemberRoles {
   @@unique([guildId, userId])
 }
 
+model BotMessagesConfig {
+  guildId             String   @id
+  welcomeEnabled      Boolean  @default(false)
+  welcomeChannelId    String?
+  welcomeTitle        String   @default("Добро пожаловать в семью, {user}!")
+  welcomeMessage      String   @default("Рады приветствовать тебя на нашем сервере {guild}! Ознакомься с правилами и подай заявку в семью.")
+  welcomeEmbedColor   String   @default("#EC4899")
+
+  leaveEnabled        Boolean  @default(false)
+  leaveChannelId      String?
+  leaveMessage        String   @default("{user} покинул наш сервер.")
+
+  ticketGreetingTitle String   @default("Заявка в семью INTERPOL")
+  ticketGreetingDesc  String   @default("Приветствуем, {user}!\nВаша анкета получена. Ожидайте рассмотрения рекрутерами семьи.\nНе забудьте подготовить скриншоты статистики.")
+
+  botStatusText       String   @default("Majestic RP • /event")
+  botStatusActivity   String   @default("PLAYING")
+
+  updatedAt           DateTime @updatedAt
+  createdAt           DateTime @default(now())
+}
+
+model CustomEmbedTemplate {
+  id              String    @id @default(cuid())
+  guildId         String
+  name            String    // Template name, e.g. "Правила", "Анонс дропа"
+  targetChannelId String?
+  content         String?   // Text above embed (e.g. @everyone)
+  title           String?
+  description     String?
+  color           String    @default("#EC4899")
+  authorName      String?
+  authorIconUrl   String?
+  authorUrl       String?
+  thumbnailUrl    String?
+  imageUrl        String?
+  footerText      String?
+  footerIconUrl   String?
+  fieldsJson      String    @default("[]") // JSON array of { name, value, inline }
+  sentMessageId   String?
+  lastSentAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+

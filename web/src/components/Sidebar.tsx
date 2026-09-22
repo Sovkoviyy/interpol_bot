@@ -9,7 +9,9 @@ import {
   BarChart3, 
   Settings,
   Flame,
-  Users
+  Users,
+  MessageSquare,
+  Sparkles
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -30,31 +32,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
     { to: '/members', label: 'Участники', icon: Users, visible: true },
     { to: '/recruitment', label: 'Заявки в семью', icon: UserPlus, visible: isAdmin || userPermissions?.manageRecruiting },
     { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: isAdmin || userPermissions?.manageEvents },
+    { to: '/messages', label: 'Сообщения бота', icon: MessageSquare, visible: isAdmin || userPermissions?.manageSettings },
+    { to: '/embeds', label: 'Embed Генератор', icon: Sparkles, visible: isAdmin || userPermissions?.manageSettings },
     { to: '/logs', label: 'Аудит сервера', icon: ScrollText, visible: isAdmin || userPermissions?.viewLogs },
     { to: '/roles', label: 'Уровни доступа', icon: ShieldCheck, visible: isAdmin || userPermissions?.manageSettings },
     { to: '/stats', label: 'Статистика', icon: BarChart3, visible: true },
   ];
 
   return (
-    <aside className="w-64 bg-[#151921] border-r border-[#1E232F] flex flex-col justify-between flex-shrink-0 min-h-screen">
+    <aside className="w-64 bg-[#0B0E14] border-r border-[#1E232F] flex flex-col justify-between flex-shrink-0 min-h-screen">
       <div>
         {/* Brand Header */}
         <div className="h-16 flex items-center px-6 border-b border-[#1E232F] gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-pink-600 via-rose-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
             <Flame className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-base tracking-wide bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+            <h1 className="font-bold text-base tracking-wide bg-gradient-to-r from-white via-pink-100 to-pink-300 bg-clip-text text-transparent">
               INTERPOL BOT
             </h1>
-            <p className="text-[11px] text-slate-400 font-medium tracking-wider uppercase">Majestic Family</p>
+            <p className="text-[11px] text-pink-400/80 font-medium tracking-wider uppercase">Majestic Family</p>
           </div>
         </div>
 
         {/* Navigation Links */}
         <nav className="p-4 space-y-1.5">
-          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">
-            Модули
+          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-3 mb-2">
+            Модули системы
           </div>
           {links.filter(l => l.visible).map((link) => {
             const Icon = link.icon;
@@ -65,8 +69,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 font-semibold shadow-inner'
-                      : 'text-slate-300 hover:text-white hover:bg-[#1E232F]'
+                      ? 'bg-pink-500/10 text-pink-400 border border-pink-500/30 font-semibold shadow-pink-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#151922]'
                   }`
                 }
               >
