@@ -8,7 +8,8 @@ import {
   ShieldCheck, 
   BarChart3, 
   Settings,
-  Flame
+  Flame,
+  Users
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
 
   const links = [
     { to: '/dashboard', label: 'Обзор', icon: LayoutDashboard, visible: true },
+    { to: '/members', label: 'Участники', icon: Users, visible: true },
     { to: '/recruitment', label: 'Заявки в семью', icon: UserPlus, visible: isAdmin || userPermissions?.manageRecruiting },
     { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: isAdmin || userPermissions?.manageEvents },
     { to: '/logs', label: 'Аудит сервера', icon: ScrollText, visible: isAdmin || userPermissions?.viewLogs },

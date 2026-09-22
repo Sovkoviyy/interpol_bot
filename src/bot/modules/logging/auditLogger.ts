@@ -120,7 +120,14 @@ export class AuditLogger {
       if (!logConfig) return;
 
       // Check if this type is enabled
-      const enabledTypes: string[] = JSON.parse(logConfig.enabledLogTypesJson || '[]');
+      let enabledTypes: string[] = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT'];
+      if (logConfig.enabledLogTypesJson) {
+        try {
+          enabledTypes = JSON.parse(logConfig.enabledLogTypesJson);
+        } catch {
+          enabledTypes = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT'];
+        }
+      }
       if (!enabledTypes.includes(categoryType)) return;
 
       let targetChannelId: string | null = null;
@@ -154,7 +161,14 @@ export class AuditLogger {
         await guild.channels.fetch(targetChannelId).catch(() => null)) as TextChannel | null;
 
       if (channel && channel.isTextBased()) {
-        await channel.send({ embeds: [embed] });
+        const botMember = guild.members.me;
+        if (botMember && !channel.permissionsFor(botMember)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) {
+          console.warn(`[AuditLogger] Missing permissions in log channel #${channel.name} (${channel.id})`);
+          return;
+        }
+        await channel.send({ embeds: [embed] }).catch(err => {
+          console.error(`[AuditLogger] Failed to send embed to #${channel.name}:`, err);
+        });
       }
     } catch (error) {
       console.error(`[AuditLogger Error] Failed to send log for ${categoryType}:`, error);

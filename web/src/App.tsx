@@ -10,6 +10,7 @@ import { Events } from './pages/Events';
 import { Logs } from './pages/Logs';
 import { Roles } from './pages/Roles';
 import { Stats } from './pages/Stats';
+import { Members } from './pages/Members';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<any | null>(null);
@@ -69,6 +70,7 @@ export const App: React.FC = () => {
                   <main className="flex-1 p-8 overflow-y-auto">
                     <Routes>
                       <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/members" element={<Members />} />
                       <Route path="/recruitment" element={<Recruitment />} />
                       <Route path="/events" element={<Events />} />
                       <Route path="/logs" element={<Logs />} />

@@ -161,18 +161,29 @@ export const Logs: React.FC = () => {
                     <Icon className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <span className="font-bold text-white text-xs">#{cat.name}</span>
-                      <button
-                        onClick={() => toggleLogType(cat.type)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                          isEnabled
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-slate-700/30 text-slate-400 border border-slate-700/50'
-                        }`}
-                      >
-                        {isEnabled ? 'Включено' : 'Выключено'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleLogType(cat.type)}
+                          className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            isEnabled ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-slate-700/60'
+                          }`}
+                          role="switch"
+                          aria-checked={isEnabled}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              isEnabled ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className={`text-[11px] font-semibold ${isEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          {isEnabled ? 'Включено' : 'Выключено'}
+                        </span>
+                      </div>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">{cat.label}</p>
                   </div>

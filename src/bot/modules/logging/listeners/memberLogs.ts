@@ -16,11 +16,15 @@ export function registerMemberLogs() {
     // Restore roles if member was previously in server
     await RolePersistenceService.restoreMemberRoles(member);
 
+    // Track invite link used to join
+    const inviteInfo = await import('./inviteLogs').then(m => m.trackMemberJoinInvite(member)).catch(() => null);
+
     const embed = new EmbedBuilder()
       .setColor(0x57F287) // Green
       .setTitle('📥 Новый участник присоединился')
       .setDescription(
         `**Пользователь:** ${member} (\`${member.user.tag}\` / \`${member.id}\`)\n` +
+        (inviteInfo ? `**Инвайт:** \`${inviteInfo.code}\`${inviteInfo.inviterTag ? ` (пригласил: \`${inviteInfo.inviterTag}\`)` : ''}\n` : '') +
         `**Возраст аккаунта:** <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>\n` +
         `**Всего участников:** ${member.guild.memberCount}\n` +
         `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`

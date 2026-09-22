@@ -38,21 +38,67 @@ export const Events: React.FC = () => {
     pingIntervals: [15, 10, 5, 3, 1],
   });
 
+  const [defaultSettings, setDefaultSettings] = useState<any>(null);
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [eventsRes, rolesRes, channelsRes] = await Promise.all([
+      const [eventsRes, rolesRes, channelsRes, defaultsRes] = await Promise.all([
         api.get(`/events?status=${statusFilter}`),
         api.get('/guild/roles'),
         api.get('/guild/channels'),
+        api.get('/events/defaults').catch(() => ({ data: {} })),
       ]);
       setEvents(eventsRes.data.events);
       setRoles(rolesRes.data.roles);
       setChannels(channelsRes.data.channels);
+      if (defaultsRes.data) {
+        setDefaultSettings(defaultsRes.data);
+        setForm(prev => ({
+          ...prev,
+          channelId: prev.channelId || defaultsRes.data.channelId || '',
+          voiceChannelId: prev.voiceChannelId || defaultsRes.data.voiceChannelId || '',
+          targetRoleId: prev.targetRoleId || defaultsRes.data.targetRoleId || '',
+        }));
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const setQuickDate = (daysAhead: number) => {
+    const target = new Date();
+    target.setDate(target.getDate() + daysAhead);
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    
+    setForm(prev => ({
+      ...prev,
+      eventTime: `${dateStr}T20:00`,
+      checkInTime: `${dateStr}T19:50`,
+    }));
+  };
+
+  const handleEventTimeChange = (val: string) => {
+    const eventDate = new Date(val);
+    if (!isNaN(eventDate.getTime())) {
+      const checkinDate = new Date(eventDate.getTime() - 10 * 60000);
+      const yyyy = checkinDate.getFullYear();
+      const mm = String(checkinDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(checkinDate.getDate()).padStart(2, '0');
+      const hh = String(checkinDate.getHours()).padStart(2, '0');
+      const min = String(checkinDate.getMinutes()).padStart(2, '0');
+      setForm(prev => ({
+        ...prev,
+        eventTime: val,
+        checkInTime: `${yyyy}-${mm}-${dd}T${hh}:${min}`,
+      }));
+    } else {
+      setForm(prev => ({ ...prev, eventTime: val }));
     }
   };
 
@@ -370,7 +416,49 @@ export const Events: React.FC = () => {
                 )}
               </div>
 
+              {/* Quick Date Presets */}
+              <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 font-medium text-[11px]">Быстрый выбор дня проведения:</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(0)}
+                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-emerald-600/30 hover:border-emerald-500/50 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white font-medium transition-all"
+                    >
+                      Сегодня
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(1)}
+                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-emerald-600/30 hover:border-emerald-500/50 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white font-medium transition-all"
+                    >
+                      Завтра
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(2)}
+                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-emerald-600/30 hover:border-emerald-500/50 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white font-medium transition-all"
+                    >
+                      Послезавтра
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Время начала мероприятия *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={form.eventTime}
+                    onChange={(e) => handleEventTimeChange(e.target.value)}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Чек-ин рассчитается за 10 мин</span>
+                </div>
+
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Время проверки явки (чек-ин) *</label>
                   <input
@@ -380,17 +468,7 @@ export const Events: React.FC = () => {
                     onChange={(e) => setForm({ ...form, checkInTime: e.target.value })}
                     className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Время начала мероприятия *</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={form.eventTime}
-                    onChange={(e) => setForm({ ...form, eventTime: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Авто или вручную</span>
                 </div>
               </div>
 

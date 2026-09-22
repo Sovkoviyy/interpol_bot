@@ -9,6 +9,20 @@ import { TextChannel } from 'discord.js';
 
 export const eventsRouter = Router();
 
+// Get remembered default channels and roles
+eventsRouter.get('/defaults', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildConfig = await prisma.guildConfig.findUnique({
+    where: { guildId },
+  });
+
+  return res.json({
+    channelId: guildConfig?.defaultEventChannelId || '',
+    voiceChannelId: guildConfig?.defaultVoiceChannelId || '',
+    targetRoleId: guildConfig?.defaultMentionRoleId || '',
+  });
+});
+
 // Get list of events
 eventsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const guildId = req.user?.guildId || config.discord.guildId;
@@ -97,6 +111,22 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
     where: { id: event.id },
     data: { messageId: msg.id },
   });
+
+  // Remember chosen channels and role for future events
+  await prisma.guildConfig.upsert({
+    where: { guildId },
+    update: {
+      defaultEventChannelId: channelId,
+      defaultVoiceChannelId: voiceChannelId || null,
+      defaultMentionRoleId: targetRoleId || null,
+    },
+    create: {
+      guildId,
+      defaultEventChannelId: channelId,
+      defaultVoiceChannelId: voiceChannelId || null,
+      defaultMentionRoleId: targetRoleId || null,
+    },
+  }).catch(() => null);
 
   return res.json({ success: true, event });
 });

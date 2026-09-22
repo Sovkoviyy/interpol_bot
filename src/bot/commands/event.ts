@@ -45,19 +45,29 @@ export const eventCommand: Command = {
         )
         .addStringOption(opt =>
           opt
+            .setName('date')
+            .setDescription('День проведения сбора (по умолчанию: сегодня)')
+            .addChoices(
+              { name: 'Сегодня', value: 'today' },
+              { name: 'Завтра', value: 'tomorrow' },
+              { name: 'Послезавтра (+2 дня)', value: 'after_tomorrow' }
+            )
+        )
+        .addStringOption(opt =>
+          opt
             .setName('party_code')
             .setDescription('Код группы для сбора в игре')
         )
         .addChannelOption(opt =>
           opt
             .setName('voice_channel')
-            .setDescription('Голосовой канал, где собираемся')
+            .setDescription('Голосовой канал (если не указать, возьмется запомненный)')
             .addChannelTypes(ChannelType.GuildVoice)
         )
         .addRoleOption(opt =>
           opt
             .setName('role')
-            .setDescription('Роль для упоминания (например @Семья или @Капт-состав)')
+            .setDescription('Роль для упоминания (если не указать, возьмется запомненная)')
         )
         .addIntegerOption(opt =>
           opt
@@ -82,19 +92,47 @@ export const eventCommand: Command = {
       const type = interaction.options.getString('type', true) as 'UNLIMITED' | 'LIMITED';
       const startTimeStr = interaction.options.getString('start_time', true);
       const checkinTimeStr = interaction.options.getString('checkin_time', true);
+      const dateChoice = interaction.options.getString('date') || 'today';
       const partyCode = interaction.options.getString('party_code');
       const voiceChannel = interaction.options.getChannel('voice_channel');
       const targetRole = interaction.options.getRole('role');
       const limit = interaction.options.getInteger('limit');
       const description = interaction.options.getString('description');
 
+      // Fetch saved channel defaults from GuildConfig
+      const guildConfig = await prisma.guildConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
+      const finalVoiceChannelId = voiceChannel ? voiceChannel.id : (guildConfig?.defaultVoiceChannelId || undefined);
+      const finalTargetRoleId = targetRole ? targetRole.id : (guildConfig?.defaultMentionRoleId || undefined);
+
+      // Save chosen defaults for subsequent events
+      await prisma.guildConfig.upsert({
+        where: { guildId: guild.id },
+        update: {
+          defaultEventChannelId: interaction.channelId,
+          ...(voiceChannel ? { defaultVoiceChannelId: voiceChannel.id } : {}),
+          ...(targetRole ? { defaultMentionRoleId: targetRole.id } : {}),
+        },
+        create: {
+          guildId: guild.id,
+          defaultEventChannelId: interaction.channelId,
+          defaultVoiceChannelId: voiceChannel?.id,
+          defaultMentionRoleId: targetRole?.id,
+        },
+      }).catch(() => null);
+
+      let daysOffset = 0;
+      if (dateChoice === 'tomorrow') daysOffset = 1;
+      else if (dateChoice === 'after_tomorrow') daysOffset = 2;
+
       // Helper to parse time string
       const parseTime = (input: string): Date => {
         const now = new Date();
-        // If user typed a number (e.g. 20 -> in 20 minutes)
+        const baseDate = new Date(now.getTime() + daysOffset * 24 * 60 * 60 * 1000);
+
+        // If user typed a number (e.g. 20 -> in 20 minutes from now)
         if (/^\d+$/.test(input.trim())) {
           const minutes = parseInt(input.trim(), 10);
-          return new Date(now.getTime() + minutes * 60000);
+          return new Date(baseDate.getTime() + minutes * 60000);
         }
 
         // If user typed HH:MM
@@ -102,18 +140,18 @@ export const eventCommand: Command = {
         if (timeMatch) {
           const hours = parseInt(timeMatch[1], 10);
           const minutes = parseInt(timeMatch[2], 10);
-          const target = new Date(now);
+          const target = new Date(baseDate);
           target.setHours(hours, minutes, 0, 0);
 
-          // If target is already in the past today, assume tomorrow
-          if (target.getTime() < now.getTime() - 60000) {
+          // If date was 'today' and target is already in past today, assume tomorrow
+          if (daysOffset === 0 && target.getTime() < now.getTime() - 60000) {
             target.setDate(target.getDate() + 1);
           }
           return target;
         }
 
         // Fallback default: in 30 mins
-        return new Date(now.getTime() + 30 * 60000);
+        return new Date(baseDate.getTime() + 30 * 60000);
       };
 
       const eventTime = parseTime(startTimeStr);
@@ -129,8 +167,8 @@ export const eventCommand: Command = {
           checkInTime,
           eventTime,
           partyCode,
-          voiceChannelId: voiceChannel?.id,
-          targetRoleId: targetRole?.id,
+          voiceChannelId: finalVoiceChannelId,
+          targetRoleId: finalTargetRoleId,
           participantLimit: type === 'LIMITED' ? (limit || 10) : null,
           status: 'ACTIVE',
           channelId: interaction.channelId,

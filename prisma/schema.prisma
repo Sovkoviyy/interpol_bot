@@ -15,8 +15,25 @@ model GuildConfig {
   eventsEnabled      Boolean  @default(true)
   loggingEnabled     Boolean  @default(true)
   restoreRolesOnJoin Boolean  @default(true)
+  // Event defaults for memorizing choices
+  defaultEventChannelId String?
+  defaultVoiceChannelId String?
+  defaultMentionRoleId  String?
+  statsApiKey           String?  // API key for external stats integrations
   updatedAt          DateTime @updatedAt
   createdAt          DateTime @default(now())
+}
+
+model MemberInviteTracking {
+  id         String   @id @default(cuid())
+  guildId    String
+  userId     String
+  inviteCode String?
+  inviterId  String?
+  inviterTag String?
+  joinedAt   DateTime @default(now())
+
+  @@unique([guildId, userId])
 }
 
 model RolePermission {
