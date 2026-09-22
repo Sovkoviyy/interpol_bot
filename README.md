@@ -111,64 +111,33 @@ DATABASE_URL="file:./dev.db"
 
 ---
 
-## 💻 Локальный запуск (Windows / Тест)
+## 🚀 Единый запуск из одного файла (Windows и Linux)
 
-1. **Инициализация базы данных:**
+Больше не нужно отдельно собирать фронтенд, генерировать базу данных и собирать бэкенд. Все автоматизировано через **`start.js`**:
+* Сам накатит схему базы данных (SQLite/PostgreSQL)
+* Сам соберет веб-панель React при ее отсутствии
+* Сам скомпилирует TypeScript бэкенд
+* Запустит бота и веб-панель вместе на едином порту
+
+### Запуск на Windows (в 1 клик):
+* Просто дважды кликните по файлу **`start.bat`** (или введите `npm start`).
+
+### Запуск на Linux / Ubuntu 24.04:
 ```bash
-npm run prisma:push
+chmod +x start.sh
+./start.sh
+```
+или просто:
+```bash
+npm start
 ```
 
-2. **Запуск бэкенда и бота:**
-```bash
-npm run dev
-```
-
-3. **Запуск веб-панели (в отдельном терминале):**
-```bash
-cd web
-npm run dev
-```
-Панель откроется по адресу: `http://localhost:5173`
-
----
-
-## 🌐 Развертывание на Ubuntu 24.04 VPS (Production)
-
-### 1. Установка Node.js (v20 или v22):
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs git
-sudo npm install -g pm2
-```
-
-### 2. Клонирование и установка:
-```bash
-git clone <url-вашего-репозитория> interpol_bot
-cd interpol_bot
-
-# Установка зависимостей бэкенда
-npm install
-
-# Установка зависимостей фронтенда
-cd web
-npm install
-npm run build
-cd ..
-
-# Применение схемы БД
-npm run prisma:push
-
-# Сборка TypeScript бэкенда
-npm run build
-```
-
-### 3. Запуск через PM2:
+### Запуск в фоне на сервере (PM2):
 ```bash
 pm2 start ecosystem.config.js
 pm2 save
 pm2 startup
 ```
-Бот и веб-сервер будут работать в фоне 24/7 с автоматическим перезапуском при сбоях и перезагрузке сервера!
 
 ---
 

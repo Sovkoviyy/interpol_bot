@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'interpol_bot',
-      script: 'dist/index.js',
+      script: 'start.js',
       instances: 1,
       autorestart: true,
       watch: false,

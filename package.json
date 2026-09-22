@@ -4,11 +4,14 @@
   "description": "Modular Discord bot and Web Dashboard for Majestic RP Family",
   "main": "dist/index.js",
   "scripts": {
+    "start": "node start.js",
+    "setup": "node start.js --setup-only",
     "dev": "tsx src/index.ts",
     "build:server": "tsc",
+    "build:web": "npm --prefix web run build",
+    "build": "tsc && npm --prefix web run build",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
-    "build": "tsc"
+    "prisma:push": "prisma db push"
   },
   "keywords": [],
   "author": "",
