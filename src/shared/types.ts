@@ -20,7 +20,8 @@ export type LogCategoryType =
   | 'CHANNELS'
   | 'VOICE'
   | 'INVITES'
-  | 'BOT';
+  | 'BOT'
+  | 'EVENTS';
 
 export interface RolePermissionDTO {
   roleId: string;

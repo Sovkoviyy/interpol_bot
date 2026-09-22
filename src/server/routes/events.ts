@@ -5,7 +5,8 @@ import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { EventService } from '../../bot/modules/events/eventService';
-import { TextChannel } from 'discord.js';
+import { TextChannel, EmbedBuilder } from 'discord.js';
+import { AuditLogger } from '../../bot/modules/logging/auditLogger';
 
 export const eventsRouter = Router();
 
@@ -128,6 +129,20 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
     },
   }).catch(() => null);
 
+  // Send audit log to #ивенты-лог
+  const createEmbed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle(`📢 Создано новое мероприятие: ${event.title}`)
+    .setDescription(
+      `Создатель: <@${req.user!.userId}> (${req.user!.username})\n` +
+      `Канал сбора: <#${channelId}>\n` +
+      `Тип: **${type === 'LIMITED' ? `С ограничением (${participantLimit || 10} мест)` : 'Без ограничений'}**\n` +
+      `Чек-ин: <t:${Math.floor(new Date(checkInTime).getTime() / 1000)}:f>\n` +
+      `Старт: <t:${Math.floor(new Date(eventTime).getTime() / 1000)}:f>`
+    )
+    .setTimestamp();
+  await AuditLogger.sendLog(guild, 'EVENTS', createEmbed);
+
   return res.json({ success: true, event });
 });
 
@@ -136,14 +151,29 @@ eventsRouter.post('/:id/status', requireAuth, requirePermission('manageEvents'),
   const id = req.params.id as string;
   const { status } = req.body; // FINISHED or CANCELLED
 
+  const now = new Date();
   const event = await prisma.eventGathering.update({
     where: { id },
-    data: { status },
+    data: { 
+      status,
+      finishedAt: (status === 'FINISHED' || status === 'CANCELLED') ? now : undefined,
+    },
   });
 
   const guild = bot.guilds.cache.get(event.guildId);
   if (guild) {
     await EventService.refreshAnnouncement(guild, event.id);
+
+    const statusText = status === 'FINISHED' ? 'завершено' : 'отменено';
+    const statusEmbed = new EmbedBuilder()
+      .setColor(status === 'FINISHED' ? 0x2ECC71 : 0xED4245)
+      .setTitle(`📅 Статус мероприятия изменен: ${event.title}`)
+      .setDescription(
+        `Мероприятие **«${event.title}»** было **${statusText}** администратором <@${req.user!.userId}>.\n` +
+        `Канал: <#${event.channelId}>`
+      )
+      .setTimestamp();
+    await AuditLogger.sendLog(guild, 'EVENTS', statusEmbed);
   }
 
   return res.json({ success: true, event });
@@ -182,6 +212,16 @@ eventsRouter.post('/:id/participants/:userId/kick', requireAuth, requirePermissi
   const guild = bot.guilds.cache.get(event.guildId);
   if (guild) {
     await EventService.refreshAnnouncement(guild, event.id);
+
+    const kickEmbed = new EmbedBuilder()
+      .setColor(0xED4245)
+      .setTitle(`❌ Исключение с мероприятия: ${event.title}`)
+      .setDescription(
+        `Участник <@${userId}> был исключен из мероприятия **${event.title}** администратором <@${req.user!.userId}>.\n` +
+        (promotedUserId ? `⬆️ Из резерва в основной состав переведен: <@${promotedUserId}>.` : '')
+      )
+      .setTimestamp();
+    await AuditLogger.sendLog(guild, 'EVENTS', kickEmbed);
   }
 
   return res.json({ success: true, promotedUserId });

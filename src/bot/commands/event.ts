@@ -2,10 +2,12 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   ChannelType,
+  EmbedBuilder,
 } from 'discord.js';
 import prisma from '../../database/client';
 import { Command } from '../client';
 import { EventService } from '../modules/events/eventService';
+import { AuditLogger } from '../modules/logging/auditLogger';
 
 export const eventCommand: Command = {
   data: new SlashCommandBuilder()
@@ -201,6 +203,20 @@ export const eventCommand: Command = {
         where: { id: event.id },
         data: { messageId: announcementMsg.id },
       });
+
+      // Send audit log to #ивенты-лог
+      const createEmbed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle(`📢 Создано новое мероприятие: ${event.title}`)
+        .setDescription(
+          `Создатель: <@${interaction.user.id}> (${interaction.user.tag})\n` +
+          `Канал сбора: <#${interaction.channelId}>\n` +
+          `Тип: **${type === 'LIMITED' ? `С ограничением (${limit || 10} мест)` : 'Без ограничений'}**\n` +
+          `Чек-ин: <t:${Math.floor(checkInTime.getTime() / 1000)}:f>\n` +
+          `Старт: <t:${Math.floor(eventTime.getTime() / 1000)}:f>`
+        )
+        .setTimestamp();
+      await AuditLogger.sendLog(guild, 'EVENTS', createEmbed);
 
       await interaction.editReply({
         content: `✅ Сбор на мероприятие **«${title}»** успешно объявлен!`,

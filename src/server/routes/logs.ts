@@ -15,7 +15,7 @@ logsRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Re
     where: { guildId },
   });
 
-  const defaultEnabled = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT'];
+  const defaultEnabled = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT', 'EVENTS'];
 
   if (!logConfig) {
     return res.json({
@@ -29,6 +29,7 @@ logsRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Re
         voiceLogsChannelId: null,
         inviteLogsChannelId: null,
         botLogsChannelId: null,
+        eventLogsChannelId: null,
         enabledLogTypes: defaultEnabled,
       },
     });
@@ -61,6 +62,7 @@ logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), asy
     voiceLogsChannelId,
     inviteLogsChannelId,
     botLogsChannelId,
+    eventLogsChannelId,
     enabledLogTypes,
   } = req.body;
 
@@ -75,6 +77,7 @@ logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), asy
       voiceLogsChannelId,
       inviteLogsChannelId,
       botLogsChannelId,
+      eventLogsChannelId,
       enabledLogTypesJson: JSON.stringify(enabledLogTypes || []),
     },
     create: {
@@ -87,6 +90,7 @@ logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), asy
       voiceLogsChannelId,
       inviteLogsChannelId,
       botLogsChannelId,
+      eventLogsChannelId,
       enabledLogTypesJson: JSON.stringify(enabledLogTypes || []),
     },
   });

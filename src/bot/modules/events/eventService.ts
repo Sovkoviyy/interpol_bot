@@ -12,6 +12,7 @@ import {
   GuildMember,
 } from 'discord.js';
 import prisma from '../../../database/client';
+import { AuditLogger } from '../logging/auditLogger';
 
 export class EventService {
   /**
@@ -211,6 +212,19 @@ export class EventService {
     });
 
     await this.refreshAnnouncement(interaction.guild!, eventId);
+
+    // Audit log in #ивенты-лог
+    const joinEmbed = new EmbedBuilder()
+      .setColor(assignedStatus === 'CONFIRMED' ? 0x2ECC71 : 0xFEE75C)
+      .setTitle(`✋ Запись на мероприятие: ${event.title}`)
+      .setDescription(
+        `Участник <@${userId}> (\`${interaction.user.tag}\`) записался в **${assignedStatus === 'CONFIRMED' ? 'основной состав' : 'резерв'}**.\n` +
+        `Мероприятие: **«${event.title}»**\n` +
+        `Канал: <#${event.channelId}>\n` +
+        `Состав: ${assignedStatus === 'CONFIRMED' ? confirmedCount + 1 : confirmedCount}/${limit}`
+      )
+      .setTimestamp();
+    await AuditLogger.sendLog(interaction.guild!, 'EVENTS', joinEmbed);
   }
 
   /**
@@ -274,6 +288,17 @@ export class EventService {
     });
 
     await this.refreshAnnouncement(interaction.guild!, eventId);
+
+    // Audit log in #ивенты-лог
+    const leaveEmbed = new EmbedBuilder()
+      .setColor(0xED4245)
+      .setTitle(`🚪 Отказ от участия: ${event.title}`)
+      .setDescription(
+        `Участник <@${userId}> (\`${interaction.user.tag}\`) покинул список участников мероприятия **«${event.title}»**.\n` +
+        (promotedUserId ? `⬆️ Из резерва в основной состав переведен: <@${promotedUserId}>.` : '')
+      )
+      .setTimestamp();
+    await AuditLogger.sendLog(interaction.guild!, 'EVENTS', leaveEmbed);
   }
 
   /**
@@ -306,12 +331,24 @@ export class EventService {
 
     if (event.type === 'UNLIMITED') {
       // Allow ending the event
+      const now = new Date();
       await prisma.eventGathering.update({
         where: { id: eventId },
-        data: { status: 'FINISHED' },
+        data: { 
+          status: 'FINISHED',
+          finishedAt: now,
+        },
       });
       await interaction.reply({ content: '🏁 Сбор на мероприятие завершен.', ephemeral: true });
       await this.refreshAnnouncement(interaction.guild!, eventId);
+
+      const finishEmbed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle(`🏁 Сбор завершен: ${event.title}`)
+        .setDescription(`Организатор/администратор <@${interaction.user.id}> завершил сбор на мероприятие **«${event.title}»**.`)
+        .setTimestamp();
+      await AuditLogger.sendLog(interaction.guild!, 'EVENTS', finishEmbed);
+
       return;
     }
 
@@ -392,5 +429,16 @@ export class EventService {
     });
 
     await this.refreshAnnouncement(interaction.guild!, eventId);
+
+    // Audit log in #ивенты-лог
+    const kickEmbed = new EmbedBuilder()
+      .setColor(0xED4245)
+      .setTitle(`❌ Исключение с мероприятия: ${event.title}`)
+      .setDescription(
+        `Администратор/организатор <@${interaction.user.id}> исключил участника <@${targetUserId}> из мероприятия **«${event.title}»**.\n` +
+        (promotedUserId ? `⬆️ Из резерва в основной состав переведен: <@${promotedUserId}>.` : '')
+      )
+      .setTimestamp();
+    await AuditLogger.sendLog(interaction.guild!, 'EVENTS', kickEmbed);
   }
 }

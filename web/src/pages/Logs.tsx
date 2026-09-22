@@ -11,7 +11,8 @@ import {
   Mic, 
   Link2, 
   Bot,
-  CheckCircle2
+  CheckCircle2,
+  Swords
 } from 'lucide-react';
 import api from '../api/client';
 
@@ -29,7 +30,8 @@ export const Logs: React.FC = () => {
     { type: 'CHANNELS', key: 'channelLogsChannelId', name: 'каналы-лог', label: 'Создание, удаление, переименование каналов', icon: Hash, color: 'text-emerald-400' },
     { type: 'VOICE', key: 'voiceLogsChannelId', name: 'войс-лог', label: 'Вход/выход из войса, переходы, серверный мут', icon: Mic, color: 'text-indigo-400' },
     { type: 'INVITES', key: 'inviteLogsChannelId', name: 'инвайты-лог', label: 'Создание и удаление инвайтов сервера', icon: Link2, color: 'text-amber-400' },
-    { type: 'BOT', key: 'botLogsChannelId', name: 'бот-лог', label: 'Действия рекрутеров, одобрения заявок, сборы МП', icon: Bot, color: 'text-teal-400' },
+    { type: 'EVENTS', key: 'eventLogsChannelId', name: 'ивенты-лог', label: 'Создание сборов на МП, запись участников, резерв, старт, завершение и удаление сообщений', icon: Swords, color: 'text-orange-400' },
+    { type: 'BOT', key: 'botLogsChannelId', name: 'бот-лог', label: 'Действия рекрутеров, одобрения заявок, синхронизация', icon: Bot, color: 'text-teal-400' },
   ];
 
   const fetchData = async () => {

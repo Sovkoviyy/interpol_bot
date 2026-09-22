@@ -105,6 +105,8 @@ model EventGathering {
   lastPingSentAt    DateTime?
   createdById       String
   createdByTag      String?
+  finishedAt        DateTime?
+  messageDeleted    Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -134,8 +136,9 @@ model LoggingConfig {
   voiceLogsChannelId   String?  // #voice-logs
   inviteLogsChannelId  String?  // #invite-logs
   botLogsChannelId     String?  // #bot-actions-logs
+  eventLogsChannelId   String?  // #ивенты-лог
   // Toggles for individual log types (stored as JSON array or boolean flags)
-  enabledLogTypesJson  String   @default("[\"MESSAGES\",\"MEMBERS\",\"ROLES\",\"CHANNELS\",\"VOICE\",\"INVITES\",\"BOT\"]")
+  enabledLogTypesJson  String   @default("[\"MESSAGES\",\"MEMBERS\",\"ROLES\",\"CHANNELS\",\"VOICE\",\"INVITES\",\"BOT\",\"EVENTS\"]")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

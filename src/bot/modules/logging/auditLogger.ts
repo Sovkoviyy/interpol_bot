@@ -44,6 +44,7 @@ export class AuditLogger {
       { key: 'voiceLogsChannelId', name: 'войс-лог', type: 'VOICE' },
       { key: 'inviteLogsChannelId', name: 'инвайты-лог', type: 'INVITES' },
       { key: 'botLogsChannelId', name: 'бот-лог', type: 'BOT' },
+      { key: 'eventLogsChannelId', name: 'ивенты-лог', type: 'EVENTS' },
     ];
 
     const channelResults: Record<string, string> = {};
@@ -82,6 +83,7 @@ export class AuditLogger {
         voiceLogsChannelId: channelResults.voiceLogsChannelId,
         inviteLogsChannelId: channelResults.inviteLogsChannelId,
         botLogsChannelId: channelResults.botLogsChannelId,
+        eventLogsChannelId: channelResults.eventLogsChannelId,
       },
       create: {
         guildId: guild.id,
@@ -93,6 +95,7 @@ export class AuditLogger {
         voiceLogsChannelId: channelResults.voiceLogsChannelId,
         inviteLogsChannelId: channelResults.inviteLogsChannelId,
         botLogsChannelId: channelResults.botLogsChannelId,
+        eventLogsChannelId: channelResults.eventLogsChannelId,
       },
     });
 
@@ -120,12 +123,12 @@ export class AuditLogger {
       if (!logConfig) return;
 
       // Check if this type is enabled
-      let enabledTypes: string[] = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT'];
+      let enabledTypes: string[] = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT', 'EVENTS'];
       if (logConfig.enabledLogTypesJson) {
         try {
           enabledTypes = JSON.parse(logConfig.enabledLogTypesJson);
         } catch {
-          enabledTypes = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT'];
+          enabledTypes = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT', 'EVENTS'];
         }
       }
       if (!enabledTypes.includes(categoryType)) return;
@@ -152,6 +155,9 @@ export class AuditLogger {
           break;
         case 'BOT':
           targetChannelId = logConfig.botLogsChannelId;
+          break;
+        case 'EVENTS':
+          targetChannelId = logConfig.eventLogsChannelId;
           break;
       }
 

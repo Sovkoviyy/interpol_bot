@@ -2,6 +2,7 @@ import { TextChannel, EmbedBuilder } from 'discord.js';
 import bot from '../../client';
 import prisma from '../../../database/client';
 import { EventService } from './eventService';
+import { AuditLogger } from '../logging/auditLogger';
 
 export class EventScheduler {
   private static timer: NodeJS.Timeout | null = null;
@@ -15,6 +16,9 @@ export class EventScheduler {
     this.timer = setInterval(() => {
       this.checkActiveEvents().catch(err => {
         console.error('[EventScheduler] Error checking events:', err);
+      });
+      this.checkMessageCleanup().catch(err => {
+        console.error('[EventScheduler] Error cleaning up event messages:', err);
       });
     }, 25000);
   }
@@ -45,7 +49,10 @@ export class EventScheduler {
       if (now >= event.eventTime) {
         await prisma.eventGathering.update({
           where: { id: event.id },
-          data: { status: 'FINISHED' },
+          data: { 
+            status: 'FINISHED',
+            finishedAt: now,
+          },
         });
 
         const finishEmbed = new EmbedBuilder()
@@ -62,6 +69,19 @@ export class EventScheduler {
         await channel.send({ embeds: [finishEmbed] });
         await EventService.refreshAnnouncement(guild, event.id);
         this.sentMilestones.delete(event.id);
+
+        // Audit log in #ивенты-лог
+        const logEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle(`🏁 Мероприятие завершено (старт): ${event.title}`)
+          .setDescription(
+            `Мероприятие **${event.title}** завершилось (время начала наступило).\n` +
+            `Канал: <#${event.channelId}>\n` +
+            `Участников: ${event.participants.length}`
+          )
+          .setTimestamp();
+        await AuditLogger.sendLog(guild, 'EVENTS', logEmbed);
+
         continue;
       }
 
@@ -143,4 +163,66 @@ export class EventScheduler {
       }
     }
   }
+
+  /**
+   * Automatically delete event announcement messages 30 minutes after event finishes or is cancelled
+   */
+  private static async checkMessageCleanup() {
+    const finishedEvents = await prisma.eventGathering.findMany({
+      where: {
+        status: { in: ['FINISHED', 'CANCELLED'] },
+        messageDeleted: false,
+        messageId: { not: null },
+        channelId: { not: null },
+      },
+    });
+
+    const now = new Date();
+
+    for (const event of finishedEvents) {
+      const finishTime = event.finishedAt || event.eventTime || event.updatedAt;
+      const diffMinutes = (now.getTime() - finishTime.getTime()) / 60000;
+
+      // 30 minutes past event finish
+      if (diffMinutes >= 30) {
+        const guild = bot.guilds.cache.get(event.guildId);
+        if (guild && event.channelId && event.messageId) {
+          try {
+            const channel = (guild.channels.cache.get(event.channelId) ||
+              await guild.channels.fetch(event.channelId).catch(() => null)) as TextChannel | null;
+
+            if (channel && channel.isTextBased()) {
+              const msg = await channel.messages.fetch(event.messageId).catch(() => null);
+              if (msg) {
+                await msg.delete().catch(() => null);
+              }
+            }
+
+            // Log auto-deletion to #ивенты-лог
+            const deleteEmbed = new EmbedBuilder()
+              .setColor(0x95A5A6)
+              .setTitle(`🗑️ Удалено сообщение сбора: ${event.title}`)
+              .setDescription(
+                `Сообщение сбора на мероприятие **«${event.title}»** было автоматически удалено спустя 30 минут после его завершения.\n` +
+                `Канал: <#${event.channelId}>`
+              )
+              .setTimestamp();
+            await AuditLogger.sendLog(guild, 'EVENTS', deleteEmbed);
+          } catch (err) {
+            console.error(`[EventScheduler] Error deleting message for event ${event.id}:`, err);
+          }
+        }
+
+        // Mark as deleted in DB so we never check again
+        await prisma.eventGathering.update({
+          where: { id: event.id },
+          data: {
+            messageDeleted: true,
+            messageId: null,
+          },
+        }).catch(() => null);
+      }
+    }
+  }
 }
+

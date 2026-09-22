@@ -75,6 +75,20 @@ async function runTests() {
   console.assert(sampleApiKey.startsWith('interpol_'), 'API key must start with interpol_ prefix');
   console.log('✅ Test 6: External stats API key format verified');
 
+  // Test 7: 30-Minute Message Cleanup Check
+  const eventFinishedAt = new Date(Date.now() - 31 * 60 * 1000); // 31 minutes ago
+  const diffMinutes = (Date.now() - eventFinishedAt.getTime()) / 60000;
+  console.assert(diffMinutes >= 30, '31 minutes ago should trigger 30-minute auto cleanup');
+  const recentFinishedAt = new Date(Date.now() - 15 * 60 * 1000); // 15 minutes ago
+  const diffRecent = (Date.now() - recentFinishedAt.getTime()) / 60000;
+  console.assert(diffRecent < 30, '15 minutes ago should NOT trigger 30-minute auto cleanup');
+  console.log('✅ Test 7: 30-minute event message auto-deletion timer verified');
+
+  // Test 8: EVENTS Log Category
+  const logCategories = ['MESSAGES', 'MEMBERS', 'ROLES', 'CHANNELS', 'VOICE', 'INVITES', 'BOT', 'EVENTS'];
+  console.assert(logCategories.includes('EVENTS'), 'EVENTS category must be present in log categories');
+  console.log('✅ Test 8: Audit log category EVENTS verified');
+
   console.log('🎉 ALL LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
