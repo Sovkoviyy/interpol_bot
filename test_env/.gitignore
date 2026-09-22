@@ -1,6 +1,0 @@
-.env
-.env.test
-test.db
-test.db-journal
-cloudflared.log
-run_bot.bat

@@ -49,8 +49,14 @@ function runCommand(command, cwd = ROOT_DIR) {
 
 // 2. Инициализация базы данных Prisma
 console.log('📦 [1/3] Проверка и синхронизация базы данных (Prisma)...');
-runCommand('npx prisma db push');
-runCommand('npx prisma generate');
+if (!runCommand('npx prisma db push')) {
+  console.error('❌ Ошибка синхронизации схемы Prisma.');
+  process.exit(1);
+}
+if (!runCommand('npx prisma generate')) {
+  console.error('❌ Ошибка генерации клиента Prisma.');
+  process.exit(1);
+}
 
 // 3. Проверка и сборка веб-панели (React + Vite)
 const webDir = path.join(ROOT_DIR, 'web');
@@ -59,12 +65,18 @@ const webModules = path.join(webDir, 'node_modules');
 
 if (!fs.existsSync(webModules)) {
   console.log('\n📦 Установка зависимостей веб-панели...');
-  runCommand('npm install', webDir);
+  if (!runCommand('npm install', webDir)) {
+    console.error('❌ Ошибка установки зависимостей веб-панели.');
+    process.exit(1);
+  }
 }
 
 if (!fs.existsSync(webDist)) {
   console.log('\n🔨 [2/3] Сборка веб-панели React...');
-  runCommand('npm run build', webDir);
+  if (!runCommand('npm run build', webDir)) {
+    console.error('❌ Ошибка сборки веб-панели.');
+    process.exit(1);
+  }
 } else {
   console.log('✅ [2/3] Веб-панель уже собрана (web/dist)');
 }
@@ -72,7 +84,10 @@ if (!fs.existsSync(webDist)) {
 // 4. Сборка TypeScript бэкенда
 const backendDist = path.join(ROOT_DIR, 'dist', 'index.js');
 console.log('\n🔨 [3/3] Компиляция TypeScript бэкенда...');
-runCommand('npm run build:server');
+if (!runCommand('npm run build:server')) {
+  console.error('❌ Ошибка сборки бэкенда.');
+  process.exit(1);
+}
 
 if (process.argv.includes('--setup-only')) {
   console.log('\n🎉 Подготовка завершена! Флаг --setup-only указан, выход.');

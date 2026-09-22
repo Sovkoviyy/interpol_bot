@@ -9,18 +9,10 @@ web/dist/
 # Environment secrets
 .env
 .env.local
-test_env/.env
-test_env/.env.test
 
 # SQLite Databases
 *.db
 *.db-journal
-test_env/*.db
-test_env/*.db-journal
-
-# Binaries
-cloudflared.exe
-test_env/cloudflared.exe
 
 # Logs
 *.log

@@ -26,8 +26,16 @@ authRouter.get('/login', (req: Request, res: Response) => {
 // 2. OAuth2 Callback
 authRouter.get('/callback', async (req: Request, res: Response) => {
   const code = req.query.code as string;
+  const reqHost = req.get('host');
+  let redirectBase = config.server.frontendUrl;
+
+  // When frontend is served directly by Express (e.g. localhost:3001 or VPS), redirect to current host
+  if (reqHost && config.server.frontendUrl.includes('5173') && !reqHost.includes('5173')) {
+    redirectBase = `${req.protocol}://${reqHost}`;
+  }
+
   if (!code) {
-    return res.redirect(`${config.server.frontendUrl}/login?error=no_code`);
+    return res.redirect(`${redirectBase}/login?error=no_code`);
   }
 
   try {
@@ -107,10 +115,10 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.redirect(`${config.server.frontendUrl}/dashboard?token=${token}`);
+    return res.redirect(`${redirectBase}/dashboard?token=${token}`);
   } catch (error: any) {
     console.error('[OAuth2 Error]:', error.response?.data || error.message);
-    return res.redirect(`${config.server.frontendUrl}/login?error=auth_failed`);
+    return res.redirect(`${redirectBase}/login?error=auth_failed`);
   }
 });
 
