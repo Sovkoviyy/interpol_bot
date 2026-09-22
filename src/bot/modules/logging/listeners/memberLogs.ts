@@ -8,10 +8,14 @@ import {
 } from 'discord.js';
 import bot from '../../../client';
 import { AuditLogger } from '../auditLogger';
+import { RolePersistenceService } from '../../roles/rolePersistenceService';
 
 export function registerMemberLogs() {
   // Member Join
   bot.on(Events.GuildMemberAdd, async (member: GuildMember) => {
+    // Restore roles if member was previously in server
+    await RolePersistenceService.restoreMemberRoles(member);
+
     const embed = new EmbedBuilder()
       .setColor(0x57F287) // Green
       .setTitle('📥 Новый участник присоединился')
@@ -29,6 +33,9 @@ export function registerMemberLogs() {
 
   // Member Leave / Kick
   bot.on(Events.GuildMemberRemove, async (member: GuildMember | PartialGuildMember) => {
+    // Save roles before member leaves
+    await RolePersistenceService.saveMemberRoles(member);
+
     const kickExecutor = await AuditLogger.getAuditLogExecutor(
       member.guild, 
       AuditLogEvent.MemberKick, 

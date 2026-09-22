@@ -62,6 +62,7 @@ guildRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: R
       recruitmentEnabled: true,
       eventsEnabled: true,
       loggingEnabled: true,
+      restoreRolesOnJoin: true,
     },
   });
 });
@@ -69,7 +70,7 @@ guildRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: R
 // Update guild general config
 guildRouter.post('/config', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   const guildId = req.user?.guildId || config.discord.guildId;
-  const { recruitmentEnabled, eventsEnabled, loggingEnabled } = req.body;
+  const { recruitmentEnabled, eventsEnabled, loggingEnabled, restoreRolesOnJoin } = req.body;
 
   const updated = await prisma.guildConfig.upsert({
     where: { guildId: guildId || 'default' },
@@ -77,12 +78,14 @@ guildRouter.post('/config', requireAuth, requirePermission('manageSettings'), as
       recruitmentEnabled: Boolean(recruitmentEnabled),
       eventsEnabled: Boolean(eventsEnabled),
       loggingEnabled: Boolean(loggingEnabled),
+      restoreRolesOnJoin: restoreRolesOnJoin !== undefined ? Boolean(restoreRolesOnJoin) : true,
     },
     create: {
       guildId: guildId || 'default',
       recruitmentEnabled: Boolean(recruitmentEnabled),
       eventsEnabled: Boolean(eventsEnabled),
       loggingEnabled: Boolean(loggingEnabled),
+      restoreRolesOnJoin: restoreRolesOnJoin !== undefined ? Boolean(restoreRolesOnJoin) : true,
     },
   });
 

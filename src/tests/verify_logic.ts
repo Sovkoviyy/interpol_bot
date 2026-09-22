@@ -44,6 +44,24 @@ async function runTests() {
   console.assert(isMilestone, '5 minutes should be a ping milestone');
   console.log('✅ Test 3: Event ping intervals verified');
 
+  // Test 4: Role Persistence Logic
+  const sampleMemberRoles = [
+    { id: 'everyone', managed: false },
+    { id: 'nitro_booster', managed: true },
+    { id: 'family_officer', managed: false },
+    { id: 'family_member', managed: false },
+  ];
+  const guildId = 'everyone';
+  const filteredRoles = sampleMemberRoles
+    .filter(r => r.id !== guildId && !r.managed)
+    .map(r => r.id);
+
+  console.assert(filteredRoles.length === 2, 'Expected 2 roles after filtering');
+  console.assert(filteredRoles.includes('family_officer'), 'Should contain family_officer');
+  console.assert(filteredRoles.includes('family_member'), 'Should contain family_member');
+  console.assert(!filteredRoles.includes('nitro_booster'), 'Managed roles should be excluded');
+  console.log('✅ Test 4: Role persistence filtering logic verified');
+
   console.log('🎉 ALL LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 

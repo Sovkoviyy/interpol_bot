@@ -135,7 +135,7 @@ export const Dashboard: React.FC = () => {
         <h2 className="text-base font-bold text-white mb-1">Управление модулями</h2>
         <p className="text-xs text-slate-400 mb-6">Включение и мгновенное отключение функций бота</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Recruitment Module */}
           <div className="p-4 rounded-xl bg-[#1E232F]/50 border border-[#1E232F] flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -144,7 +144,7 @@ export const Dashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-100">Заявки в семью</p>
-                <p className="text-xs text-slate-400">Форма подачи и тикеты</p>
+                <p className="text-xs text-slate-400">Форма и тикеты</p>
               </div>
             </div>
             <button
@@ -201,6 +201,30 @@ export const Dashboard: React.FC = () => {
               className="text-slate-300 hover:text-white"
             >
               {config?.loggingEnabled ? (
+                <ToggleRight className="w-8 h-8 text-emerald-400" />
+              ) : (
+                <ToggleLeft className="w-8 h-8 text-slate-500" />
+              )}
+            </button>
+          </div>
+
+          {/* Restore Roles Module */}
+          <div className="p-4 rounded-xl bg-[#1E232F]/50 border border-[#1E232F] flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-600/20 text-purple-400 flex items-center justify-center">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-100">Возврат ролей</p>
+                <p className="text-xs text-slate-400">При возвращении</p>
+              </div>
+            </div>
+            <button
+              onClick={() => handleToggleModule('restoreRolesOnJoin', config?.restoreRolesOnJoin)}
+              disabled={saving}
+              className="text-slate-300 hover:text-white"
+            >
+              {config?.restoreRolesOnJoin ? (
                 <ToggleRight className="w-8 h-8 text-emerald-400" />
               ) : (
                 <ToggleLeft className="w-8 h-8 text-slate-500" />
