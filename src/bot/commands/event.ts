@@ -69,7 +69,18 @@ export const eventCommand: Command = {
         .addRoleOption(opt =>
           opt
             .setName('role')
-            .setDescription('Роль для упоминания (если не указать, возьмется запомненная)')
+            .setDescription('Конкретная роль сервера для упоминания (например @Капт-состав или @Семья)')
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('mention')
+            .setDescription('Или выберите общее упоминание (@everyone, @here, без пинга)')
+            .addChoices(
+              { name: 'Запомненная роль по умолчанию', value: 'default' },
+              { name: '@everyone (упомянуть всех)', value: 'everyone' },
+              { name: '@here (только онлайн)', value: 'here' },
+              { name: 'Без упоминания (тихий сбор)', value: 'none' }
+            )
         )
         .addIntegerOption(opt =>
           opt
@@ -98,13 +109,22 @@ export const eventCommand: Command = {
       const partyCode = interaction.options.getString('party_code');
       const voiceChannel = interaction.options.getChannel('voice_channel');
       const targetRole = interaction.options.getRole('role');
+      const mentionChoice = interaction.options.getString('mention') || 'default';
       const limit = interaction.options.getInteger('limit');
       const description = interaction.options.getString('description');
 
       // Fetch saved channel defaults from GuildConfig
       const guildConfig = await prisma.guildConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
       const finalVoiceChannelId = voiceChannel ? voiceChannel.id : (guildConfig?.defaultVoiceChannelId || undefined);
-      const finalTargetRoleId = targetRole ? targetRole.id : (guildConfig?.defaultMentionRoleId || undefined);
+
+      let finalTargetRoleId: string | undefined;
+      if (targetRole) {
+        finalTargetRoleId = targetRole.id;
+      } else if (mentionChoice !== 'default') {
+        finalTargetRoleId = mentionChoice; // 'everyone' | 'here' | 'none'
+      } else {
+        finalTargetRoleId = guildConfig?.defaultMentionRoleId || undefined;
+      }
 
       // Save chosen defaults for subsequent events
       await prisma.guildConfig.upsert({
@@ -112,13 +132,13 @@ export const eventCommand: Command = {
         update: {
           defaultEventChannelId: interaction.channelId,
           ...(voiceChannel ? { defaultVoiceChannelId: voiceChannel.id } : {}),
-          ...(targetRole ? { defaultMentionRoleId: targetRole.id } : {}),
+          ...(finalTargetRoleId ? { defaultMentionRoleId: finalTargetRoleId } : {}),
         },
         create: {
           guildId: guild.id,
           defaultEventChannelId: interaction.channelId,
           defaultVoiceChannelId: voiceChannel?.id,
-          defaultMentionRoleId: targetRole?.id,
+          defaultMentionRoleId: finalTargetRoleId,
         },
       }).catch(() => null);
 
@@ -184,7 +204,18 @@ export const eventCommand: Command = {
       const embed = await EventService.buildEventEmbed(event.id);
       const components = EventService.buildEventButtons(event.id, type === 'LIMITED');
 
-      const pingContent = targetRole ? `<@&${targetRole.id}>` : (type === 'UNLIMITED' ? '@here' : undefined);
+      let pingContent: string | undefined = undefined;
+      if (finalTargetRoleId === 'everyone') {
+        pingContent = '@everyone';
+      } else if (finalTargetRoleId === 'here') {
+        pingContent = '@here';
+      } else if (finalTargetRoleId === 'none') {
+        pingContent = undefined;
+      } else if (finalTargetRoleId) {
+        pingContent = `<@&${finalTargetRoleId}>`;
+      } else if (type === 'UNLIMITED') {
+        pingContent = '@here';
+      }
 
       const channel = interaction.channel;
       if (!channel || !channel.isTextBased() || !('send' in channel)) {
@@ -204,6 +235,12 @@ export const eventCommand: Command = {
         data: { messageId: announcementMsg.id },
       });
 
+      let mentionDisplay = 'Без упоминания';
+      if (finalTargetRoleId === 'everyone') mentionDisplay = '@everyone';
+      else if (finalTargetRoleId === 'here') mentionDisplay = '@here';
+      else if (finalTargetRoleId && finalTargetRoleId !== 'none') mentionDisplay = `<@&${finalTargetRoleId}>`;
+      else if (type === 'UNLIMITED') mentionDisplay = '@here (по умолчанию)';
+
       // Send audit log to #ивенты-лог
       const createEmbed = new EmbedBuilder()
         .setColor(0x5865F2)
@@ -211,6 +248,7 @@ export const eventCommand: Command = {
         .setDescription(
           `Создатель: <@${interaction.user.id}> (${interaction.user.tag})\n` +
           `Канал сбора: <#${interaction.channelId}>\n` +
+          `Упоминание: **${mentionDisplay}**\n` +
           `Тип: **${type === 'LIMITED' ? `С ограничением (${limit || 10} мест)` : 'Без ограничений'}**\n` +
           `Чек-ин: <t:${Math.floor(checkInTime.getTime() / 1000)}:f>\n` +
           `Старт: <t:${Math.floor(eventTime.getTime() / 1000)}:f>`

@@ -100,7 +100,19 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
   // Post announcement
   const embed = await EventService.buildEventEmbed(event.id);
   const components = EventService.buildEventButtons(event.id, type === 'LIMITED');
-  const pingContent = targetRoleId ? `<@&${targetRoleId}>` : (type === 'UNLIMITED' ? '@here' : undefined);
+
+  let pingContent: string | undefined = undefined;
+  if (targetRoleId === 'everyone') {
+    pingContent = '@everyone';
+  } else if (targetRoleId === 'here') {
+    pingContent = '@here';
+  } else if (targetRoleId === 'none') {
+    pingContent = undefined;
+  } else if (targetRoleId) {
+    pingContent = `<@&${targetRoleId}>`;
+  } else if (type === 'UNLIMITED') {
+    pingContent = '@here';
+  }
 
   const msg = await channel.send({
     content: pingContent,
@@ -129,6 +141,12 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
     },
   }).catch(() => null);
 
+  let mentionDisplay = 'Без упоминания';
+  if (targetRoleId === 'everyone') mentionDisplay = '@everyone';
+  else if (targetRoleId === 'here') mentionDisplay = '@here';
+  else if (targetRoleId && targetRoleId !== 'none') mentionDisplay = `<@&${targetRoleId}>`;
+  else if (type === 'UNLIMITED') mentionDisplay = '@here (по умолчанию)';
+
   // Send audit log to #ивенты-лог
   const createEmbed = new EmbedBuilder()
     .setColor(0x5865F2)
@@ -136,6 +154,7 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
     .setDescription(
       `Создатель: <@${req.user!.userId}> (${req.user!.username})\n` +
       `Канал сбора: <#${channelId}>\n` +
+      `Упоминание: **${mentionDisplay}**\n` +
       `Тип: **${type === 'LIMITED' ? `С ограничением (${participantLimit || 10} мест)` : 'Без ограничений'}**\n` +
       `Чек-ин: <t:${Math.floor(new Date(checkInTime).getTime() / 1000)}:f>\n` +
       `Старт: <t:${Math.floor(new Date(eventTime).getTime() / 1000)}:f>`

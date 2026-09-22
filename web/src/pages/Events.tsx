@@ -144,6 +144,14 @@ export const Events: React.FC = () => {
   const textChannels = channels.filter(c => c.type === 0);
   const voiceChannels = channels.filter(c => c.type === 2);
 
+  const getMentionLabel = (targetRoleId?: string) => {
+    if (!targetRoleId || targetRoleId === 'none') return 'Без пинга';
+    if (targetRoleId === 'here') return '@here';
+    if (targetRoleId === 'everyone') return '@everyone';
+    const found = roles.find(r => r.id === targetRoleId);
+    return found ? `@${found.name}` : `@${targetRoleId}`;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -179,47 +187,56 @@ export const Events: React.FC = () => {
 
           <button
             onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all shadow-lg shadow-emerald-600/20"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition-all"
           >
             <Plus className="w-4 h-4" />
-            <span>Создать сбор</span>
+            Объявить сбор
           </button>
         </div>
       </div>
 
       {/* Events Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {events.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-slate-500 bg-[#151921] border border-[#1E232F] rounded-2xl">
-            Сборов с выбранным статусом нет
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {loading ? (
+          <div className="col-span-full py-12 text-center text-slate-500">Загрузка мероприятий...</div>
+        ) : events.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-slate-500">Мероприятий не найдено</div>
         ) : (
           events.map((ev) => {
+            const isLimited = ev.type === 'LIMITED';
             const confirmed = ev.participants?.filter((p: any) => p.status === 'CONFIRMED') || [];
             const reserve = ev.participants?.filter((p: any) => p.status === 'RESERVE') || [];
-            const isLimited = ev.type === 'LIMITED';
 
             return (
               <div
                 key={ev.id}
-                className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between"
+                className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 hover:border-slate-700/60 transition-all flex flex-col justify-between"
               >
                 <div>
-                  {/* Status badge & title */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        ev.status === 'ACTIVE'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
-                      }`}
-                    >
-                      {ev.status === 'ACTIVE' ? '🟢 Активен' : '🏁 Завершен'}
-                    </span>
+                  {/* Card Top Info */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                        ev.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        ev.status === 'FINISHED' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+                        'bg-red-500/10 text-red-400 border border-red-500/20'
+                      }`}>
+                        {ev.status === 'ACTIVE' ? 'Активен' : (ev.status === 'FINISHED' ? 'Завершен' : 'Отменен')}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {isLimited ? `Спецсостав (${confirmed.length}/${ev.participantLimit})` : 'Массовый сбор'}
+                      </span>
+                    </div>
 
-                    <span className="text-xs text-slate-400 font-medium">
-                      Организатор: @{ev.createdByTag || 'Организатор'}
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <span className="text-xs text-slate-400 font-medium">
+                        Организатор: @{ev.createdByTag || 'Организатор'}
+                      </span>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-xs text-indigo-400 font-medium bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                        🔔 {getMentionLabel(ev.targetRoleId)}
+                      </span>
+                    </div>
                   </div>
 
                   <h3 className="text-lg font-bold text-white mb-2">{ev.title}</h3>
@@ -516,17 +533,28 @@ export const Events: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Роль для пинга</label>
+                  <label className="block text-slate-400 mb-1 font-medium">Роль для упоминания (пинг)</label>
                   <select
                     value={form.targetRoleId}
                     onChange={(e) => setForm({ ...form, targetRoleId: e.target.value })}
                     className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                   >
-                    <option value="">@everyone / @here</option>
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.id}>@{r.name}</option>
-                    ))}
+                    <optgroup label="Общие упоминания">
+                      <option value="none">Без упоминания (тихий сбор)</option>
+                      <option value="here">@here (только кто онлайн)</option>
+                      <option value="everyone">@everyone (все участники)</option>
+                    </optgroup>
+                    <optgroup label="Конкретные роли сервера">
+                      {roles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          @{r.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">
+                    Бот отправит пинг выбранной роли при публикации и напоминаниях
+                  </span>
                 </div>
               </div>
 

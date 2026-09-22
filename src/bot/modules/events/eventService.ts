@@ -39,36 +39,55 @@ export class EventService {
 
     const embed = new EmbedBuilder()
       .setColor(event.status === 'ACTIVE' ? 0x5865F2 : (event.status === 'FINISHED' ? 0x2ECC71 : 0xED4245))
-      .setTitle(`⚔️ Сбор на мероприятие: ${event.title}`)
-      .setDescription(
-        (event.description ? `*${event.description}*\n\n` : '') +
-        `**Организатор:** <@${event.createdById}> (\`${event.createdByTag || 'Организатор'}\`)\n` +
-        `**Тип сбора:** \`${isLimited ? `С ограничением (${confirmed.length}/${event.participantLimit || '∞'})` : 'Без ограничений'}\`\n` +
-        `**Статус:** ${event.status === 'ACTIVE' ? '🟢 Активен' : (event.status === 'FINISHED' ? '🏁 Завершено' : '❌ Отменено')}\n\n` +
-        `**Проверка явки (чек-ин):** <t:${checkInUnix}:t> (<t:${checkInUnix}:R>)\n` +
-        `**Начало мероприятия:** <t:${eventUnix}:t> (<t:${eventUnix}:R>)\n` +
-        `**Код группы:** \`${event.partyCode || 'Не указан'}\`\n` +
-        `**Голосовой канал:** ${event.voiceChannelId ? `<#${event.voiceChannelId}>` : 'Не указан'}\n` +
-        `**Целевая роль:** ${event.targetRoleId ? `<@&${event.targetRoleId}>` : 'Все'}\n`
-      );
+      .setTitle(`⚔️  ${event.title}`);
+
+    const descParts: string[] = [];
+
+    if (event.description) {
+      descParts.push(`> 💬 *${event.description}*\n`);
+    }
+
+    descParts.push(`⏰ **Начало:** <t:${eventUnix}:t> • <t:${eventUnix}:R>`);
+    descParts.push(`📋 **Чек-ин:** <t:${checkInUnix}:t> • <t:${checkInUnix}:R>`);
+    descParts.push(`👑 **Организатор:** <@${event.createdById}>`);
+
+    if (event.voiceChannelId) {
+      descParts.push(`🔊 **Голосовой канал:** <#${event.voiceChannelId}>`);
+    }
+
+    if (event.partyCode) {
+      descParts.push(`🔑 **Код группы:** \`${event.partyCode}\``);
+    }
+
+    if (event.targetRoleId && event.targetRoleId !== 'none') {
+      const roleText = event.targetRoleId === 'everyone'
+        ? '@everyone'
+        : (event.targetRoleId === 'here' ? '@here' : `<@&${event.targetRoleId}>`);
+      descParts.push(`🎯 **Упоминание:** ${roleText}`);
+    }
+
+    embed.setDescription(descParts.join('\n'));
 
     if (isLimited) {
+      const limit = event.participantLimit || 10;
       // Main roster
       let confirmedText = confirmed.length > 0 
-        ? confirmed.map((p, idx) => `**${idx + 1}.** <@${p.userId}> (\`${p.userTag || p.userId}\`)`).join('\n')
-        : '*Список пуст*';
+        ? confirmed.map((p, idx) => `\`${idx + 1}.\` <@${p.userId}>`).join('\n')
+        : '*Список пуст. Нажмите «Записаться» ниже.*';
 
       if (confirmedText.length > 1024) confirmedText = confirmedText.slice(0, 1000) + '...';
 
       embed.addFields({
-        name: `👥 Основной состав (${confirmed.length}/${event.participantLimit || 0})`,
+        name: `👥 Основной состав (${confirmed.length}/${limit})`,
         value: confirmedText,
         inline: false,
       });
 
-      // Reserve list
+      // Reserve list only when there are members in reserve
       if (reserve.length > 0) {
-        let reserveText = reserve.map((p, idx) => `**${idx + 1}.** <@${p.userId}> (\`${p.userTag || p.userId}\`)`).join('\n');
+        let reserveText = reserve
+          .map((p, idx) => `\`${idx + 1}.\` <@${p.userId}>`)
+          .join('\n');
         if (reserveText.length > 1024) reserveText = reserveText.slice(0, 1000) + '...';
 
         embed.addFields({
@@ -79,7 +98,14 @@ export class EventService {
       }
     }
 
-    embed.setFooter({ text: `ID сбора: ${event.id}` }).setTimestamp();
+    let footerText = 'Сбор семьи • Нажмите кнопку ниже для записи';
+    if (event.status === 'FINISHED') {
+      footerText = '🏁 Мероприятие завершено • Сообщение удалится через 30 мин';
+    } else if (event.status === 'CANCELLED') {
+      footerText = '❌ Мероприятие отменено организатором';
+    }
+
+    embed.setFooter({ text: footerText }).setTimestamp();
     return embed;
   }
 

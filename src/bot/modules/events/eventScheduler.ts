@@ -55,15 +55,17 @@ export class EventScheduler {
           },
         });
 
+        const finishLines: string[] = [
+          `🚀 **Мероприятие официально началось!**\n`,
+        ];
+        if (event.voiceChannelId) finishLines.push(`> 🔊 **Голосовой канал:** <#${event.voiceChannelId}>`);
+        if (event.partyCode) finishLines.push(`> 🔑 **Код группы:** \`${event.partyCode}\``);
+        finishLines.push(`\nВсем участникам хорошей игры и побед! Сообщение сбора удалится через 30 минут.`);
+
         const finishEmbed = new EmbedBuilder()
           .setColor(0x2ECC71)
-          .setTitle(`🏁 Мероприятие началось: ${event.title}`)
-          .setDescription(
-            `Сбор завершен! Мероприятие официально началось.\n` +
-            `Код группы: \`${event.partyCode || 'Не указан'}\`\n` +
-            (event.voiceChannelId ? `Голосовой канал: <#${event.voiceChannelId}>\n` : '') +
-            `Всем участникам хорошей игры!`
-          )
+          .setTitle(`🏁 Старт мероприятия: ${event.title}`)
+          .setDescription(finishLines.join('\n'))
           .setTimestamp();
 
         await channel.send({ embeds: [finishEmbed] });
@@ -117,39 +119,50 @@ export class EventScheduler {
         if (matchesEventStart || matchesCheckIn) {
           sent.add(targetMin);
 
-          // Build ping targets
+          // Build ping targets with exact role support
           let pings = '';
+          const targetRoleId = event.targetRoleId;
           if (event.type === 'LIMITED') {
             const confirmed = event.participants.filter(p => p.status === 'CONFIRMED');
             if (confirmed.length > 0) {
               pings = confirmed.map(p => `<@${p.userId}>`).join(' ');
-            } else if (event.targetRoleId) {
-              pings = `<@&${event.targetRoleId}>`;
+            } else if (targetRoleId) {
+              if (targetRoleId === 'everyone') pings = '@everyone';
+              else if (targetRoleId === 'here') pings = '@here';
+              else if (targetRoleId !== 'none') pings = `<@&${targetRoleId}>`;
             }
           } else {
-            pings = event.targetRoleId ? `<@&${event.targetRoleId}>` : '@here';
+            if (targetRoleId === 'everyone') pings = '@everyone';
+            else if (targetRoleId === 'here') pings = '@here';
+            else if (targetRoleId === 'none') pings = '';
+            else if (targetRoleId) pings = `<@&${targetRoleId}>`;
+            else pings = '@here';
           }
 
           const isCheckInPing = matchesCheckIn;
-          const timeText = isCheckInPing 
-            ? `до **проверки явки (чек-ин)** осталось **${targetMin} мин.**!` 
-            : `до **начала мероприятия** осталось **${targetMin} мин.**!`;
+          const reminderLines: string[] = [
+            `🔔 **До ${isCheckInPing ? 'проверки явки (чек-ин)' : 'начала мероприятия'} осталось ${targetMin} мин!**\n`,
+          ];
+
+          if (event.voiceChannelId) {
+            reminderLines.push(`> 🔊 **Голосовой канал:** <#${event.voiceChannelId}>`);
+          }
+          if (event.partyCode) {
+            reminderLines.push(`> 🔑 **Код группы:** \`${event.partyCode}\``);
+          }
+          if (event.messageId) {
+            reminderLines.push(`> 📍 [Открыть карточку сбора](https://discord.com/channels/${guild.id}/${event.channelId}/${event.messageId})`);
+          }
 
           const reminderEmbed = new EmbedBuilder()
-            .setColor(targetMin <= 3 ? 0xED4245 : 0xFEE75C)
-            .setTitle(`⏰ Внимание! Сбор на ${event.title}`)
-            .setDescription(
-              `${timeText}\n\n` +
-              (event.voiceChannelId ? `🔊 Заходите в голосовой канал: <#${event.voiceChannelId}>\n` : '') +
-              (event.partyCode ? `🔑 Код группы: \`${event.partyCode}\`\n` : '') +
-              `📌 Чек-ин: <t:${Math.floor(event.checkInTime.getTime() / 1000)}:t>\n` +
-              `🚀 Старт: <t:${Math.floor(event.eventTime.getTime() / 1000)}:t>`
-            )
-            .setFooter({ text: `Автоматическое напоминание бота` })
+            .setColor(targetMin <= 3 ? 0xED4245 : (targetMin <= 5 ? 0xFEE75C : 0x5865F2))
+            .setTitle(`⏰ Напоминание: ${event.title}`)
+            .setDescription(reminderLines.join('\n'))
+            .setFooter({ text: 'Приготовьте экипировку и занимайте места в канале' })
             .setTimestamp();
 
           await channel.send({
-            content: pings,
+            content: pings || undefined,
             embeds: [reminderEmbed],
           });
 

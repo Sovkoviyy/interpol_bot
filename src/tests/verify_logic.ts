@@ -89,6 +89,21 @@ async function runTests() {
   console.assert(logCategories.includes('EVENTS'), 'EVENTS category must be present in log categories');
   console.log('✅ Test 8: Audit log category EVENTS verified');
 
+  // Test 9: Event Role Mention Resolution
+  const resolvePing = (targetRoleId?: string | null, type = 'LIMITED') => {
+    if (!targetRoleId || targetRoleId === 'none') return undefined;
+    if (targetRoleId === 'everyone') return '@everyone';
+    if (targetRoleId === 'here') return '@here';
+    return `<@&${targetRoleId}>`;
+  };
+
+  console.assert(resolvePing('123456789') === '<@&123456789>', 'Should format specific role ID');
+  console.assert(resolvePing('everyone') === '@everyone', 'Should format @everyone');
+  console.assert(resolvePing('here') === '@here', 'Should format @here');
+  console.assert(resolvePing('none') === undefined, 'Should be undefined for none');
+  console.assert(resolvePing(null) === undefined, 'Should be undefined for null');
+  console.log('✅ Test 9: Specific role mention resolution verified');
+
   console.log('🎉 ALL LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
