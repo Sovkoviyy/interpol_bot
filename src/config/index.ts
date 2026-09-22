@@ -13,7 +13,7 @@ if (customEnvPath && fs.existsSync(customEnvPath)) {
   resolvedEnv = cwdEnvPath;
 }
 
-dotenv.config({ path: resolvedEnv });
+dotenv.config({ path: resolvedEnv, override: true });
 
 export const config = {
   discord: {

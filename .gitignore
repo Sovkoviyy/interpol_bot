@@ -10,6 +10,7 @@ web/dist/
 .env
 .env.local
 test_env/.env
+test_env/.env.test
 
 # SQLite Databases
 *.db

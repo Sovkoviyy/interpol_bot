@@ -13,19 +13,29 @@ const { execSync, spawn } = require('child_process');
 
 const TEST_DIR = __dirname;
 const ROOT_DIR = path.resolve(TEST_DIR, '..');
-const ENV_FILE = path.join(TEST_DIR, '.env');
+// Используем .env.test, чтобы Prisma не ругалась на конфликт с родительским .env
+const ENV_FILE = path.join(TEST_DIR, '.env.test');
+const OLD_ENV_FILE = path.join(TEST_DIR, '.env');
+
+// Если остался старый .env, переносим в .env.test и удаляем старый
+if (fs.existsSync(OLD_ENV_FILE)) {
+  if (!fs.existsSync(ENV_FILE)) {
+    fs.copyFileSync(OLD_ENV_FILE, ENV_FILE);
+  }
+  fs.unlinkSync(OLD_ENV_FILE);
+}
 
 console.log('====================================================================');
 console.log('🧪 [INTERPOL BOT] ТЕСТОВОЕ ОКРУЖЕНИЕ (ИЗОЛИРОВАННАЯ ПЕСОЧНИЦА)');
 console.log('====================================================================');
 console.log('• Отдельная база данных: test_env/test.db');
-console.log('• Отдельный файл конфигурации: test_env/.env\n');
+console.log('• Отдельный файл конфигурации: test_env/.env.test\n');
 
 function ask(rl, question) {
   return new Promise((resolve) => rl.question(question, resolve));
 }
 
-// Загрузка существующих значений из .env
+// Загрузка существующих значений из .env.test
 function loadCurrentEnv() {
   const env = {};
   if (fs.existsSync(ENV_FILE)) {
@@ -91,12 +101,12 @@ async function configureEnv() {
     `DISCORD_REDIRECT_URI=http://localhost:${port}/api/auth/callback`,
     '',
     '# Test Database (Isolated)',
-    'DATABASE_URL="file:./test.db"',
+    'DATABASE_URL="file:../test_env/test.db"',
     '',
   ].join('\n');
 
   fs.writeFileSync(ENV_FILE, newEnvContent, 'utf-8');
-  console.log('\n✅ [УСПЕХ] Файл test_env/.env сохранен!\n');
+  console.log('\n✅ [УСПЕХ] Файл test_env/.env.test сохранен!\n');
 
   return {
     DISCORD_TOKEN: token,
@@ -140,17 +150,16 @@ async function main() {
     console.log('✅ [2/4] Веб-панель готова.');
   }
 
-  // 3. Синхронизация тестовой БД
+  // 3. Синхронизация тестовой БД (запускаем из ROOT_DIR, передавая DATABASE_URL)
   console.log('\n📦 [3/4] Инициализация тестовой базы данных SQLite (test_env/test.db)...');
   try {
-    const schemaPath = path.join(ROOT_DIR, 'prisma', 'schema.prisma');
-    execSync(`npx prisma db push --schema="${schemaPath}"`, {
-      cwd: TEST_DIR,
+    execSync('npx prisma db push', {
+      cwd: ROOT_DIR,
       stdio: 'inherit',
       shell: true,
       env: {
         ...process.env,
-        DATABASE_URL: 'file:./test.db',
+        DATABASE_URL: 'file:../test_env/test.db',
       },
     });
   } catch (e) {
@@ -168,17 +177,19 @@ async function main() {
   console.log('\n====================================================================');
   console.log('🚀 [4/4] Запуск тестового бота и Cloudflare Tunnel...');
   console.log('====================================================================');
-  console.log('• Бот и сервер запущены в отдельном окне.');
+  console.log('• Бот и сервер запускаются в отдельном окне.');
   console.log('• Ниже будет выведена публичная ссылка Cloudflare:\n');
 
   if (process.platform === 'win32') {
-    // Windows: запуск в отдельном cmd окне
-    const startCmd = `start "INTERPOL BOT [ТЕСТОВОЕ ОКРУЖЕНИЕ]" cmd /k "cd /d "${TEST_DIR}" && set ENV_FILE=${ENV_FILE} && node "${backendDist}""`;
-    execSync(startCmd, { shell: true });
+    // Windows: запуск через батник без проблем с кавычками и путями
+    const runnerBat = path.join(TEST_DIR, 'run_bot.bat');
+    const runnerContent = `@echo off\r\nchcp 65001 > nul\r\ntitle INTERPOL BOT [ТЕСТОВОЕ ОКРУЖЕНИЕ]\r\ncd /d "${ROOT_DIR}"\r\nset "ENV_FILE=${ENV_FILE}"\r\nnode "${backendDist}"\r\nif errorlevel 1 pause\r\n`;
+    fs.writeFileSync(runnerBat, runnerContent, 'utf-8');
+    execSync(`start "" "${runnerBat}"`, { shell: true });
   } else {
     // Linux
     spawn('node', [backendDist], {
-      cwd: TEST_DIR,
+      cwd: ROOT_DIR,
       stdio: 'inherit',
       env: {
         ...process.env,
