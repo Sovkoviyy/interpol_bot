@@ -122,12 +122,8 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
   }
 });
 
-// 3. Dev Login (for rapid testing when offline or without Discord app configured yet)
+// 3. Dev Login (kept active per user request for easy testing/staging; remove before public release)
 authRouter.post('/dev-login', async (req: Request, res: Response) => {
-  if (!config.isDev) {
-    return res.status(403).json({ error: 'Forbidden: dev-login is only available in development mode' });
-  }
-
   const sessionData: UserSessionData = {
     userId: '111122223333444455',
     username: 'Family_Leader',
