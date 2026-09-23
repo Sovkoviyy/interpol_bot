@@ -1,3 +1,4 @@
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
 import prisma from '../../../database/client';
 
 export class LeaveService {
@@ -102,4 +103,34 @@ export class LeaveService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  /**
+   * Deploy interactive button panel in a Discord channel to let members submit leave requests
+   */
+  static async deployLeavePanel(channel: TextChannel) {
+    const embed = new EmbedBuilder()
+      .setColor(0xF59E0B)
+      .setTitle('🏖️ Заявка на отпуск / Неактив / АФК | Семья INTERPOL')
+      .setDescription(
+        'Если вы временно не можете проявлять активность в игре по уважительной причине (сессия, работа, отъезд), ' +
+        'оформите официальную заявку на отпуск.\n\n' +
+        '**Правила отпусков:**\n' +
+        '• Максимальная продолжительность: **до 14 дней (2 недели)**\n' +
+        '• После одобрения статус вашего профиля переходит в «В отпуске»\n' +
+        '• Во время отпуска вам не начисляются штрафы за пропуск МП\n\n' +
+        '👇 Нажмите кнопку ниже для заполнения формы:'
+      )
+      .setFooter({ text: 'INTERPOL Majestic RP • Заявки на неактив' })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('panel_request_leave')
+        .setLabel('🏖️ Подать на отпуск (до 14 дней)')
+        .setStyle(ButtonStyle.Primary)
+    );
+
+    return await channel.send({ embeds: [embed], components: [row] });
+  }
 }
+

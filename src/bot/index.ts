@@ -58,4 +58,50 @@ export async function startBot() {
   }
 }
 
+/**
+ * Restart the Discord bot client dynamically without taking down the web server
+ */
+export async function restartBot() {
+  console.log('🔄 [Bot] Restart initiated from web dashboard...');
+
+  try {
+    EventScheduler.stop();
+  } catch (err) {
+    // ignore
+  }
+
+  try {
+    bot.removeAllListeners();
+    await bot.destroy();
+  } catch (err) {
+    console.error('Error during bot destruction:', err);
+  }
+
+  // Re-start bot client
+  await startBot();
+  console.log('✅ [Bot] Bot successfully reloaded from dashboard!');
+
+  return {
+    success: true,
+    user: bot.user?.tag || null,
+    restartedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Get current bot health & status
+ */
+export function getBotStatus() {
+  const isOnline = bot.isReady();
+  return {
+    online: isOnline,
+    tag: bot.user?.tag || null,
+    id: bot.user?.id || null,
+    ping: bot.ws.ping,
+    guildsCount: bot.guilds.cache.size,
+    uptimeSeconds: bot.uptime ? Math.floor(bot.uptime / 1000) : 0,
+  };
+}
+
 export default bot;
+

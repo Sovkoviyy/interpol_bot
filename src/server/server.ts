@@ -19,6 +19,7 @@ import leaveRouter from './routes/leave';
 import payrollRouter from './routes/payroll';
 import blacklistRouter from './routes/blacklist';
 import antiNukeRouter from './routes/antiNuke';
+import botManagementRouter from './routes/botManagement';
 
 export function createServer() {
   const app = express();
@@ -49,6 +50,7 @@ export function createServer() {
   app.use('/api/payroll', payrollRouter);
   app.use('/api/blacklist', blacklistRouter);
   app.use('/api/anti-nuke', antiNukeRouter);
+  app.use('/api/bot', botManagementRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {

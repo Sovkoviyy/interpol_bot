@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { TextChannel } from 'discord.js';
 import { requireAuth } from '../middlewares/auth';
 import config from '../../config';
 import prisma from '../../database/client';
+import bot from '../../bot/client';
 import { ProfileService } from '../../bot/modules/profiles/profileService';
 
 const router = Router();
@@ -98,6 +100,41 @@ router.post('/:userId/penalty', async (req, res) => {
     );
 
     res.json({ profile: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/profiles/deploy-panel
+ * Send interactive static binding message to Discord channel
+ */
+router.post('/deploy-panel', async (req, res) => {
+  try {
+    const { channelId } = req.body;
+    if (!channelId) return res.status(400).json({ error: 'Укажите ID текстового канала' });
+
+    const guildId = config.discord.guildId;
+    if (!guildId) return res.status(400).json({ error: 'GUILD_ID не настроен' });
+
+    const guild = bot.guilds.cache.get(guildId);
+    if (!guild) return res.status(400).json({ error: 'Бот не подключен к серверу Discord' });
+
+    const channel = (guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null)) as TextChannel | null;
+    if (!channel || !channel.isTextBased()) {
+      return res.status(400).json({ error: 'Текстовый канал с таким ID не найден на сервере' });
+    }
+
+    const msg = await ProfileService.deployStaticBindingPanel(channel);
+
+    // Save as default in GuildConfig if configured
+    await prisma.guildConfig.upsert({
+      where: { guildId },
+      update: { staticBindingChannelId: channel.id },
+      create: { guildId, staticBindingChannelId: channel.id },
+    }).catch(() => null);
+
+    res.json({ success: true, messageId: msg.id, channelId: channel.id });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

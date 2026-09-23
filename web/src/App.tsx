@@ -17,6 +17,7 @@ import { Academy } from './pages/Academy';
 import { VoiceTracker } from './pages/VoiceTracker';
 import { RecruiterPayroll } from './pages/RecruiterPayroll';
 import { AntiNuke } from './pages/AntiNuke';
+import { Blacklist } from './pages/Blacklist';
 import { Leaves } from './pages/Leaves';
 import { Profiles } from './pages/Profiles';
 import { ModalProvider } from './context/ModalContext';
@@ -88,6 +89,7 @@ export const App: React.FC = () => {
                         <Route path="/leaves" element={<Leaves />} />
                         <Route path="/payroll" element={<RecruiterPayroll />} />
                         <Route path="/anti-nuke" element={<AntiNuke />} />
+                        <Route path="/blacklist" element={<Blacklist />} />
                         <Route path="/members" element={<Members />} />
                         <Route path="/messages" element={<BotMessages />} />
                         <Route path="/embeds" element={<EmbedBuilder />} />

@@ -221,7 +221,31 @@ async function runTests() {
   console.assert(shouldLog2 === false, 'Message inside log channel should NOT be logged to prevent loop');
   console.log('✅ Test 17: Message logging feedback loop prevention verified');
 
-  console.log('🎉 ALL 17 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
+  // Test 18: Leave Request Modal Date Parsing (DD.MM.YYYY and YYYY-MM-DD)
+  const parseModalDate = (str: string): Date => {
+    const parts = str.trim().split(/[./-]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      } else {
+        return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+      }
+    }
+    return new Date(str);
+  };
+  const d1 = parseModalDate('25.09.2026');
+  const d2 = parseModalDate('2026-09-25');
+  console.assert(d1.getFullYear() === 2026 && d1.getMonth() === 8 && d1.getDate() === 25, 'DD.MM.YYYY parsing should succeed');
+  console.assert(d2.getFullYear() === 2026 && d2.getMonth() === 8 && d2.getDate() === 25, 'YYYY-MM-DD parsing should succeed');
+  console.log('✅ Test 18: Leave request modal date parser verified');
+
+  // Test 19: Channel Snowflake ID validation
+  const isValidSnowflake = (id: string) => /^\d{17,20}$/.test(id);
+  console.assert(isValidSnowflake('123456789012345678'), 'Valid 18-digit Discord Snowflake should pass');
+  console.assert(!isValidSnowflake('general-chat'), 'Channel name should fail Snowflake validation');
+  console.log('✅ Test 19: Channel Snowflake ID validation verified');
+
+  console.log('🎉 ALL 19 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
 runTests().catch(err => {

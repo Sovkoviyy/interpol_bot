@@ -16,7 +16,8 @@ import {
   Coins,
   ShieldAlert,
   CalendarOff,
-  IdCard
+  IdCard,
+  UserX
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -44,7 +45,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
     { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: isAdmin || userPermissions?.manageEvents },
     { to: '/leaves', label: 'Отпуска & Неактив', icon: CalendarOff, visible: true },
     { to: '/payroll', label: 'Выплаты рекрутерам', icon: Coins, visible: isAdmin || userPermissions?.manageRecruiting },
-    { to: '/anti-nuke', label: 'Защита & ЧС', icon: ShieldAlert, visible: isAdmin || userPermissions?.antiNukeAlerts },
+    { to: '/anti-nuke', label: 'Защита сервера', icon: ShieldAlert, visible: isAdmin || userPermissions?.antiNukeAlerts },
+    { to: '/blacklist', label: 'Черный список (ЧС)', icon: UserX, visible: isAdmin || userPermissions?.manageRecruiting },
     { to: '/messages', label: 'Сообщения бота', icon: MessageSquare, visible: isAdmin || userPermissions?.manageSettings },
     { to: '/embeds', label: 'Embed Генератор', icon: Sparkles, visible: isAdmin || userPermissions?.manageSettings },
     { to: '/logs', label: 'Аудит сервера', icon: ScrollText, visible: isAdmin || userPermissions?.viewLogs },

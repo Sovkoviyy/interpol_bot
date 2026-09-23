@@ -11,7 +11,8 @@ import {
   UserCheck, 
   Shield, 
   Medal,
-  Users
+  Users,
+  Send
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -24,18 +25,30 @@ export const Profiles: React.FC = () => {
     topMp: [],
     topVoice: [],
   });
+  const [channels, setChannels] = useState<any[]>([]);
+  const [deployChannelId, setDeployChannelId] = useState('');
+  const [deploying, setDeploying] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   const fetchProfiles = async () => {
     try {
       setLoading(true);
-      const [profRes, leadRes] = await Promise.all([
+      const [profRes, leadRes, chRes] = await Promise.all([
         api.get(`/profiles?search=${encodeURIComponent(search)}`),
         api.get('/profiles/leaderboard'),
+        api.get('/guild/channels').catch(() => ({ data: { channels: [] } })),
       ]);
       setProfiles(profRes.data.profiles || []);
       setLeaderboard(leadRes.data || { topMp: [], topVoice: [] });
+      
+      const textChannels = (chRes.data?.channels || []).filter(
+        (c: any) => c.type === 0 || c.type === 'GUILD_TEXT'
+      );
+      setChannels(textChannels);
+      if (textChannels.length > 0 && !deployChannelId) {
+        setDeployChannelId(textChannels[0].id);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -46,6 +59,42 @@ export const Profiles: React.FC = () => {
   useEffect(() => {
     fetchProfiles();
   }, [search]);
+
+  const handleDeployPanel = async () => {
+    if (!deployChannelId) {
+      modal.alert({ title: 'Ошибка', message: 'Выберите текстовый канал для отправки панели.', type: 'warning' });
+      return;
+    }
+
+    const selectedCh = channels.find(c => c.id === deployChannelId);
+    const chName = selectedCh ? `#${selectedCh.name}` : deployChannelId;
+
+    modal.confirm({
+      title: 'Отправить панель привязки статика?',
+      message: `Бот отправит интерактивное сообщение с кнопкой «🆔 Привязать статик» в канал ${chName}. Участники смогут нажать её и ввести свой Majestic Static ID.`,
+      type: 'pink',
+      confirmText: 'Отправить панель',
+      onConfirm: async () => {
+        try {
+          setDeploying(true);
+          await api.post('/profiles/deploy-panel', { channelId: deployChannelId });
+          modal.alert({
+            title: 'Панель успешно отправлена',
+            message: `Интерактивная кнопка привязки статика успешно опубликована в канале ${chName}!`,
+            type: 'success',
+          });
+        } catch (err: any) {
+          modal.alert({
+            title: 'Ошибка отправки',
+            message: err.response?.data?.error || 'Не удалось отправить панель в канал',
+            type: 'error',
+          });
+        } finally {
+          setDeploying(false);
+        }
+      },
+    });
+  };
 
   const handleEditStatic = (prof: any) => {
     modal.form({
@@ -169,6 +218,44 @@ export const Profiles: React.FC = () => {
           <p className="text-sm text-gray-400 mt-1">
             Привязка статик ID к Discord аккаунтам, учет отыгранных МП, штрафов и часов в войсе
           </p>
+        </div>
+      </div>
+
+      {/* Interactive Static Binding Panel Deployment Card */}
+      <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-4 sm:p-5 backdrop-blur-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 shrink-0">
+            <Send className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-white">Интерактивная панель привязки статика в Discord</h3>
+            <p className="text-xs text-gray-400">
+              Отправьте эмбед с кнопкой в канал, чтобы бойцы могли привязать Majestic Static ID прямо в Discord
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <select
+            value={deployChannelId}
+            onChange={(e) => setDeployChannelId(e.target.value)}
+            className="bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors w-full md:w-56"
+          >
+            <option value="">Выберите канал...</option>
+            {channels.map((ch) => (
+              <option key={ch.id} value={ch.id}>
+                #{ch.name}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleDeployPanel}
+            disabled={deploying || !deployChannelId}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-500 hover:from-pink-500 hover:to-pink-400 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-pink-500/20 whitespace-nowrap disabled:opacity-50"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {deploying ? 'Отправка...' : 'Отправить в канал'}
+          </button>
         </div>
       </div>
 

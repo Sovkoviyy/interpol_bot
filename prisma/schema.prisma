@@ -19,6 +19,8 @@ model GuildConfig {
   defaultEventChannelId String?
   defaultVoiceChannelId String?
   defaultMentionRoleId  String?
+  staticBindingChannelId String?
+  leaveRequestChannelId  String?
   statsApiKey           String?  // API key for external stats integrations
   updatedAt          DateTime @updatedAt
   createdAt          DateTime @default(now())

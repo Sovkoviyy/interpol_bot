@@ -13,6 +13,8 @@ import { RecruitmentService } from '../modules/recruitment/recruitmentService';
 import { EventService } from '../modules/events/eventService';
 import { AcademyService } from '../modules/academy/academyService';
 import { VoiceTrackerService } from '../modules/voiceTracker/voiceTrackerService';
+import { ProfileService } from '../modules/profiles/profileService';
+import { LeaveService } from '../modules/leave/leaveService';
 import prisma from '../../database/client';
 
 export function registerInteractionHandler() {
@@ -256,6 +258,71 @@ export function registerInteractionHandler() {
           await EventService.promptManagement(interaction, eventId);
           return;
         }
+
+        // --- Panel Buttons (Profiles & Leaves) ---
+        if (customId === 'panel_bind_static') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_bind_static')
+            .setTitle('Привязка Majestic Static ID');
+
+          const staticInput = new TextInputBuilder()
+            .setCustomId('static_id')
+            .setLabel('Ваш Static ID')
+            .setPlaceholder('например: 123456')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const charNameInput = new TextInputBuilder()
+            .setCustomId('character_name')
+            .setLabel('Имя персонажа (IC Nickname)')
+            .setPlaceholder('например: Alex Interpol')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+
+          modal.addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(staticInput),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(charNameInput)
+          );
+
+          await interaction.showModal(modal);
+          return;
+        }
+
+        if (customId === 'panel_request_leave') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_request_leave')
+            .setTitle('Заявка на отпуск / АФК (макс 14 дн)');
+
+          const startInput = new TextInputBuilder()
+            .setCustomId('leave_start_date')
+            .setLabel('Дата начала (ДД.ММ.ГГГГ)')
+            .setPlaceholder('например: 25.09.2026')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const endInput = new TextInputBuilder()
+            .setCustomId('leave_end_date')
+            .setLabel('Дата окончания (ДД.ММ.ГГГГ)')
+            .setPlaceholder('например: 05.10.2026')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const reasonInput = new TextInputBuilder()
+            .setCustomId('leave_reason')
+            .setLabel('Причина отпуска')
+            .setPlaceholder('например: Работа / сессия / отъезд')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true);
+
+          modal.addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(startInput),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(endInput),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput)
+          );
+
+          await interaction.showModal(modal);
+          return;
+        }
       }
 
       // 3. Modals
@@ -330,6 +397,73 @@ export function registerInteractionHandler() {
         if (customId.startsWith('recruit_modal_reject_')) {
           const applicationId = customId.replace('recruit_modal_reject_', '');
           await RecruitmentService.handleRejectSubmit(interaction, applicationId);
+          return;
+        }
+
+        // --- Panel Modals ---
+        if (customId === 'modal_bind_static') {
+          await interaction.deferReply({ ephemeral: true });
+          const staticId = interaction.fields.getTextInputValue('static_id');
+          const characterName = interaction.fields.getTextInputValue('character_name') || undefined;
+
+          try {
+            await ProfileService.setStatic(
+              interaction.guildId!,
+              interaction.user.id,
+              staticId,
+              characterName,
+              interaction.user.tag
+            );
+            await interaction.editReply({
+              content: `✅ Ваш Static ID **${staticId}**${characterName ? ` (${characterName})` : ''} успешно привязан!`
+            });
+          } catch (err: any) {
+            await interaction.editReply({ content: `❌ Ошибка привязки статика: ${err.message}` });
+          }
+          return;
+        }
+
+        if (customId === 'modal_request_leave') {
+          await interaction.deferReply({ ephemeral: true });
+          const rawStart = interaction.fields.getTextInputValue('leave_start_date');
+          const rawEnd = interaction.fields.getTextInputValue('leave_end_date');
+          const reason = interaction.fields.getTextInputValue('leave_reason');
+
+          const parseDate = (str: string): Date => {
+            const parts = str.trim().split(/[./-]/);
+            if (parts.length === 3) {
+              if (parts[0].length === 4) {
+                return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+              } else {
+                return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+              }
+            }
+            return new Date(str);
+          };
+
+          const startDate = parseDate(rawStart);
+          const endDate = parseDate(rawEnd);
+
+          if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            await interaction.editReply({ content: '❌ Неверный формат дат. Используйте формат: ДД.ММ.ГГГГ' });
+            return;
+          }
+
+          try {
+            await LeaveService.requestLeave(
+              interaction.guildId!,
+              interaction.user.id,
+              interaction.user.tag,
+              startDate,
+              endDate,
+              reason
+            );
+            await interaction.editReply({
+              content: `✅ Заявка на отпуск с **${startDate.toLocaleDateString('ru-RU')}** по **${endDate.toLocaleDateString('ru-RU')}** успешно отправлена руководству на рассмотрение!`
+            });
+          } catch (err: any) {
+            await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
+          }
           return;
         }
       }

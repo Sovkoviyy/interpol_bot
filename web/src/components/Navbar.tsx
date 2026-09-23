@@ -1,6 +1,7 @@
-import React from 'react';
-import { LogOut, ShieldAlert, User } from 'lucide-react';
+import React, { useState } from 'react';
+import { LogOut, ShieldAlert, User, RefreshCw } from 'lucide-react';
 import api from '../api/client';
+import { useModal } from '../context/ModalContext';
 
 interface NavbarProps {
   user: any;
@@ -8,6 +9,37 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
+  const modal = useModal();
+  const [restarting, setRestarting] = useState(false);
+
+  const handleRestartBot = () => {
+    modal.confirm({
+      title: 'Перезапустить Discord бота?',
+      message: 'Бот переподключится к Discord Gateway, синхронизирует слеш-команды и применит настройки без прерывания работы веб-сервера.',
+      type: 'warning',
+      confirmText: 'Перезапустить',
+      onConfirm: async () => {
+        try {
+          setRestarting(true);
+          await api.post('/bot/restart');
+          modal.alert({
+            title: 'Бот перезапущен',
+            message: 'Discord бот успешно переподключен и находится онлайн!',
+            type: 'success',
+          });
+        } catch (err: any) {
+          modal.alert({
+            title: 'Ошибка перезапуска',
+            message: err.response?.data?.error || 'Не удалось перезапустить бота',
+            type: 'error',
+          });
+        } finally {
+          setRestarting(false);
+        }
+      },
+    });
+  };
+
   const handleLogout = async () => {
     try {
       await api.post('/auth/logout');
@@ -31,6 +63,18 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
       </div>
 
       <div className="flex items-center gap-4">
+        {user?.permissions?.isAdmin && (
+          <button
+            onClick={handleRestartBot}
+            disabled={restarting}
+            title="Перезагрузить Discord бота"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-dark-800 hover:bg-dark-700 text-slate-300 hover:text-pink-400 border border-dark-700 hover:border-pink-500/40 transition-all shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${restarting ? 'animate-spin text-pink-400' : ''}`} />
+            {restarting ? 'Перезапуск...' : 'Перезапустить бота'}
+          </button>
+        )}
+
         {user?.permissions?.isAdmin && (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-pink-500/10 text-pink-400 border border-pink-500/20">
             <ShieldAlert className="w-3.5 h-3.5" />

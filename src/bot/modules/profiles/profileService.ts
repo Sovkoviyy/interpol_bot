@@ -1,3 +1,4 @@
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
 import prisma from '../../../database/client';
 
 export class ProfileService {
@@ -132,4 +133,33 @@ export class ProfileService {
       take: 20,
     });
   }
+
+  /**
+   * Deploy interactive button panel in a Discord channel to let members bind their static ID
+   */
+  static async deployStaticBindingPanel(channel: TextChannel) {
+    const embed = new EmbedBuilder()
+      .setColor(0xEC4899)
+      .setTitle('🆔 Привязка Majestic Static ID | Семья INTERPOL')
+      .setDescription(
+        'Каждый участник и академик семьи должен привязать свой внутриигровой Static ID и никнейм персонажа.\n\n' +
+        '**Зачем это нужно:**\n' +
+        '• Учет посещения мероприятий (МП, дропы, цеха, ВЗМ)\n' +
+        '• Сдача отчетов и повышение со 2 ранга\n' +
+        '• Личная статистика и отображение в топе актива семьи\n\n' +
+        '👇 Нажмите кнопку ниже, чтобы ввести свой Static ID:'
+      )
+      .setFooter({ text: 'INTERPOL Majestic RP • Привязка профиля' })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('panel_bind_static')
+        .setLabel('🆔 Привязать статик')
+        .setStyle(ButtonStyle.Success)
+    );
+
+    return await channel.send({ embeds: [embed], components: [row] });
+  }
 }
+

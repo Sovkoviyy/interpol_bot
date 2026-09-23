@@ -14,10 +14,20 @@ export class AuditLogger {
    * Automatically sets up the 'LOGS' category and all dedicated log channels on the guild
    */
   public static async setupLogChannels(guild: Guild): Promise<{ categoryId: string; channels: Record<string, string> }> {
-    // 1. Create or find Category 'LOGS'
-    let category = guild.channels.cache.find(
-      c => c.type === ChannelType.GuildCategory && c.name.toUpperCase() === 'LOGS'
-    );
+    const existingConfig = await prisma.loggingConfig.findUnique({
+      where: { guildId: guild.id },
+    }).catch(() => null);
+
+    // 1. Find Category by ID first, then fallback to name or create
+    let category = existingConfig?.categoryId 
+      ? guild.channels.cache.get(existingConfig.categoryId)
+      : null;
+
+    if (!category || category.type !== ChannelType.GuildCategory) {
+      category = guild.channels.cache.find(
+        c => c.type === ChannelType.GuildCategory && c.name.toUpperCase() === 'LOGS'
+      ) || null;
+    }
 
     if (!category) {
       category = await guild.channels.create({
@@ -50,9 +60,15 @@ export class AuditLogger {
     const channelResults: Record<string, string> = {};
 
     for (const def of channelDefinitions) {
-      let channel = guild.channels.cache.find(
-        c => c.parentId === category!.id && c.name === def.name
-      ) as TextChannel | undefined;
+      // Prioritize lookup by stored ID in DB (so renames don't break anything)
+      const existingId = (existingConfig as any)?.[def.key];
+      let channel = existingId ? (guild.channels.cache.get(existingId) as TextChannel | undefined) : undefined;
+
+      if (!channel) {
+        channel = guild.channels.cache.find(
+          c => c.parentId === category!.id && c.name === def.name
+        ) as TextChannel | undefined;
+      }
 
       if (!channel) {
         channel = await guild.channels.create({
