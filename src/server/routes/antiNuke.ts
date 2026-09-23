@@ -5,14 +5,11 @@ import config from '../../config';
 import bot from '../../bot/client';
 import { AntiNukeService } from '../../bot/modules/antiNuke/antiNukeService';
 
+import { resolveGuildId } from '../utils/guild';
+
 const router = Router();
 
 router.use(requireAuth);
-
-function resolveGuildId(req: AuthenticatedRequest): string {
-  const headerGuild = req.headers['x-guild-id'] as string;
-  return headerGuild || req.user?.guildId || config.discord.guildId || 'default';
-}
 
 /**
  * GET /api/anti-nuke/config

@@ -618,8 +618,8 @@ export const ServerSetup: React.FC = () => {
                   <ScrollText className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Аудит сервера (8 лог-каналов)</h3>
-                  <p className="text-[11px] text-gray-400">Категория LOGS и каналы для всех видов логов</p>
+                  <h3 className="text-sm font-semibold text-white">Аудит сервера (8 каналов логирования)</h3>
+                  <p className="text-[11px] text-gray-400">Категория LOGS и каналы для фиксации всех событий сервера</p>
                 </div>
               </div>
               <button
@@ -633,19 +633,57 @@ export const ServerSetup: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-3 bg-dark-800/50 rounded-xl border border-dark-800 text-xs text-gray-400 space-y-1">
-              <div className="flex items-center justify-between">
-                <span>Категория LOGS:</span>
-                <span className="font-mono text-emerald-400">
-                  {state?.bindings?.logsCategoryId ? `ID: ${state.bindings.logsCategoryId}` : 'Не настроена'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Лог сообщений:</span>
-                <span className="font-mono text-gray-300">
-                  {state?.bindings?.messageLogsChannelId ? `OK` : '—'}
-                </span>
-              </div>
+            {/* Category Status Bar */}
+            <div className="flex items-center justify-between p-2.5 bg-dark-800/60 rounded-xl border border-dark-700/60 text-xs">
+              <span className="text-gray-400 font-medium">Категория LOGS:</span>
+              <span className="font-mono text-emerald-400 font-semibold">
+                {state?.bindings?.logsCategoryId ? `📁 LOGS (ID: ${state.bindings.logsCategoryId})` : '⚪ Не создана'}
+              </span>
+            </div>
+
+            {/* All 8 Log Channels Breakdown */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              {[
+                { key: 'messageLogsChannelId', label: 'Логи сообщений', defName: 'msg-logs', icon: '💬' },
+                { key: 'memberLogsChannelId', label: 'Логи участников', defName: 'member-logs', icon: '👤' },
+                { key: 'roleLogsChannelId', label: 'Логи ролей', defName: 'role-logs', icon: '🛡️' },
+                { key: 'channelLogsChannelId', label: 'Логи каналов', defName: 'channel-logs', icon: '📁' },
+                { key: 'voiceLogsChannelId', label: 'Логи войса', defName: 'voice-logs', icon: '🔊' },
+                { key: 'inviteLogsChannelId', label: 'Логи инвайтов', defName: 'invite-logs', icon: '🔗' },
+                { key: 'botLogsChannelId', label: 'Действия бота', defName: 'bot-actions-logs', icon: '🤖' },
+                { key: 'eventLogsChannelId', label: 'Логи МП и сборов', defName: 'ивенты-лог', icon: '⚔️' },
+              ].map((log) => {
+                const chId = (state?.bindings as any)?.[log.key];
+                const channelObj = chId ? (state?.channels || []).find((c: any) => c.id === chId) : null;
+                const isConfigured = Boolean(chId);
+
+                return (
+                  <div
+                    key={log.key}
+                    className="p-2.5 bg-dark-800/40 rounded-xl border border-dark-800/80 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm shrink-0">{log.icon}</span>
+                      <div className="min-w-0">
+                        <span className="text-white font-medium block truncate text-[11px]">{log.label}</span>
+                        <span className="text-[10px] text-gray-400 font-mono block truncate">
+                          {channelObj ? `#${channelObj.name}` : chId ? `ID: ${chId}` : `#${log.defName}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold font-mono shrink-0 ${
+                        isConfigured
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-gray-500/10 text-gray-500 border border-gray-700/30'
+                      }`}
+                    >
+                      {isConfigured ? 'OK' : '—'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

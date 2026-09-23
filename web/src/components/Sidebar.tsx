@@ -18,7 +18,10 @@ import {
   CalendarOff,
   IdCard,
   UserX,
-  FolderTree
+  FolderTree,
+  Terminal,
+  Code2,
+  ExternalLink
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -77,15 +80,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
         { to: '/setup', label: 'Каналы & Сервер', icon: FolderTree, visible: isAdmin || userPermissions?.manageSettings },
         { to: '/messages', label: 'Сообщения бота', icon: MessageSquare, visible: isAdmin || userPermissions?.manageSettings },
         { to: '/embeds', label: 'Embed Генератор', icon: Sparkles, visible: isAdmin || userPermissions?.manageSettings },
+        { to: '/docs', label: 'API & Документация', icon: Terminal, visible: true },
       ],
     },
   ];
 
   return (
-    <aside className="w-64 bg-[#0B0E14] border-r border-[#1E232F] flex flex-col justify-between flex-shrink-0 min-h-screen">
-      <div>
+    <aside className="w-64 bg-[#0B0E14] border-r border-[#1E232F] flex flex-col justify-between flex-shrink-0 h-screen sticky top-0 z-30 select-none overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Brand Header */}
-        <div className="h-16 flex items-center px-6 border-b border-[#1E232F] gap-3">
+        <div className="h-16 flex items-center px-6 border-b border-[#1E232F] gap-3 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-pink-600 via-rose-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
             <Flame className="w-5 h-5 text-white" />
           </div>
@@ -98,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
         </div>
 
         {/* Categorized Navigation */}
-        <nav className="p-3 space-y-3.5 overflow-y-auto max-h-[calc(100vh-8rem)] custom-scrollbar">
+        <nav className="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
           {categories.map((category) => {
             const visibleLinks = category.links.filter((l) => l.visible);
             if (visibleLinks.length === 0) return null;
@@ -133,10 +137,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
         </nav>
       </div>
 
+      {/* Bottom API Quick Access Box */}
+      <div className="p-2.5 border-t border-[#1E232F] bg-[#0E1118]/80 shrink-0">
+        <NavLink
+          to="/docs"
+          className={({ isActive }) =>
+            `flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+              isActive
+                ? 'bg-pink-600 text-white font-semibold shadow-md shadow-pink-600/25'
+                : 'bg-[#151922] text-slate-300 hover:text-white hover:bg-pink-600/20 border border-slate-700/40 hover:border-pink-500/40'
+            }`
+          }
+        >
+          <Code2 className="w-4 h-4 text-pink-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="truncate font-semibold text-[11px]">API Документация</div>
+            <div className="text-[9px] text-slate-400 truncate">REST API & X-API-Key</div>
+          </div>
+          <ExternalLink className="w-3 h-3 text-slate-500 shrink-0" />
+        </NavLink>
+      </div>
+
       {/* Footer Info */}
-      <div className="p-4 border-t border-[#1E232F] text-xs text-slate-400">
+      <div className="p-3 border-t border-[#1E232F] text-xs text-slate-400 shrink-0">
         <div className="flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 text-[11px]">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Бот онлайн
           </span>

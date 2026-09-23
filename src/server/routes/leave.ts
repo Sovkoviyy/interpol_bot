@@ -4,17 +4,13 @@ import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import config from '../../config';
 import prisma from '../../database/client';
-import bot from '../../bot/client';
 import { LeaveService } from '../../bot/modules/leave/leaveService';
+import { ServerSetupService } from '../../bot/modules/setup/serverSetupService';
+import { resolveGuildId } from '../utils/guild';
 
 const router = Router();
 
 router.use(requireAuth);
-
-function resolveGuildId(req: AuthenticatedRequest): string {
-  const headerGuild = req.headers['x-guild-id'] as string;
-  return headerGuild || req.user?.guildId || config.discord.guildId || 'default';
-}
 
 /**
  * GET /api/leave
@@ -95,24 +91,8 @@ router.post('/deploy-panel', requirePermission('manageSettings'), async (req: Au
     const guildId = resolveGuildId(req);
     if (!guildId || guildId === 'default') return res.status(400).json({ error: 'Сервер Discord не выбран' });
 
-    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
-    if (!guild) return res.status(400).json({ error: 'Бот не подключен к серверу Discord' });
-
-    const channel = (guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null)) as TextChannel | null;
-    if (!channel || !channel.isTextBased()) {
-      return res.status(400).json({ error: 'Текстовый канал с таким ID не найден на сервере' });
-    }
-
-    const msg = await LeaveService.deployLeavePanel(channel);
-
-    // Save as default in GuildConfig if configured
-    await prisma.guildConfig.upsert({
-      where: { guildId },
-      update: { leaveRequestChannelId: channel.id },
-      create: { guildId, leaveRequestChannelId: channel.id },
-    }).catch(() => null);
-
-    res.json({ success: true, messageId: msg.id, channelId: channel.id });
+    const result = await ServerSetupService.deployPanel(guildId, 'leave', channelId);
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

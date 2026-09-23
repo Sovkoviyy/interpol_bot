@@ -4,12 +4,13 @@ import config from '../../config';
 import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
+import { resolveGuildId } from '../utils/guild';
 
 export const guildRouter = Router();
 
 // Get guild roles
 guildRouter.get('/roles', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const guild = bot.guilds.cache.get(guildId);
 
   if (!guild) {
@@ -31,7 +32,7 @@ guildRouter.get('/roles', requireAuth, async (req: AuthenticatedRequest, res: Re
 
 // Get guild channels
 guildRouter.get('/channels', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const guild = bot.guilds.cache.get(guildId);
 
   if (!guild) {
@@ -51,7 +52,7 @@ guildRouter.get('/channels', requireAuth, async (req: AuthenticatedRequest, res:
 
 // Get guild general config
 guildRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = (req.headers['x-guild-id'] as string) || req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const guildConfig = await prisma.guildConfig.findUnique({
     where: { guildId: guildId || 'default' },
   });
@@ -70,7 +71,7 @@ guildRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: R
 
 // Update guild general config
 guildRouter.post('/config', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = (req.headers['x-guild-id'] as string) || req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const { recruitmentEnabled, eventsEnabled, loggingEnabled, restoreRolesOnJoin, restoreNicknamesOnJoin } = req.body;
 
   const updated = await prisma.guildConfig.upsert({
@@ -97,7 +98,7 @@ guildRouter.post('/config', requireAuth, requirePermission('manageSettings'), as
 
 // Get all guild members with rich metadata, roles, invite info
 guildRouter.get('/members', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
 
   if (!guild) {

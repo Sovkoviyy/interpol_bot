@@ -6,14 +6,11 @@ import prisma from '../../database/client';
 import bot from '../../bot/client';
 import { AcademyService } from '../../bot/modules/academy/academyService';
 
+import { resolveGuildId } from '../utils/guild';
+
 const router = Router();
 
 router.use(requireAuth);
-
-function resolveGuildId(req: AuthenticatedRequest): string {
-  const headerGuild = req.headers['x-guild-id'] as string;
-  return headerGuild || req.user?.guildId || config.discord.guildId || 'default';
-}
 
 /**
  * GET /api/academy/config

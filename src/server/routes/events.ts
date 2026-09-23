@@ -7,12 +7,13 @@ import { requirePermission } from '../middlewares/rbac';
 import { EventService } from '../../bot/modules/events/eventService';
 import { TextChannel, EmbedBuilder } from 'discord.js';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
+import { resolveGuildId } from '../utils/guild';
 
 export const eventsRouter = Router();
 
 // Get remembered default channels and roles
 eventsRouter.get('/defaults', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const guildConfig = await prisma.guildConfig.findUnique({
     where: { guildId },
   });
@@ -26,7 +27,7 @@ eventsRouter.get('/defaults', requireAuth, async (req: AuthenticatedRequest, res
 
 // Get list of events
 eventsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const status = req.query.status as string;
 
   const whereClause: any = { guildId };
@@ -48,7 +49,7 @@ eventsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Respon
 
 // Create event from web dashboard
 eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const {
     title,
     description,

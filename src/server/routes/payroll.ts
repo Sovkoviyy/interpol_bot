@@ -4,14 +4,11 @@ import { requirePermission } from '../middlewares/rbac';
 import config from '../../config';
 import { PayrollService } from '../../bot/modules/payroll/payrollService';
 
+import { resolveGuildId } from '../utils/guild';
+
 const router = Router();
 
 router.use(requireAuth);
-
-function resolveGuildId(req: AuthenticatedRequest): string {
-  const headerGuild = req.headers['x-guild-id'] as string;
-  return headerGuild || req.user?.guildId || config.discord.guildId || 'default';
-}
 
 /**
  * GET /api/payroll/config

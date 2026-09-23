@@ -21,6 +21,7 @@ import { Blacklist } from './pages/Blacklist';
 import { Leaves } from './pages/Leaves';
 import { Profiles } from './pages/Profiles';
 import { ServerSetup } from './pages/ServerSetup';
+import { ApiDocs } from './pages/ApiDocs';
 import { ModalProvider } from './context/ModalContext';
 
 export const App: React.FC = () => {
@@ -75,11 +76,11 @@ export const App: React.FC = () => {
               !user ? (
                 <Navigate to="/login" replace />
               ) : (
-                <div className="flex min-h-screen bg-[#060709] text-slate-100">
+                <div className="flex h-screen w-screen overflow-hidden bg-[#060709] text-slate-100">
                   <Sidebar userPermissions={user?.permissions} />
-                  <div className="flex-1 flex flex-col min-w-0">
+                  <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
                     <Navbar user={user} onLogout={() => setUser(null)} />
-                    <main className="flex-1 p-8 overflow-y-auto">
+                    <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
                       <Routes>
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/setup" element={<ServerSetup />} />
@@ -98,6 +99,8 @@ export const App: React.FC = () => {
                         <Route path="/logs" element={<Logs />} />
                         <Route path="/roles" element={<Roles />} />
                         <Route path="/stats" element={<Stats />} />
+                        <Route path="/docs" element={<ApiDocs />} />
+                        <Route path="/api-docs" element={<ApiDocs />} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                       </Routes>
                     </main>

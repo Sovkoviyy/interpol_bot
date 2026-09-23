@@ -5,12 +5,13 @@ import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
+import { resolveGuildId } from '../utils/guild';
 
 export const logsRouter = Router();
 
 // Get logging config
 logsRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const logConfig = await prisma.loggingConfig.findUnique({
     where: { guildId },
   });
@@ -52,7 +53,7 @@ logsRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Re
 
 // Update logging config
 logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const {
     categoryId,
     messageLogsChannelId,
@@ -103,7 +104,7 @@ logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), asy
 
 // 1-Click Auto Setup channels in Discord
 logsRouter.post('/auto-setup', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const guild = bot.guilds.cache.get(guildId);
 
   if (!guild) {

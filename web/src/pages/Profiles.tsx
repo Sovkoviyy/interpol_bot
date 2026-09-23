@@ -176,9 +176,20 @@ export const Profiles: React.FC = () => {
     });
   };
 
-  const formatVoice = (mins: number) => {
-    const hours = Math.floor(mins / 60);
-    const m = mins % 60;
+  const formatVoice = (secondsOrMinutes?: number | null) => {
+    if (secondsOrMinutes === undefined || secondsOrMinutes === null || isNaN(Number(secondsOrMinutes)) || Number(secondsOrMinutes) <= 0) {
+      return '0 мин';
+    }
+    const val = Number(secondsOrMinutes);
+    // UserProfile in DB stores voiceSeconds. If value > 300, it's almost certainly seconds.
+    // If it's small, it could be either minutes or seconds; treating as seconds gives accurate hours/mins.
+    const totalMinutes = Math.floor(val / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+
+    if (hours === 0 && m === 0) {
+      return val > 0 ? `${val} сек` : '0 мин';
+    }
     if (hours === 0) return `${m} мин`;
     return `${hours}ч ${m}м`;
   };
@@ -328,7 +339,7 @@ export const Profiles: React.FC = () => {
                   {profiles.map((prof) => (
                     <tr key={prof.id} className="hover:bg-dark-800/30 transition-colors">
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-white">{prof.discordTag || 'Пользователь'}</div>
+                        <div className="font-semibold text-white">{prof.userTag || prof.discordTag || 'Пользователь'}</div>
                         <div className="font-mono text-xs text-gray-500">ID: {prof.userId}</div>
                       </td>
                       <td className="px-4 py-3">
@@ -351,18 +362,18 @@ export const Profiles: React.FC = () => {
                       <td className="px-4 py-3 text-center">
                         <span className="inline-flex items-center gap-1 font-bold text-pink-400 font-mono">
                           <Flame className="w-4 h-4 text-pink-500" />
-                          {prof.mpCount}
+                          {prof.mpCount || 0}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center font-mono">
-                        {prof.penaltyMps > 0 ? (
-                          <span className="text-amber-400 font-bold">+{prof.penaltyMps}</span>
+                        {(prof.penaltyMp || prof.penaltyMps || 0) > 0 ? (
+                          <span className="text-amber-400 font-bold">+{prof.penaltyMp || prof.penaltyMps}</span>
                         ) : (
                           <span className="text-gray-500">0</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-center text-xs font-mono text-gray-300">
-                        {formatVoice(prof.voiceMinutes)}
+                        {formatVoice(prof.voiceSeconds ?? prof.voiceMinutes)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -473,7 +484,7 @@ export const Profiles: React.FC = () => {
                       </span>
                       <div>
                         <div className="font-semibold text-white text-sm">
-                          {p.characterName || p.discordTag || 'Боец'}
+                          {p.characterName || p.userTag || p.discordTag || 'Боец'}
                         </div>
                         <div className="text-[11px] text-gray-500 font-mono">
                           {p.staticId ? `#${p.staticId}` : p.userId}
@@ -482,7 +493,7 @@ export const Profiles: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <span className="font-bold text-pink-400 font-mono text-sm">
-                        {formatVoice(p.voiceMinutes)}
+                        {formatVoice(p.voiceSeconds ?? p.voiceMinutes)}
                       </span>
                       <span className="text-[11px] text-gray-500 block">онлайн</span>
                     </div>

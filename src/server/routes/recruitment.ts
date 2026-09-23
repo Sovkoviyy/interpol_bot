@@ -6,12 +6,13 @@ import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { RecruitmentService } from '../../bot/modules/recruitment/recruitmentService';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
+import { resolveGuildId } from '../utils/guild';
 
 export const recruitmentRouter = Router();
 
 // Get recruitment configuration
 recruitmentRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const recConfig = await prisma.recruitmentConfig.findUnique({
     where: { guildId },
   });
@@ -61,7 +62,7 @@ recruitmentRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, 
 
 // Update recruitment configuration
 recruitmentRouter.post('/config', requireAuth, requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const {
     channelId,
     categoryId,
@@ -103,7 +104,7 @@ recruitmentRouter.post('/config', requireAuth, requirePermission('manageRecruiti
 
 // Get applications list
 recruitmentRouter.get('/applications', requireAuth, requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const status = req.query.status as string;
 
   const whereClause: any = { guildId };
@@ -132,7 +133,7 @@ recruitmentRouter.get('/applications', requireAuth, requirePermission('manageRec
 
 // Post recruitment embed in Discord channel from web dashboard
 recruitmentRouter.post('/post-panel', requireAuth, requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const recConfig = await prisma.recruitmentConfig.findUnique({ where: { guildId } });
 
   if (!recConfig || !recConfig.channelId) {

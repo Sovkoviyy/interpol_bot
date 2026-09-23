@@ -5,6 +5,7 @@ import config from '../../config';
 import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { ChannelType } from 'discord.js';
+import { resolveGuildId } from '../utils/guild';
 
 export const statsRouter = Router();
 
@@ -155,8 +156,7 @@ function checkRateLimit(clientIdentifier: string): boolean {
 
 // 1. Dashboard internal stats endpoint
 statsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const headerGuild = req.headers['x-guild-id'] as string;
-  const guildId = headerGuild || req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const data = await getCachedStatsData(guildId, true); // internal dashboard gets fresh data
 
   const guildConfig = await prisma.guildConfig.findUnique({
@@ -172,8 +172,7 @@ statsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Respons
 
 // 2. Generate/Regenerate API Key for external access
 statsRouter.post('/api-key/generate', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const headerGuild = req.headers['x-guild-id'] as string;
-  const guildId = headerGuild || req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const newApiKey = 'interpol_' + crypto.randomBytes(24).toString('hex');
 
   await prisma.guildConfig.upsert({

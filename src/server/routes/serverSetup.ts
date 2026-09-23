@@ -4,14 +4,9 @@ import { requirePermission } from '../middlewares/rbac';
 import { ServerSetupService } from '../../bot/modules/setup/serverSetupService';
 import config from '../../config';
 
-export const serverSetupRouter = Router();
+import { resolveGuildId } from '../utils/guild';
 
-function getGuildId(req: AuthenticatedRequest): string {
-  const headerGuild = req.headers['x-guild-id'] as string;
-  const queryGuild = req.query.guildId as string;
-  const bodyGuild = req.body?.guildId as string;
-  return headerGuild || queryGuild || bodyGuild || req.user?.guildId || config.discord.guildId;
-}
+export const serverSetupRouter = Router();
 
 /**
  * GET /api/setup/guilds
@@ -32,7 +27,7 @@ serverSetupRouter.get('/guilds', requireAuth, (req: AuthenticatedRequest, res: R
  */
 serverSetupRouter.get('/status', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = getGuildId(req);
+    const guildId = resolveGuildId(req);
     if (!guildId) {
       return res.status(400).json({ error: 'Сервер Discord не выбран' });
     }
@@ -50,7 +45,7 @@ serverSetupRouter.get('/status', requireAuth, async (req: AuthenticatedRequest, 
  */
 serverSetupRouter.post('/provision', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = getGuildId(req);
+    const guildId = resolveGuildId(req);
     if (!guildId) {
       return res.status(400).json({ error: 'Сервер Discord не выбран' });
     }
@@ -69,7 +64,7 @@ serverSetupRouter.post('/provision', requireAuth, requirePermission('manageSetti
  */
 serverSetupRouter.post('/deploy-panel', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = getGuildId(req);
+    const guildId = resolveGuildId(req);
     if (!guildId) {
       return res.status(400).json({ error: 'Сервер Discord не выбран' });
     }
@@ -92,7 +87,7 @@ serverSetupRouter.post('/deploy-panel', requireAuth, requirePermission('manageSe
  */
 serverSetupRouter.post('/bindings', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = getGuildId(req);
+    const guildId = resolveGuildId(req);
     if (!guildId) {
       return res.status(400).json({ error: 'Сервер Discord не выбран' });
     }
