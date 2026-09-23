@@ -1,24 +1,43 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
-import { AlertTriangle, CheckCircle2, XCircle, Info, Sparkles } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, XCircle, Info, Sparkles, HelpCircle, FormInput } from 'lucide-react';
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title?: string;
   message: string;
   confirmText?: string;
   cancelText?: string;
-  type?: 'danger' | 'pink';
+  type?: 'danger' | 'pink' | 'warning';
+  onConfirm?: () => Promise<void> | void;
 }
 
-interface AlertOptions {
+export interface AlertOptions {
   title?: string;
   message: string;
-  type?: 'success' | 'error' | 'info';
+  type?: 'success' | 'error' | 'info' | 'warning';
   okText?: string;
 }
 
-interface ModalContextType {
+export interface FormField {
+  name: string;
+  label: string;
+  placeholder?: string;
+  defaultValue?: string;
+  required?: boolean;
+}
+
+export interface FormOptions {
+  title?: string;
+  message?: string;
+  fields: FormField[];
+  submitText?: string;
+  cancelText?: string;
+  onSubmit: (values: Record<string, string>) => Promise<void> | void;
+}
+
+export interface ModalContextType {
   confirm: (options: ConfirmOptions | string) => Promise<boolean>;
   alert: (options: AlertOptions | string) => Promise<void>;
+  form: (options: FormOptions) => void;
 }
 
 const ModalContext = createContext<ModalContextType | undefined>(undefined);
@@ -44,6 +63,21 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     options: { message: '' },
   });
 
+  // Form state
+  const [formState, setFormState] = useState<{
+    isOpen: boolean;
+    options: FormOptions | null;
+    values: Record<string, string>;
+    isSubmitting: boolean;
+    error: string | null;
+  }>({
+    isOpen: false,
+    options: null,
+    values: {},
+    isSubmitting: false,
+    error: null,
+  });
+
   const confirm = useCallback((input: ConfirmOptions | string): Promise<boolean> => {
     const options: ConfirmOptions = typeof input === 'string' ? { message: input } : input;
     return new Promise((resolve) => {
@@ -55,8 +89,14 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           confirmText: options.confirmText || 'Подтвердить',
           cancelText: options.cancelText || 'Отмена',
           type: options.type || 'pink',
+          onConfirm: options.onConfirm,
         },
-        resolve,
+        resolve: async (val: boolean) => {
+          if (val && options.onConfirm) {
+            await options.onConfirm();
+          }
+          resolve(val);
+        },
       });
     });
   }, []);
@@ -77,6 +117,20 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     });
   }, []);
 
+  const form = useCallback((options: FormOptions) => {
+    const initialValues: Record<string, string> = {};
+    for (const f of options.fields) {
+      initialValues[f.name] = f.defaultValue || '';
+    }
+    setFormState({
+      isOpen: true,
+      options,
+      values: initialValues,
+      isSubmitting: false,
+      error: null,
+    });
+  }, []);
+
   const handleConfirmClose = (result: boolean) => {
     if (confirmState.resolve) {
       confirmState.resolve(result);
@@ -91,6 +145,29 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setAlertState(prev => ({ ...prev, isOpen: false }));
   };
 
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formState.options) return;
+
+    // Validate required fields
+    for (const f of formState.options.fields) {
+      if (f.required && !formState.values[f.name]?.trim()) {
+        setFormState(prev => ({ ...prev, error: `Поле «${f.label}» обязательно для заполнения` }));
+        return;
+      }
+    }
+
+    try {
+      setFormState(prev => ({ ...prev, isSubmitting: true, error: null }));
+      await formState.options.onSubmit(formState.values);
+      setFormState(prev => ({ ...prev, isOpen: false }));
+    } catch (err: any) {
+      setFormState(prev => ({ ...prev, error: err.message || 'Ошибка отправки формы' }));
+    } finally {
+      setFormState(prev => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
   // Keyboard handler for Escape & Enter
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -99,14 +176,18 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         else if (e.key === 'Enter') handleConfirmClose(true);
       } else if (alertState.isOpen) {
         if (e.key === 'Escape' || e.key === 'Enter') handleAlertClose();
+      } else if (formState.isOpen) {
+        if (e.key === 'Escape' && !formState.isSubmitting) {
+          setFormState(prev => ({ ...prev, isOpen: false }));
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [confirmState.isOpen, alertState.isOpen]);
+  }, [confirmState.isOpen, alertState.isOpen, formState.isOpen, formState.isSubmitting]);
 
   return (
-    <ModalContext.Provider value={{ confirm, alert }}>
+    <ModalContext.Provider value={{ confirm, alert, form }}>
       {children}
 
       {/* Confirmation Modal */}
@@ -123,10 +204,14 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                 confirmState.options.type === 'danger'
                   ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  : confirmState.options.type === 'warning'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                   : 'bg-pink-500/10 text-pink-400 border border-pink-500/20'
               }`}>
                 {confirmState.options.type === 'danger' ? (
                   <AlertTriangle className="w-5 h-5 text-red-400" />
+                ) : confirmState.options.type === 'warning' ? (
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
                 ) : (
                   <Sparkles className="w-5 h-5 text-pink-400" />
                 )}
@@ -157,6 +242,8 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 className={`px-5 py-2 rounded-xl text-white font-semibold text-xs shadow-lg transition-all ${
                   confirmState.options.type === 'danger'
                     ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-red-600/25'
+                    : confirmState.options.type === 'warning'
+                    ? 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 shadow-amber-600/25'
                     : 'bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 shadow-pink-600/25'
                 }`}
               >
@@ -177,6 +264,8 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             <div className={`absolute top-0 left-0 right-0 h-1 ${
               alertState.options.type === 'error'
                 ? 'bg-gradient-to-r from-red-600 to-rose-600'
+                : alertState.options.type === 'warning'
+                ? 'bg-gradient-to-r from-amber-600 to-amber-500'
                 : alertState.options.type === 'success'
                 ? 'bg-gradient-to-r from-pink-600 via-rose-500 to-fuchsia-600'
                 : 'bg-gradient-to-r from-pink-500 to-purple-600'
@@ -186,11 +275,14 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                 alertState.options.type === 'error'
                   ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  : alertState.options.type === 'warning'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                   : alertState.options.type === 'success'
                   ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20'
                   : 'bg-slate-700/20 text-slate-300 border border-slate-700/30'
               }`}>
                 {alertState.options.type === 'error' && <XCircle className="w-5 h-5 text-red-400" />}
+                {alertState.options.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
                 {alertState.options.type === 'success' && <CheckCircle2 className="w-5 h-5 text-pink-400" />}
                 {alertState.options.type === 'info' && <Info className="w-5 h-5 text-indigo-400" />}
               </div>
@@ -216,6 +308,74 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Form Dialog Modal */}
+      {formState.isOpen && formState.options && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <form 
+            onSubmit={handleFormSubmit}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-[#0B0E14] border border-pink-500/20 rounded-2xl p-6 shadow-2xl shadow-pink-950/40 relative overflow-hidden space-y-4"
+          >
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-600 via-rose-500 to-fuchsia-600" />
+
+            <div>
+              <h3 className="text-base font-bold text-white mb-1">
+                {formState.options.title || 'Ввод данных'}
+              </h3>
+              {formState.options.message && (
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {formState.options.message}
+                </p>
+              )}
+            </div>
+
+            {formState.error && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
+                {formState.error}
+              </div>
+            )}
+
+            <div className="space-y-3.5 max-h-[60vh] overflow-y-auto pr-1">
+              {formState.options.fields.map((field) => (
+                <div key={field.name}>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    {field.label} {field.required && <span className="text-pink-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.values[field.name] || ''}
+                    placeholder={field.placeholder || ''}
+                    onChange={(e) => setFormState(prev => ({
+                      ...prev,
+                      values: { ...prev.values, [field.name]: e.target.value }
+                    }))}
+                    className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-colors"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4 border-t border-[#1E232F] flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={formState.isSubmitting}
+                onClick={() => setFormState(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 rounded-xl bg-[#151922] hover:bg-[#1E232F] text-slate-300 hover:text-white font-medium text-xs transition-colors disabled:opacity-50"
+              >
+                {formState.options.cancelText || 'Отмена'}
+              </button>
+              <button
+                type="submit"
+                disabled={formState.isSubmitting}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-lg shadow-pink-600/25 transition-all disabled:opacity-50"
+              >
+                {formState.isSubmitting ? 'Обработка...' : (formState.options.submitText || 'Сохранить')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </ModalContext.Provider>

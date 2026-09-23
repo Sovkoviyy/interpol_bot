@@ -37,17 +37,20 @@ model MemberInviteTracking {
 }
 
 model RolePermission {
-  id               String   @id @default(cuid())
-  guildId          String
-  roleId           String
-  roleName         String?
+  id                 String   @id @default(cuid())
+  guildId            String
+  roleId             String
+  roleName           String?
   // Bitwise / individual permission flags
-  manageSettings   Boolean  @default(false)
-  manageRecruiting Boolean  @default(false)
-  manageEvents     Boolean  @default(false)
-  viewLogs         Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  manageSettings     Boolean  @default(false)
+  manageRecruiting   Boolean  @default(false)
+  manageEvents       Boolean  @default(false)
+  viewLogs           Boolean  @default(false)
+  manageAcademy      Boolean  @default(false)
+  manageVoiceTracker Boolean  @default(false)
+  antiNukeAlerts     Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@unique([guildId, roleId])
 }
@@ -199,6 +202,241 @@ model CustomEmbedTemplate {
   lastSentAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+// ==========================================
+// V2 EXTENSIONS: USER PROFILES & STATICS
+// ==========================================
+
+model UserProfile {
+  id              String    @id @default(cuid())
+  guildId         String
+  userId          String    // Discord user ID
+  userTag         String?
+  staticId        String?   // Majestic RP Static ID (e.g. 12345)
+  characterName   String?   // In-game name
+  rank            Int       @default(1) // 1: Академик, 2: Участник, 3: Офицер, etc.
+  mpCount         Int       @default(0) // Total verified MPs played
+  penaltyMp       Int       @default(0) // Additional penalty MPs required before rankup
+  voiceSeconds    Int       @default(0) // Total time spent in MP voice channels
+  status          String    @default("ACTIVE") // ACTIVE, ON_LEAVE, AFK, BLACKLISTED
+  leaveUntil      DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  mpReports       MpReport[]
+  academyChannels AcademyChannel[]
+  leaveRequests   LeaveRequest[]
+
+  @@unique([guildId, userId])
+  @@index([staticId])
+}
+
+// ==========================================
+// V2 EXTENSIONS: ACADEMY & 2ND RANK PROMOTION
+// ==========================================
+
+model AcademyConfig {
+  guildId              String   @id
+  categoryId           String?  // Category for active academy channels
+  archiveCategoryId    String?  // Category for archived channels
+  academicRoleId       String?  // Rank 1 role ID
+  promotedRoleId       String?  // Rank 2 role ID
+  requiredMpForRankUp  Int      @default(10) // Default 10 MPs
+  channelPrefix        String   @default("академик-")
+  updatedAt            DateTime @updatedAt
+  createdAt            DateTime @default(now())
+}
+
+model AcademyChannel {
+  id              String      @id @default(cuid())
+  guildId         String
+  userId          String
+  userTag         String?
+  staticId        String?
+  channelId       String      @unique // Discord text channel ID
+  status          String      @default("ACTIVE") // ACTIVE, PROMOTED, ARCHIVED
+  approvedMpCount Int         @default(0)
+  requiredMp      Int         @default(10)
+  penaltyMp       Int         @default(0)
+  archivedAt      DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  userProfile     UserProfile? @relation(fields: [guildId, userId], references: [guildId, userId])
+  reports         MpReport[]
+}
+
+model MpReport {
+  id               String          @id @default(cuid())
+  guildId          String
+  userId           String
+  userTag          String?
+  academyChannelId String?
+  channelId        String          // Channel where report was posted
+  messageId        String?         // Discord embed message with Approve/Reject buttons
+  mpType           String          // Дроп, Цех, ВЗМ, МЦЛ, Капт, etc.
+  screenshotUrls   String          @default("[]") // JSON array of screenshot URLs
+  comment          String?
+  status           String          @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewerId       String?
+  reviewerTag      String?
+  rejectionReason  String?
+  createdAt        DateTime        @default(now())
+  reviewedAt       DateTime?
+
+  userProfile      UserProfile?    @relation(fields: [guildId, userId], references: [guildId, userId])
+  academyChannel   AcademyChannel? @relation(fields: [academyChannelId], references: [id])
+}
+
+// ==========================================
+// V2 EXTENSIONS: DYNAMIC VOICE MP TRACKER
+// ==========================================
+
+model VoiceTrackerConfig {
+  guildId              String   @id
+  voiceChannelId       String?  // Tracked voice channel ID
+  defaultVoiceName     String   @default("Ожидание МП")
+  controlChannelId     String?  // Channel for staff MP start/stop control panel
+  controlMessageId     String?  // Persistent control message
+  logChannelId         String?  // Log channel for attendance summaries
+  updatedAt            DateTime @updatedAt
+  createdAt            DateTime @default(now())
+}
+
+model VoiceTrackerSession {
+  id               String               @id @default(cuid())
+  guildId          String
+  eventName        String               // e.g. "Дроп [16:00]"
+  voiceChannelId   String
+  startedById      String
+  startedByTag     String?
+  startedAt        DateTime             @default(now())
+  endedAt          DateTime?
+  status           String               @default("ACTIVE") // ACTIVE, COMPLETED
+  totalAttendees   Int                  @default(0)
+  peakConcurrent   Int                  @default(0)
+  attendanceJson   String               @default("[]") // [{ userId, userTag, joinTime, leaveTime, durationSeconds, isLate, leftEarly }]
+  
+  attendanceLogs   VoiceAttendanceLog[]
+}
+
+model VoiceAttendanceLog {
+  id              String              @id @default(cuid())
+  sessionId       String
+  guildId         String
+  userId          String
+  userTag         String?
+  joinedAt        DateTime
+  leftAt          DateTime?
+  durationSeconds Int                 @default(0)
+  isLate          Boolean             @default(false)
+  leftEarly       Boolean             @default(false)
+
+  session         VoiceTrackerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// V2 EXTENSIONS: LEAVES & AFK
+// ==========================================
+
+model LeaveRequest {
+  id              String       @id @default(cuid())
+  guildId         String
+  userId          String
+  userTag         String?
+  startDate       DateTime
+  endDate         DateTime
+  reason          String
+  status          String       @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewerId      String?
+  reviewerTag     String?
+  rejectionReason String?
+  createdAt       DateTime     @default(now())
+  reviewedAt      DateTime?
+
+  userProfile     UserProfile? @relation(fields: [guildId, userId], references: [guildId, userId])
+}
+
+// ==========================================
+// V2 EXTENSIONS: RECRUITER PAYROLL & BONUSES
+// ==========================================
+
+model RecruiterSalaryConfig {
+  guildId                  String   @id
+  payPerCandidateAccepted  Float    @default(10000) // $10,000 per accepted recruit
+  payPerApprovedReport     Float    @default(3000)  // $3,000 per approved MP report
+  payPerPromotion          Float    @default(15000) // $15,000 per completed academician promotion
+  currencySymbol           String   @default("$")
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+}
+
+model RecruiterPayoutRecord {
+  id               String   @id @default(cuid())
+  guildId          String
+  recruiterId      String
+  recruiterTag     String?
+  periodStart      DateTime
+  periodEnd        DateTime
+  acceptedCount    Int      @default(0)
+  reportsCount     Int      @default(0)
+  promotionsCount  Int      @default(0)
+  totalPayout      Float    @default(0)
+  status           String   @default("PENDING") // PENDING, PAID
+  paidAt           DateTime?
+  paidById         String?
+  notes            String?
+  createdAt        DateTime @default(now())
+}
+
+// ==========================================
+// V2 EXTENSIONS: BLACKLIST (ЧС)
+// ==========================================
+
+model BlacklistEntry {
+  id         String   @id @default(cuid())
+  guildId    String
+  staticId   String?  // Majestic Static ID
+  discordId  String?  // Discord User ID
+  name       String?  // In-game name or Discord Tag
+  reason     String
+  proofUrl   String?  // Link to proof screenshot/video
+  addedById  String
+  addedByTag String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([staticId])
+  @@index([discordId])
+}
+
+// ==========================================
+// V2 EXTENSIONS: ANTI-NUKE & SERVER BACKUPS
+// ==========================================
+
+model AntiNukeConfig {
+  guildId              String   @id
+  enabled              Boolean  @default(true)
+  actionOnChannelDelete String  @default("STRIP_ROLES_RESTORE") // STRIP_ROLES_RESTORE, KICK, BAN
+  alertUserIdsJson     String   @default("[]") // Array of Leader/Dep Discord IDs to DM
+  alertChannelId       String?  // Channel to send emergency alert
+  autoBackupDaily      Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+  createdAt            DateTime @default(now())
+}
+
+model ServerBackupSnapshot {
+  id          String   @id @default(cuid())
+  guildId     String
+  name        String   // e.g. "Auto Backup 23.09.2026", "Before Raid"
+  createdById String?
+  createdByTag String?
+  dataJson    String   // Full JSON tree of categories, channels, permissions, roles
+  channelsCount Int    @default(0)
+  rolesCount    Int    @default(0)
+  createdAt   DateTime @default(now())
 }
 
 

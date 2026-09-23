@@ -12,6 +12,13 @@ import rbacRouter from './routes/rbac';
 import statsRouter from './routes/stats';
 import botMessagesRouter from './routes/botMessages';
 import embedsRouter from './routes/embeds';
+import profilesRouter from './routes/profiles';
+import academyRouter from './routes/academy';
+import voiceTrackerRouter from './routes/voiceTracker';
+import leaveRouter from './routes/leave';
+import payrollRouter from './routes/payroll';
+import blacklistRouter from './routes/blacklist';
+import antiNukeRouter from './routes/antiNuke';
 
 export function createServer() {
   const app = express();
@@ -35,6 +42,13 @@ export function createServer() {
   app.use('/api/stats', statsRouter);
   app.use('/api/bot-messages', botMessagesRouter);
   app.use('/api/embeds', embedsRouter);
+  app.use('/api/profiles', profilesRouter);
+  app.use('/api/academy', academyRouter);
+  app.use('/api/voice-tracker', voiceTrackerRouter);
+  app.use('/api/leave', leaveRouter);
+  app.use('/api/payroll', payrollRouter);
+  app.use('/api/blacklist', blacklistRouter);
+  app.use('/api/anti-nuke', antiNukeRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {

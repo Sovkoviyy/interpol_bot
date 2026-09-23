@@ -4,9 +4,22 @@ import config from '../../config';
 import { recruitCommand } from './recruit';
 import { eventCommand } from './event';
 import { logsCommand } from './logs';
+import { profileCommand, setStaticCommand, topCommand, penaltyCommand } from './profile';
+import { voiceControlCommand } from './voiceControl';
+import { academyCommand } from './academy';
 
 export function registerCommands() {
-  const commands = [recruitCommand, eventCommand, logsCommand];
+  const commands = [
+    recruitCommand, 
+    eventCommand, 
+    logsCommand,
+    profileCommand,
+    setStaticCommand,
+    topCommand,
+    penaltyCommand,
+    voiceControlCommand,
+    academyCommand,
+  ];
 
   for (const cmd of commands) {
     bot.commands.set(cmd.data.name, cmd);
@@ -25,6 +38,12 @@ export async function deploySlashCommands() {
     recruitCommand.data.toJSON(),
     eventCommand.data.toJSON(),
     logsCommand.data.toJSON(),
+    profileCommand.data.toJSON(),
+    setStaticCommand.data.toJSON(),
+    topCommand.data.toJSON(),
+    penaltyCommand.data.toJSON(),
+    voiceControlCommand.data.toJSON(),
+    academyCommand.data.toJSON(),
   ];
 
   const rest = new REST({ version: '10' }).setToken(config.discord.token);

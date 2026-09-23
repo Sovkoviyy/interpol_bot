@@ -13,6 +13,12 @@ import { Stats } from './pages/Stats';
 import { Members } from './pages/Members';
 import { BotMessages } from './pages/BotMessages';
 import { EmbedBuilder } from './pages/EmbedBuilder';
+import { Academy } from './pages/Academy';
+import { VoiceTracker } from './pages/VoiceTracker';
+import { RecruiterPayroll } from './pages/RecruiterPayroll';
+import { AntiNuke } from './pages/AntiNuke';
+import { Leaves } from './pages/Leaves';
+import { Profiles } from './pages/Profiles';
 import { ModalProvider } from './context/ModalContext';
 
 export const App: React.FC = () => {
@@ -74,9 +80,15 @@ export const App: React.FC = () => {
                     <main className="flex-1 p-8 overflow-y-auto">
                       <Routes>
                         <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/members" element={<Members />} />
+                        <Route path="/profiles" element={<Profiles />} />
+                        <Route path="/academy" element={<Academy />} />
+                        <Route path="/voice-tracker" element={<VoiceTracker />} />
                         <Route path="/recruitment" element={<Recruitment />} />
                         <Route path="/events" element={<Events />} />
+                        <Route path="/leaves" element={<Leaves />} />
+                        <Route path="/payroll" element={<RecruiterPayroll />} />
+                        <Route path="/anti-nuke" element={<AntiNuke />} />
+                        <Route path="/members" element={<Members />} />
                         <Route path="/messages" element={<BotMessages />} />
                         <Route path="/embeds" element={<EmbedBuilder />} />
                         <Route path="/logs" element={<Logs />} />

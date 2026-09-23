@@ -18,6 +18,7 @@ import prisma from '../../../database/client';
 import { FormQuestion } from '../../../shared/types';
 import { TranscriptService } from './transcript';
 import { AuditLogger } from '../logging/auditLogger';
+import { AcademyService } from '../academy/academyService';
 
 export class RecruitmentService {
   /**
@@ -411,6 +412,24 @@ export class RecruitmentService {
     if (targetMember && config?.memberRoleId) {
       await targetMember.roles.add(config.memberRoleId).catch(e => {
         console.error('Failed to grant family role:', e);
+      });
+    }
+
+    // Auto-create Academy channel for 1st rank MP progression
+    if (targetMember) {
+      let staticId: string | undefined;
+      try {
+        const answers = JSON.parse(application.answersJson || '{}');
+        for (const [key, val] of Object.entries(answers)) {
+          if (/статик|static|id/i.test(key)) {
+            staticId = String(val).trim();
+            break;
+          }
+        }
+      } catch {}
+
+      await AcademyService.createAcademyChannel(interaction.guild!, targetMember, staticId).catch(err => {
+        console.warn('[Academy] Could not auto-create academy channel:', err.message);
       });
     }
 
