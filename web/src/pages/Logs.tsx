@@ -213,6 +213,17 @@ export const Logs: React.FC = () => {
                       </div>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">{cat.label}</p>
+                    {cat.type === 'MESSAGES' && (
+                      <label className="flex items-center gap-2 mt-2 text-[11px] text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={config?.logSentMessages ?? true}
+                          onChange={(e) => setConfig({ ...config, logSentMessages: e.target.checked })}
+                          className="rounded border-slate-700 text-pink-600 focus:ring-pink-500 bg-[#0B0E14]"
+                        />
+                        <span>Логировать отправку новых сообщений в чатах</span>
+                      </label>
+                    )}
                   </div>
                 </div>
 

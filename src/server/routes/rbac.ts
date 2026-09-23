@@ -19,7 +19,17 @@ rbacRouter.get('/', requireAuth, requirePermission('manageSettings'), async (req
 // Update or set permissions for a role
 rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   const guildId = req.user?.guildId || config.discord.guildId;
-  const { roleId, roleName, manageSettings, manageRecruiting, manageEvents, viewLogs } = req.body;
+  const { 
+    roleId, 
+    roleName, 
+    manageSettings, 
+    manageRecruiting, 
+    manageEvents, 
+    viewLogs,
+    manageAcademy,
+    manageVoiceTracker,
+    antiNukeAlerts
+  } = req.body;
 
   if (!roleId) return res.status(400).json({ error: 'Role ID is required' });
 
@@ -33,6 +43,9 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageRecruiting: Boolean(manageRecruiting),
       manageEvents: Boolean(manageEvents),
       viewLogs: Boolean(viewLogs),
+      manageAcademy: Boolean(manageAcademy),
+      manageVoiceTracker: Boolean(manageVoiceTracker),
+      antiNukeAlerts: Boolean(antiNukeAlerts),
     },
     create: {
       guildId,
@@ -42,6 +55,9 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageRecruiting: Boolean(manageRecruiting),
       manageEvents: Boolean(manageEvents),
       viewLogs: Boolean(viewLogs),
+      manageAcademy: Boolean(manageAcademy),
+      manageVoiceTracker: Boolean(manageVoiceTracker),
+      antiNukeAlerts: Boolean(antiNukeAlerts),
     },
   });
 

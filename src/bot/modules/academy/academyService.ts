@@ -27,7 +27,7 @@ export class AcademyService {
         data: {
           guildId,
           requiredMpForRankUp: 10,
-          channelPrefix: 'академик-',
+          channelPrefix: 'academ-',
         },
       });
     }
@@ -47,7 +47,7 @@ export class AcademyService {
         academicRoleId: data.academicRoleId,
         promotedRoleId: data.promotedRoleId,
         requiredMpForRankUp: parseInt(data.requiredMpForRankUp, 10) || 10,
-        channelPrefix: data.channelPrefix || 'академик-',
+        channelPrefix: data.channelPrefix || 'academ-',
       },
       create: {
         guildId,
@@ -56,7 +56,7 @@ export class AcademyService {
         academicRoleId: data.academicRoleId,
         promotedRoleId: data.promotedRoleId,
         requiredMpForRankUp: parseInt(data.requiredMpForRankUp, 10) || 10,
-        channelPrefix: data.channelPrefix || 'академик-',
+        channelPrefix: data.channelPrefix || 'academ-',
       },
     });
   }
@@ -69,7 +69,42 @@ export class AcademyService {
     const profile = await ProfileService.getOrCreateProfile(guild.id, member.id, member.user.tag);
 
     const effectiveStatic = staticId || profile.staticId || member.id.slice(-5);
-    const channelName = `${config.channelPrefix || 'академик-'}${effectiveStatic}`;
+    const rawName = profile.characterName || member.displayName || member.user.username;
+    const cleanName = rawName
+      .toLowerCase()
+      .replace(/[^a-z0-9а-яё_-]/gi, '')
+      .slice(0, 20) || member.user.username.toLowerCase().slice(0, 20);
+    const prefix = config.channelPrefix || 'academ-';
+    const channelName = `${prefix}${cleanName}`;
+
+    // Ensure category ACADEMY
+    let targetCategoryId = config.categoryId;
+    if (!targetCategoryId || !guild.channels.cache.has(targetCategoryId)) {
+      let cat = guild.channels.cache.find(
+        c => c.type === ChannelType.GuildCategory && (c.name.toUpperCase() === 'ACADEMY' || c.name.toUpperCase() === 'АКАДЕМИЯ')
+      );
+      if (!cat) {
+        cat = await guild.channels.create({
+          name: 'ACADEMY',
+          type: ChannelType.GuildCategory,
+          permissionOverwrites: [
+            {
+              id: guild.roles.everyone.id,
+              deny: [PermissionFlagsBits.ViewChannel],
+            },
+            {
+              id: guild.members.me?.id || '',
+              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages],
+            },
+          ],
+        });
+        await prisma.academyConfig.update({
+          where: { guildId: guild.id },
+          data: { categoryId: cat.id },
+        }).catch(() => null);
+      }
+      targetCategoryId = cat.id;
+    }
 
     // Permissions: private to @everyone, visible to member and recruiters
     const permissionOverwrites: any[] = [
@@ -115,7 +150,7 @@ export class AcademyService {
     const channel = await guild.channels.create({
       name: channelName,
       type: ChannelType.GuildText,
-      parent: config.categoryId || undefined,
+      parent: targetCategoryId || undefined,
       permissionOverwrites,
       topic: `Личный канал отчетов академика ${member.user.tag} (Статик: ${effectiveStatic})`,
     });
@@ -386,6 +421,8 @@ export class AcademyService {
         where: { id: academyChannelId },
         data: {
           status: 'PROMOTED',
+          promotedById: reviewer.id,
+          promotedByTag: reviewer.user.tag,
           archivedAt: new Date(),
         },
       });

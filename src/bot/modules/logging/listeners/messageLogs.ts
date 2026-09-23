@@ -23,14 +23,16 @@ interface CachedMessage {
 const messageCache = new Map<string, CachedMessage>();
 
 export function registerMessageLogs() {
-  // Track messages for delete/edit cache
-  bot.on(Events.MessageCreate, (message: Message) => {
+  // Track messages for delete/edit cache and log new messages
+  bot.on(Events.MessageCreate, async (message: Message) => {
     if (message.author?.bot || !message.guild) return;
 
     if (messageCache.size >= 3000) {
       const oldestKey = messageCache.keys().next().value;
       if (oldestKey) messageCache.delete(oldestKey);
     }
+
+    const attachments = Array.from(message.attachments.values()).map(a => a.url);
 
     messageCache.set(message.id, {
       authorId: message.author.id,
@@ -39,8 +41,56 @@ export function registerMessageLogs() {
       content: message.content || '',
       channelId: message.channelId,
       createdAt: message.createdAt,
-      attachments: Array.from(message.attachments.values()).map(a => a.url),
+      attachments,
     });
+
+    // Check if message creation logging is enabled
+    const logConfig = await prisma.loggingConfig.findUnique({
+      where: { guildId: message.guild.id },
+    }).catch(() => null);
+
+    // Skip if in any log channel to prevent feedback loops
+    if (
+      logConfig &&
+      (message.channelId === logConfig.messageLogsChannelId ||
+       message.channelId === logConfig.memberLogsChannelId ||
+       message.channelId === logConfig.roleLogsChannelId ||
+       message.channelId === logConfig.channelLogsChannelId ||
+       message.channelId === logConfig.voiceLogsChannelId ||
+       message.channelId === logConfig.inviteLogsChannelId ||
+       message.channelId === logConfig.botLogsChannelId ||
+       message.channelId === logConfig.eventLogsChannelId)
+    ) {
+      return;
+    }
+
+    if (logConfig?.logSentMessages) {
+      const embed = new EmbedBuilder()
+        .setColor(0x3B82F6) // Blue
+        .setTitle('💬 Сообщение отправлено')
+        .setDescription(
+          `**Канал:** <#${message.channelId}> ([Перейти к сообщению](${message.url}))\n` +
+          `**Автор:** ${message.author} (\`${message.author.tag}\`)\n` +
+          `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
+        )
+        .addFields({
+          name: 'Содержимое',
+          value: message.content && message.content.length > 0
+            ? (message.content.length > 1000 ? message.content.slice(0, 1000) + '...' : message.content)
+            : '*(Вложение без текста)*',
+        });
+
+      if (attachments.length > 0) {
+        embed.addFields({
+          name: `Вложения (${attachments.length})`,
+          value: attachments.slice(0, 5).join('\n'),
+        });
+      }
+
+      embed.setFooter({ text: `ID сообщения: ${message.id}` }).setTimestamp();
+
+      await AuditLogger.sendLog(message.guild, 'MESSAGES', embed);
+    }
   });
 
   // Message Delete

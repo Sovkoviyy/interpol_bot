@@ -11,7 +11,9 @@ export class PayrollService {
         data: {
           guildId,
           payPerCandidateAccepted: 10000,
+          payPerCandidateRejected: 3000,
           payPerApprovedReport: 3000,
+          payPerRejectedReport: 1500,
           payPerPromotion: 15000,
           currencySymbol: '$',
         },
@@ -26,14 +28,18 @@ export class PayrollService {
       where: { guildId },
       update: {
         payPerCandidateAccepted: parseFloat(data.payPerCandidateAccepted) || 10000,
+        payPerCandidateRejected: parseFloat(data.payPerCandidateRejected) || 3000,
         payPerApprovedReport: parseFloat(data.payPerApprovedReport) || 3000,
+        payPerRejectedReport: parseFloat(data.payPerRejectedReport) || 1500,
         payPerPromotion: parseFloat(data.payPerPromotion) || 15000,
         currencySymbol: data.currencySymbol || '$',
       },
       create: {
         guildId,
         payPerCandidateAccepted: parseFloat(data.payPerCandidateAccepted) || 10000,
+        payPerCandidateRejected: parseFloat(data.payPerCandidateRejected) || 3000,
         payPerApprovedReport: parseFloat(data.payPerApprovedReport) || 3000,
+        payPerRejectedReport: parseFloat(data.payPerRejectedReport) || 1500,
         payPerPromotion: parseFloat(data.payPerPromotion) || 15000,
         currencySymbol: data.currencySymbol || '$',
       },
@@ -56,8 +62,18 @@ export class PayrollService {
       },
     });
 
-    // 2. Verified MP reports
-    const reviewedReports = await prisma.mpReport.findMany({
+    // 2. Rejected recruitment candidates
+    const rejectedCandidates = await prisma.recruitmentApplication.findMany({
+      where: {
+        guildId,
+        status: 'REJECTED',
+        recruiterId: { not: null },
+        closedAt: { gte: periodStart, lte: periodEnd },
+      },
+    });
+
+    // 3. Approved MP reports
+    const approvedReports = await prisma.mpReport.findMany({
       where: {
         guildId,
         status: 'APPROVED',
@@ -66,7 +82,17 @@ export class PayrollService {
       },
     });
 
-    // 3. Completed academy promotions
+    // 4. Rejected MP reports
+    const rejectedReports = await prisma.mpReport.findMany({
+      where: {
+        guildId,
+        status: 'REJECTED',
+        reviewerId: { not: null },
+        reviewedAt: { gte: periodStart, lte: periodEnd },
+      },
+    });
+
+    // 5. Completed academy promotions
     const promotions = await prisma.academyChannel.findMany({
       where: {
         guildId,
@@ -80,7 +106,9 @@ export class PayrollService {
       recruiterId: string;
       recruiterTag: string;
       acceptedCount: number;
-      reportsCount: number;
+      rejectedCandidatesCount: number;
+      approvedReportsCount: number;
+      rejectedReportsCount: number;
       promotionsCount: number;
       totalPayout: number;
     }>();
@@ -91,7 +119,9 @@ export class PayrollService {
           recruiterId: id,
           recruiterTag: tag || id,
           acceptedCount: 0,
-          reportsCount: 0,
+          rejectedCandidatesCount: 0,
+          approvedReportsCount: 0,
+          rejectedReportsCount: 0,
           promotionsCount: 0,
           totalPayout: 0,
         });
@@ -99,6 +129,7 @@ export class PayrollService {
       return recruitersMap.get(id)!;
     };
 
+    // Credit accepted candidates
     for (const app of acceptedCandidates) {
       if (app.recruiterId) {
         const r = getOrInit(app.recruiterId, app.recruiterTag);
@@ -106,10 +137,36 @@ export class PayrollService {
       }
     }
 
-    for (const rep of reviewedReports) {
+    // Credit rejected candidates
+    for (const app of rejectedCandidates) {
+      if (app.recruiterId) {
+        const r = getOrInit(app.recruiterId, app.recruiterTag);
+        r.rejectedCandidatesCount += 1;
+      }
+    }
+
+    // Credit approved reports
+    for (const rep of approvedReports) {
       if (rep.reviewerId) {
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
-        r.reportsCount += 1;
+        r.approvedReportsCount += 1;
+      }
+    }
+
+    // Credit rejected reports
+    for (const rep of rejectedReports) {
+      if (rep.reviewerId) {
+        const r = getOrInit(rep.reviewerId, rep.reviewerTag);
+        r.rejectedReportsCount += 1;
+      }
+    }
+
+    // Credit promotions
+    for (const promo of promotions) {
+      const promoterId = promo.promotedById;
+      if (promoterId) {
+        const r = getOrInit(promoterId, promo.promotedByTag);
+        r.promotionsCount += 1;
       }
     }
 
@@ -117,7 +174,9 @@ export class PayrollService {
     const results = Array.from(recruitersMap.values()).map((rec) => {
       const payout =
         rec.acceptedCount * config.payPerCandidateAccepted +
-        rec.reportsCount * config.payPerApprovedReport +
+        rec.rejectedCandidatesCount * config.payPerCandidateRejected +
+        rec.approvedReportsCount * config.payPerApprovedReport +
+        rec.rejectedReportsCount * config.payPerRejectedReport +
         rec.promotionsCount * config.payPerPromotion;
 
       rec.totalPayout = payout;
@@ -132,7 +191,9 @@ export class PayrollService {
       currencySymbol: config.currencySymbol,
       rates: {
         payPerCandidateAccepted: config.payPerCandidateAccepted,
+        payPerCandidateRejected: config.payPerCandidateRejected,
         payPerApprovedReport: config.payPerApprovedReport,
+        payPerRejectedReport: config.payPerRejectedReport,
         payPerPromotion: config.payPerPromotion,
       },
       recruiters: results.sort((a, b) => b.totalPayout - a.totalPayout),

@@ -12,6 +12,19 @@ export class LeaveService {
     endDate: Date,
     reason: string
   ) {
+    const startMs = startDate.getTime();
+    const endMs = endDate.getTime();
+    if (isNaN(startMs) || isNaN(endMs)) {
+      throw new Error('Некорректный формат дат отпуска');
+    }
+    if (endMs <= startMs) {
+      throw new Error('Дата окончания отпуска должна быть позже даты начала');
+    }
+    const diffDays = Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24));
+    if (diffDays > 14) {
+      throw new Error('Максимальная продолжительность отпуска — 14 дней (2 недели)');
+    }
+
     return await prisma.leaveRequest.create({
       data: {
         guildId,

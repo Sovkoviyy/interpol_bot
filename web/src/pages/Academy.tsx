@@ -104,35 +104,67 @@ export const Academy: React.FC = () => {
   };
 
   const handlePromote = async (channelId: string, approved: boolean) => {
-    let rejectionReason = '';
-    let penaltyMp = 2;
-
     if (!approved) {
-      const reason = prompt('Причина отказа в повышении:');
-      if (reason === null) return;
-      rejectionReason = reason;
-      const penaltyInput = prompt('Количество штрафных МП для добавления к норме:', '2');
-      penaltyMp = parseInt(penaltyInput || '2', 10) || 2;
-    } else {
-      const confirmed = await modal.confirm({
-        title: 'Повышение на 2 ранг',
-        message: 'Одобрить повышение академика на 2 ранг? Бот выдаст роль участника и заархивирует канал.',
-        confirmText: 'Повысить',
-        type: 'pink',
+      modal.form({
+        title: 'Отклонить повышение',
+        message: 'Укажите причину отказа и количество штрафных МП, которые академик должен отыграть дополнительно:',
+        fields: [
+          {
+            name: 'rejectionReason',
+            label: 'Причина отказа',
+            placeholder: 'Недостаточно активности, косяки в отчетах...',
+            required: true,
+          },
+          {
+            name: 'penaltyMp',
+            label: 'Штрафные МП к норме',
+            placeholder: '2',
+            defaultValue: '2',
+            required: true,
+          },
+        ],
+        submitText: 'Отклонить и оштрафовать',
+        onSubmit: async (values) => {
+          try {
+            await api.post(`/academy/channels/${channelId}/promote`, {
+              approved: false,
+              rejectionReason: values.rejectionReason,
+              penaltyMp: parseInt(values.penaltyMp, 10) || 2,
+            });
+            modal.alert({
+              title: 'Повышение отклонено',
+              message: `Назначен штраф +${values.penaltyMp || 2} МП к норме.`,
+              type: 'info',
+            });
+            fetchData();
+          } catch (err: any) {
+            modal.alert({
+              title: 'Ошибка',
+              message: err.response?.data?.error || 'Ошибка действия',
+              type: 'error',
+            });
+          }
+        },
       });
-      if (!confirmed) return;
+      return;
     }
+
+    const confirmed = await modal.confirm({
+      title: 'Повышение на 2 ранг',
+      message: 'Одобрить повышение академика на 2 ранг? Бот снимет роль 1 ранга, выдаст роль 2 ранга (мейна) и заархивирует канал.',
+      confirmText: 'Повысить',
+      type: 'pink',
+    });
+    if (!confirmed) return;
 
     try {
       await api.post(`/academy/channels/${channelId}/promote`, {
-        approved,
-        rejectionReason,
-        penaltyMp,
+        approved: true,
       });
       modal.alert({
-        title: approved ? 'Повышение одобрено!' : 'Повышение отклонено',
-        message: approved ? 'Академик успешно повышен на 2 ранг!' : `Назначен штраф +${penaltyMp} МП.`,
-        type: approved ? 'success' : 'info',
+        title: 'Повышение одобрено!',
+        message: 'Академик успешно повышен на 2 ранг (Основной состав)!',
+        type: 'success',
       });
       fetchData();
     } catch (err: any) {

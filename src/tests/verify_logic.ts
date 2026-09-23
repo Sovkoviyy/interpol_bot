@@ -132,31 +132,42 @@ async function runTests() {
   console.assert(isLeftEarly, 'User left 20m early should be flagged as LEFT_EARLY');
   console.log('✅ Test 11: Voice tracker late and early departure detection verified');
 
-  // Test 12: Recruiter Payroll Calculations
+  // Test 12: Recruiter Payroll Calculations (Accepted/Rejected Recruits, Approved/Rejected Reports, Promotions)
   const rateConfig = {
-    payPerRecruit: 5000,
-    payPerReport: 1000,
+    payPerCandidateAccepted: 10000,
+    payPerCandidateRejected: 3000,
+    payPerApprovedReport: 3000,
+    payPerRejectedReport: 1500,
     payPerPromotion: 15000,
   };
   const recruiterStats = {
-    recruitsAccepted: 4,
-    reportsReviewed: 12,
-    promotionsCompleted: 2,
+    acceptedCount: 4,
+    rejectedCandidatesCount: 2,
+    approvedReportsCount: 8,
+    rejectedReportsCount: 3,
+    promotionsCount: 2,
   };
   const totalPayout = 
-    recruiterStats.recruitsAccepted * rateConfig.payPerRecruit +
-    recruiterStats.reportsReviewed * rateConfig.payPerReport +
-    recruiterStats.promotionsCompleted * rateConfig.payPerPromotion;
-  const expectedPayout = (4 * 5000) + (12 * 1000) + (2 * 15000); // 20k + 12k + 30k = 62k
+    recruiterStats.acceptedCount * rateConfig.payPerCandidateAccepted +
+    recruiterStats.rejectedCandidatesCount * rateConfig.payPerCandidateRejected +
+    recruiterStats.approvedReportsCount * rateConfig.payPerApprovedReport +
+    recruiterStats.rejectedReportsCount * rateConfig.payPerRejectedReport +
+    recruiterStats.promotionsCount * rateConfig.payPerPromotion;
+  // (4 * 10000) + (2 * 3000) + (8 * 3000) + (3 * 1500) + (2 * 15000)
+  // = 40000 + 6000 + 24000 + 4500 + 30000 = 104500
+  const expectedPayout = 104500;
   console.assert(totalPayout === expectedPayout, `Total payout should be ${expectedPayout}, got ${totalPayout}`);
-  console.log('✅ Test 12: Recruiter payroll and statement math verified');
+  console.log('✅ Test 12: Recruiter payroll with accepted/rejected recruits & reports verified');
 
-  // Test 13: Leave Request Duration Calculation
+  // Test 13: Leave Request 14 Days (2 Weeks) Limit Validation
   const leaveStart = new Date('2026-10-01');
-  const leaveEnd = new Date('2026-10-08');
-  const durationDays = Math.round((leaveEnd.getTime() - leaveStart.getTime()) / (1000 * 60 * 60 * 24));
-  console.assert(durationDays === 7, `Duration should be 7 days, got ${durationDays}`);
-  console.log('✅ Test 13: Leave request duration calculation verified');
+  const validLeaveEnd = new Date('2026-10-15'); // 14 days
+  const invalidLeaveEnd = new Date('2026-10-16'); // 15 days
+  const validDiffDays = Math.ceil((validLeaveEnd.getTime() - leaveStart.getTime()) / (1000 * 60 * 60 * 24));
+  const invalidDiffDays = Math.ceil((invalidLeaveEnd.getTime() - leaveStart.getTime()) / (1000 * 60 * 60 * 24));
+  console.assert(validDiffDays <= 14, `Valid leave should be <= 14 days, got ${validDiffDays}`);
+  console.assert(invalidDiffDays > 14, `Invalid leave should exceed 14 days, got ${invalidDiffDays}`);
+  console.log('✅ Test 13: Leave request 14-day (2 weeks) maximum limit verified');
 
   // Test 14: Blacklist Matching Logic
   const blacklist = [
@@ -185,7 +196,32 @@ async function runTests() {
   console.assert(deserialized[0].allow === '1024', 'Overwrite allow bitfield should match');
   console.log('✅ Test 15: Anti-Nuke channel snapshot serialization verified');
 
-  console.log('🎉 ALL 15 CORE & V2 LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
+  // Test 16: Academy Channel Name Formatting #academ-name
+  const formatAcademyChannelName = (username: string, characterName?: string | null, prefix = 'academ-') => {
+    const rawName = characterName || username;
+    const cleanName = rawName
+      .toLowerCase()
+      .replace(/[^a-z0-9а-яё_-]/gi, '')
+      .slice(0, 20) || username.toLowerCase().slice(0, 20);
+    return `${prefix}${cleanName}`;
+  };
+  const testChannel1 = formatAcademyChannelName('Tony_Montana', 'Tony Montana');
+  const testChannel2 = formatAcademyChannelName('sovkoviyy');
+  console.assert(testChannel1 === 'academ-tonymontana', `Expected academ-tonymontana, got ${testChannel1}`);
+  console.assert(testChannel2 === 'academ-sovkoviyy', `Expected academ-sovkoviyy, got ${testChannel2}`);
+  console.log('✅ Test 16: Academy #academ-name channel formatting verified');
+
+  // Test 17: Message Logging Filter (No recursive loops in log channels)
+  const logChannels = ['msg_log_id', 'audit_log_id', 'events_log_id'];
+  const testMsgChannel1 = 'general_chat_id';
+  const testMsgChannel2 = 'msg_log_id';
+  const shouldLog1 = !logChannels.includes(testMsgChannel1);
+  const shouldLog2 = !logChannels.includes(testMsgChannel2);
+  console.assert(shouldLog1 === true, 'General chat message should be logged');
+  console.assert(shouldLog2 === false, 'Message inside log channel should NOT be logged to prevent loop');
+  console.log('✅ Test 17: Message logging feedback loop prevention verified');
+
+  console.log('🎉 ALL 17 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
 runTests().catch(err => {

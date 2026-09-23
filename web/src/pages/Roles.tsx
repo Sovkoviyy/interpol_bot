@@ -42,6 +42,9 @@ export const Roles: React.FC = () => {
       manageRecruiting: existing ? existing.manageRecruiting : false,
       manageEvents: existing ? existing.manageEvents : false,
       viewLogs: existing ? existing.viewLogs : false,
+      manageAcademy: existing ? existing.manageAcademy : false,
+      manageVoiceTracker: existing ? existing.manageVoiceTracker : false,
+      antiNukeAlerts: existing ? existing.antiNukeAlerts : false,
       [permKey]: !currentValue,
     };
 
@@ -143,17 +146,20 @@ export const Roles: React.FC = () => {
           <thead className="bg-[#1E232F]/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-[#1E232F]">
             <tr>
               <th className="px-6 py-3.5">Роль на сервере</th>
-              <th className="px-4 py-3.5 text-center">Настройки бота</th>
-              <th className="px-4 py-3.5 text-center">Заявки и рекрутинг</th>
-              <th className="px-4 py-3.5 text-center">Сборы на МП</th>
-              <th className="px-4 py-3.5 text-center">Логи аудита</th>
+              <th className="px-3 py-3.5 text-center">Настройки</th>
+              <th className="px-3 py-3.5 text-center">Рекрутинг</th>
+              <th className="px-3 py-3.5 text-center">Академия</th>
+              <th className="px-3 py-3.5 text-center">Сборы МП</th>
+              <th className="px-3 py-3.5 text-center">Умный войс</th>
+              <th className="px-3 py-3.5 text-center">Anti-Nuke</th>
+              <th className="px-3 py-3.5 text-center">Логи</th>
               <th className="px-4 py-3.5 text-right">Действие</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#1E232F]">
             {permissions.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                <td colSpan={9} className="px-6 py-8 text-center text-slate-500">
                   Пока ни одна роль не добавлена (администраторы Discord имеют полный доступ по умолчанию)
                 </td>
               </tr>
@@ -162,11 +168,11 @@ export const Roles: React.FC = () => {
                 <tr key={p.id} className="hover:bg-[#1E232F]/30 transition-colors">
                   <td className="px-6 py-4">
                     <span className="font-bold text-slate-200">@{p.roleName || p.roleId}</span>
-                    <p className="text-[10px] text-slate-500">ID: {p.roleId}</p>
+                    <p className="text-[10px] text-slate-500 font-mono">ID: {p.roleId}</p>
                   </td>
 
                   {/* Manage Settings */}
-                  <td className="px-4 py-4 text-center">
+                  <td className="px-3 py-4 text-center">
                     <button
                       onClick={() => handleTogglePerm(p.roleId, 'manageSettings', p.manageSettings)}
                       className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
@@ -180,7 +186,7 @@ export const Roles: React.FC = () => {
                   </td>
 
                   {/* Manage Recruiting */}
-                  <td className="px-4 py-4 text-center">
+                  <td className="px-3 py-4 text-center">
                     <button
                       onClick={() => handleTogglePerm(p.roleId, 'manageRecruiting', p.manageRecruiting)}
                       className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
@@ -193,8 +199,22 @@ export const Roles: React.FC = () => {
                     </button>
                   </td>
 
+                  {/* Manage Academy */}
+                  <td className="px-3 py-4 text-center">
+                    <button
+                      onClick={() => handleTogglePerm(p.roleId, 'manageAcademy', p.manageAcademy)}
+                      className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
+                        p.manageAcademy
+                          ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40'
+                          : 'bg-[#0B0E14] text-slate-600 border border-[#1E232F]'
+                      }`}
+                    >
+                      {p.manageAcademy ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                    </button>
+                  </td>
+
                   {/* Manage Events */}
-                  <td className="px-4 py-4 text-center">
+                  <td className="px-3 py-4 text-center">
                     <button
                       onClick={() => handleTogglePerm(p.roleId, 'manageEvents', p.manageEvents)}
                       className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
@@ -207,8 +227,36 @@ export const Roles: React.FC = () => {
                     </button>
                   </td>
 
+                  {/* Manage Voice Tracker */}
+                  <td className="px-3 py-4 text-center">
+                    <button
+                      onClick={() => handleTogglePerm(p.roleId, 'manageVoiceTracker', p.manageVoiceTracker)}
+                      className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
+                        p.manageVoiceTracker
+                          ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40'
+                          : 'bg-[#0B0E14] text-slate-600 border border-[#1E232F]'
+                      }`}
+                    >
+                      {p.manageVoiceTracker ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                    </button>
+                  </td>
+
+                  {/* Anti Nuke Alerts */}
+                  <td className="px-3 py-4 text-center">
+                    <button
+                      onClick={() => handleTogglePerm(p.roleId, 'antiNukeAlerts', p.antiNukeAlerts)}
+                      className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${
+                        p.antiNukeAlerts
+                          ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40'
+                          : 'bg-[#0B0E14] text-slate-600 border border-[#1E232F]'
+                      }`}
+                    >
+                      {p.antiNukeAlerts ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                    </button>
+                  </td>
+
                   {/* View Logs */}
-                  <td className="px-4 py-4 text-center">
+                  <td className="px-3 py-4 text-center">
                     <button
                       onClick={() => handleTogglePerm(p.roleId, 'viewLogs', p.viewLogs)}
                       className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${

@@ -43,7 +43,7 @@ export const Leaves: React.FC = () => {
 
     modal.form({
       title: 'Подать заявку на отпуск / неактив',
-      message: 'Укажите даты начала и окончания отпуска, а также причину. При одобрении статус в профиле изменится на «В отпуске».',
+      message: 'Укажите даты начала и окончания (максимум 14 дней / 2 недели) и причину. При одобрении статус в профиле изменится на «В отпуске».',
       fields: [
         {
           name: 'startDate',
@@ -68,6 +68,26 @@ export const Leaves: React.FC = () => {
       ],
       submitText: 'Отправить заявку',
       onSubmit: async (values) => {
+        const start = new Date(values.startDate);
+        const end = new Date(values.endDate);
+        const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 0) {
+          modal.alert({
+            title: 'Неверные даты',
+            message: 'Дата окончания отпуска должна быть позже даты начала.',
+            type: 'error',
+          });
+          return;
+        }
+        if (diffDays > 14) {
+          modal.alert({
+            title: 'Превышен лимит',
+            message: 'Максимальная продолжительность отпуска составляет 14 дней (2 недели).',
+            type: 'error',
+          });
+          return;
+        }
+
         try {
           await api.post('/leave', values);
           modal.alert({

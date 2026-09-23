@@ -8,7 +8,9 @@ import {
   Trophy, 
   Download,
   Users,
-  Check
+  Check,
+  XCircle,
+  Award
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -80,7 +82,7 @@ export const RecruiterPayroll: React.FC = () => {
             Выплаты и премии рекрутерам
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Автоматический расчет зарплат: за принятые анкеты, проверенные отчеты МП и проведенные повышения
+            Автоматический расчет зарплат: за одобренные и отклоненные заявки, проверенные отчеты МП и повышения
           </p>
         </div>
 
@@ -135,10 +137,44 @@ export const RecruiterPayroll: React.FC = () => {
             </div>
 
             <div className="text-xs">
-              <span className="text-slate-400 mr-2">Итого к выплате:</span>
+              <span className="text-slate-400 mr-2">Итого к выплате всем:</span>
               <strong className="text-base text-pink-400 font-mono font-bold">
                 {payrollData?.grandTotal?.toLocaleString('ru-RU') || 0} {currency}
               </strong>
+            </div>
+          </div>
+
+          {/* Current Rates Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="bg-[#151921] border border-[#1E232F] rounded-xl p-3 text-center">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Одобр. заявка</span>
+              <span className="text-sm font-bold text-emerald-400 font-mono">
+                {config?.payPerCandidateAccepted?.toLocaleString('ru-RU') || 0} {currency}
+              </span>
+            </div>
+            <div className="bg-[#151921] border border-[#1E232F] rounded-xl p-3 text-center">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Отклон. заявка</span>
+              <span className="text-sm font-bold text-slate-300 font-mono">
+                {config?.payPerCandidateRejected?.toLocaleString('ru-RU') || 0} {currency}
+              </span>
+            </div>
+            <div className="bg-[#151921] border border-[#1E232F] rounded-xl p-3 text-center">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Одобр. отчет</span>
+              <span className="text-sm font-bold text-pink-400 font-mono">
+                {config?.payPerApprovedReport?.toLocaleString('ru-RU') || 0} {currency}
+              </span>
+            </div>
+            <div className="bg-[#151921] border border-[#1E232F] rounded-xl p-3 text-center">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Отклон. отчет</span>
+              <span className="text-sm font-bold text-rose-300 font-mono">
+                {config?.payPerRejectedReport?.toLocaleString('ru-RU') || 0} {currency}
+              </span>
+            </div>
+            <div className="bg-[#151921] border border-[#1E232F] rounded-xl p-3 text-center col-span-2 sm:col-span-1">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Повышение 2 ранг</span>
+              <span className="text-sm font-bold text-amber-400 font-mono">
+                {config?.payPerPromotion?.toLocaleString('ru-RU') || 0} {currency}
+              </span>
             </div>
           </div>
 
@@ -147,12 +183,12 @@ export const RecruiterPayroll: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-[#1E232F]/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-[#1E232F]">
                 <tr>
-                  <th className="px-6 py-3.5">#</th>
-                  <th className="px-6 py-3.5">Рекрутер</th>
-                  <th className="px-6 py-3.5 text-center">Принято анкет</th>
-                  <th className="px-6 py-3.5 text-center">Проверено отчетов МП</th>
-                  <th className="px-6 py-3.5 text-center">Повышено академиков</th>
-                  <th className="px-6 py-3.5 text-right">Сумма выплаты</th>
+                  <th className="px-5 py-3.5">#</th>
+                  <th className="px-5 py-3.5">Рекрутер</th>
+                  <th className="px-4 py-3.5 text-center">Заявки в семью (Одобр / Отклон)</th>
+                  <th className="px-4 py-3.5 text-center">Отчеты МП (Одобр / Отклон)</th>
+                  <th className="px-4 py-3.5 text-center">Повышено на 2 ранг</th>
+                  <th className="px-5 py-3.5 text-right">Сумма выплаты</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1E232F]">
@@ -171,22 +207,27 @@ export const RecruiterPayroll: React.FC = () => {
                 ) : (
                   payrollData.recruiters.map((r: any, idx: number) => (
                     <tr key={r.recruiterId} className="hover:bg-[#1A1F2B]/40 transition-colors">
-                      <td className="px-6 py-4 font-bold text-slate-400">
+                      <td className="px-5 py-4 font-bold text-slate-400">
                         {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`}
                       </td>
-                      <td className="px-6 py-4 font-semibold text-white">
+                      <td className="px-5 py-4 font-semibold text-white">
                         @{r.recruiterTag || r.recruiterId}
+                        <span className="block text-[10px] text-slate-500 font-mono">ID: {r.recruiterId}</span>
                       </td>
-                      <td className="px-6 py-4 text-center font-mono font-bold text-emerald-400">
-                        {r.acceptedCount}
+                      <td className="px-4 py-4 text-center font-mono font-bold">
+                        <span className="text-emerald-400">{r.acceptedCount}</span>
+                        <span className="text-slate-500 mx-1">/</span>
+                        <span className="text-slate-400">{r.rejectedCandidatesCount || 0}</span>
                       </td>
-                      <td className="px-6 py-4 text-center font-mono font-bold text-pink-400">
-                        {r.reportsCount}
+                      <td className="px-4 py-4 text-center font-mono font-bold">
+                        <span className="text-pink-400">{r.approvedReportsCount || r.reportsCount || 0}</span>
+                        <span className="text-slate-500 mx-1">/</span>
+                        <span className="text-slate-400">{r.rejectedReportsCount || 0}</span>
                       </td>
-                      <td className="px-6 py-4 text-center font-mono font-bold text-amber-400">
+                      <td className="px-4 py-4 text-center font-mono font-bold text-amber-400">
                         {r.promotionsCount}
                       </td>
-                      <td className="px-6 py-4 text-right font-mono font-extrabold text-white text-sm">
+                      <td className="px-5 py-4 text-right font-mono font-extrabold text-white text-sm">
                         {r.totalPayout.toLocaleString('ru-RU')} <span className="text-pink-400 font-bold">{currency}</span>
                       </td>
                     </tr>
@@ -206,28 +247,56 @@ export const RecruiterPayroll: React.FC = () => {
           </h2>
 
           <div className="space-y-4 text-xs">
-            <div>
-              <label className="block text-slate-400 mb-1 font-medium">Ставка за 1 принятого кандидата в семью</label>
-              <input
-                type="number"
-                min={0}
-                step={500}
-                value={config?.payPerCandidateAccepted || 10000}
-                onChange={(e) => setConfig({ ...config, payPerCandidateAccepted: parseFloat(e.target.value) || 0 })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Ставка за 1 одобренную заявку</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={config?.payPerCandidateAccepted ?? 10000}
+                  onChange={(e) => setConfig({ ...config, payPerCandidateAccepted: parseFloat(e.target.value) || 0 })}
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Ставка за 1 отклоненную заявку</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={config?.payPerCandidateRejected ?? 3000}
+                  onChange={(e) => setConfig({ ...config, payPerCandidateRejected: parseFloat(e.target.value) || 0 })}
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-slate-400 mb-1 font-medium">Ставка за 1 проверенный отчет по МП</label>
-              <input
-                type="number"
-                min={0}
-                step={500}
-                value={config?.payPerApprovedReport || 3000}
-                onChange={(e) => setConfig({ ...config, payPerApprovedReport: parseFloat(e.target.value) || 0 })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Ставка за 1 одобренный отчет по МП</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={config?.payPerApprovedReport ?? 3000}
+                  onChange={(e) => setConfig({ ...config, payPerApprovedReport: parseFloat(e.target.value) || 0 })}
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Ставка за 1 проверенный и отклоненный отчет МП</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={config?.payPerRejectedReport ?? 1500}
+                  onChange={(e) => setConfig({ ...config, payPerRejectedReport: parseFloat(e.target.value) || 0 })}
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                />
+              </div>
             </div>
 
             <div>
@@ -236,7 +305,7 @@ export const RecruiterPayroll: React.FC = () => {
                 type="number"
                 min={0}
                 step={500}
-                value={config?.payPerPromotion || 15000}
+                value={config?.payPerPromotion ?? 15000}
                 onChange={(e) => setConfig({ ...config, payPerPromotion: parseFloat(e.target.value) || 0 })}
                 className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
               />

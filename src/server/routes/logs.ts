@@ -64,6 +64,7 @@ logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), asy
     botLogsChannelId,
     eventLogsChannelId,
     enabledLogTypes,
+    logSentMessages,
   } = req.body;
 
   const updated = await prisma.loggingConfig.upsert({
@@ -79,6 +80,7 @@ logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), asy
       botLogsChannelId,
       eventLogsChannelId,
       enabledLogTypesJson: JSON.stringify(enabledLogTypes || []),
+      logSentMessages: logSentMessages !== undefined ? Boolean(logSentMessages) : true,
     },
     create: {
       guildId,
@@ -92,6 +94,7 @@ logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), asy
       botLogsChannelId,
       eventLogsChannelId,
       enabledLogTypesJson: JSON.stringify(enabledLogTypes || []),
+      logSentMessages: logSentMessages !== undefined ? Boolean(logSentMessages) : true,
     },
   });
 
