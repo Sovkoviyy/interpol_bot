@@ -126,6 +126,7 @@ export class AuditLogger {
     categoryType: LogCategoryType,
     embed: EmbedBuilder
   ): Promise<void> {
+    if (!guild || !guild.id) return;
     try {
       // Check guild config
       const guildConfig = await prisma.guildConfig.findUnique({

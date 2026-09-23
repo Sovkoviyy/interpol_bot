@@ -3,12 +3,13 @@ import config from '../../config';
 import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
+import { resolveGuildId } from '../utils/guild';
 
 export const rbacRouter = Router();
 
 // Get role permissions
 rbacRouter.get('/', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const permissions = await prisma.rolePermission.findMany({
     where: { guildId },
   });
@@ -18,7 +19,7 @@ rbacRouter.get('/', requireAuth, requirePermission('manageSettings'), async (req
 
 // Update or set permissions for a role
 rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const { 
     roleId, 
     roleName, 
@@ -66,7 +67,7 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
 
 // Delete role permissions
 rbacRouter.delete('/:roleId', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const roleId = req.params.roleId as string;
 
   await prisma.rolePermission.deleteMany({

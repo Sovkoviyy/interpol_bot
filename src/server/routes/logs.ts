@@ -5,7 +5,7 @@ import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
-import { resolveGuildId } from '../utils/guild';
+import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const logsRouter = Router();
 
@@ -105,7 +105,7 @@ logsRouter.post('/config', requireAuth, requirePermission('manageSettings'), asy
 // 1-Click Auto Setup channels in Discord
 logsRouter.post('/auto-setup', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
-  const guild = bot.guilds.cache.get(guildId);
+  const guild = await getDiscordGuild(guildId);
 
   if (!guild) {
     return res.status(400).json({ error: 'Бот не подключен к серверу Discord' });

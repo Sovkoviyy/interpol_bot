@@ -1,9 +1,10 @@
 import { 
   SlashCommandBuilder, 
   ChatInputCommandInteraction, 
-  PermissionFlagsBits,
-  ChannelType
+  PermissionFlagsBits, 
+  ChannelType 
 } from 'discord.js';
+import bot from '../client';
 import { VoiceTrackerService } from '../modules/voiceTracker/voiceTrackerService';
 
 export const voiceControlCommand = {
@@ -31,8 +32,14 @@ export const voiceControlCommand = {
       return;
     }
 
+    const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
+    if (!guild) {
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      return;
+    }
+
     try {
-      await VoiceTrackerService.postControlPanel(interaction.guild!, targetChannel.id);
+      await VoiceTrackerService.postControlPanel(guild, targetChannel.id);
       await interaction.reply({
         content: `✅ Пульт управления МП успешно развернут в канале <#${targetChannel.id}>!`,
         ephemeral: true,

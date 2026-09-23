@@ -6,7 +6,7 @@ import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
-import { resolveGuildId } from '../utils/guild';
+import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const botMessagesRouter = Router();
 
@@ -123,7 +123,7 @@ botMessagesRouter.post('/test', requireAuth, requirePermission('manageSettings')
     return res.status(400).json({ error: 'Канал для отправки не выбран!' });
   }
 
-  const guild = bot.guilds.cache.get(guildId);
+  const guild = await getDiscordGuild(guildId);
   if (!guild) return res.status(404).json({ error: 'Discord Guild not found' });
 
   const channel = (guild.channels.cache.get(targetChannelId) ||

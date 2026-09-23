@@ -10,6 +10,7 @@ import {
   TextChannel 
 } from 'discord.js';
 import prisma from '../../../database/client';
+import bot from '../../client';
 import { ProfileService } from '../profiles/profileService';
 import { AuditLogger } from '../logging/auditLogger';
 import { RecruitmentService } from '../recruitment/recruitmentService';
@@ -241,8 +242,9 @@ export class AcademyService {
       },
     });
 
-    const channel = member.guild.channels.cache.get(channelId) as TextChannel | undefined;
-    if (channel) {
+    const guild = member.guild || (guildId ? (bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null)) : null);
+    const channel = guild ? ((guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null)) as TextChannel | null) : null;
+    if (channel && channel.isTextBased()) {
       const embed = new EmbedBuilder()
         .setColor(0xF59E0B)
         .setTitle(`📝 Новый отчет по МП: ${mpType}`)
@@ -314,7 +316,8 @@ export class AcademyService {
       },
     });
 
-    const channel = reviewer.guild.channels.cache.get(report.channelId) as TextChannel | undefined;
+    const guild = reviewer.guild || (report.guildId ? (bot.guilds.cache.get(report.guildId) || await bot.guilds.fetch(report.guildId).catch(() => null)) : null);
+    const channel = guild ? ((guild.channels.cache.get(report.channelId) || await guild.channels.fetch(report.channelId).catch(() => null)) as TextChannel | null) : null;
 
     if (approved) {
       // Increment MP count
@@ -323,7 +326,7 @@ export class AcademyService {
         data: { approvedMpCount: { increment: 1 } },
       });
 
-      await ProfileService.incrementMp(reviewer.guild.id, report.userId, 1);
+      await ProfileService.incrementMp(guild ? guild.id : report.guildId, report.userId, 1);
 
       const neededTotal = updatedChannel.requiredMp + updatedChannel.penaltyMp;
       const current = updatedChannel.approvedMpCount;
@@ -414,9 +417,10 @@ export class AcademyService {
       throw new Error('У вас нет роли рекрутера для подтверждения повышения');
     }
 
-    const config = await this.getConfig(reviewer.guild.id);
-    const targetMember = await reviewer.guild.members.fetch(academy.userId).catch(() => null);
-    const channel = reviewer.guild.channels.cache.get(academy.channelId) as TextChannel | undefined;
+    const guild = reviewer.guild || (academy.guildId ? (bot.guilds.cache.get(academy.guildId) || await bot.guilds.fetch(academy.guildId).catch(() => null)) : null);
+    const config = await this.getConfig(guild ? guild.id : reviewer.guild.id);
+    const targetMember = guild ? await guild.members.fetch(academy.userId).catch(() => null) : null;
+    const channel = guild ? ((guild.channels.cache.get(academy.channelId) || await guild.channels.fetch(academy.channelId).catch(() => null)) as TextChannel | null) : null;
 
     if (approved) {
       // 1. Roles transfer
@@ -447,7 +451,7 @@ export class AcademyService {
       });
 
       // 4. Send celebration
-      if (channel) {
+      if (channel && channel.isTextBased()) {
         const celebrationEmbed = new EmbedBuilder()
           .setColor(0xEC4899)
           .setTitle('🎖️ Академик успешно повышен на 2 ранг!')
@@ -469,13 +473,8 @@ export class AcademyService {
     } else {
       // Rejected promotion with penalties
       const penalty = penaltyMp || 2;
-      const updated = await prisma.academyChannel.update({
-        where: { id: academyChannelId },
-        data: {
-          penaltyMp: { increment: penalty },
-        },
-      });
 
+      // Add penalty via ProfileService (which safely updates profile penalty and all active academy channels)
       await ProfileService.addPenaltyMp(
         reviewer.guild.id,
         academy.userId,
@@ -483,7 +482,11 @@ export class AcademyService {
         `Отклонено повышение: ${rejectionReason || 'Нарушение/Недостаточная активность'}`
       );
 
-      if (channel) {
+      const updated = await prisma.academyChannel.findUnique({
+        where: { id: academyChannelId },
+      }) || academy;
+
+      if (channel && channel.isTextBased()) {
         const penaltyEmbed = new EmbedBuilder()
           .setColor(0xEF4444)
           .setTitle('⚠️ Повышение отклонено | Назначен штраф')

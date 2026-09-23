@@ -6,12 +6,13 @@ import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
+import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const embedsRouter = Router();
 
 // Get list of saved embed templates
 embedsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
 
   const templates = await prisma.customEmbedTemplate.findMany({
     where: { guildId },
@@ -23,7 +24,7 @@ embedsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Respon
 
 // Save or update an embed template
 embedsRouter.post('/', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const {
     id,
     name,
@@ -106,7 +107,7 @@ embedsRouter.delete('/:id', requireAuth, requirePermission('manageSettings'), as
 
 // Send embed to Discord channel
 embedsRouter.post('/send', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = resolveGuildId(req);
   const {
     targetChannelId,
     content,
@@ -129,7 +130,7 @@ embedsRouter.post('/send', requireAuth, requirePermission('manageSettings'), asy
     return res.status(400).json({ error: 'Выберите канал Discord для отправки!' });
   }
 
-  const guild = bot.guilds.cache.get(guildId);
+  const guild = await getDiscordGuild(guildId);
   if (!guild) return res.status(404).json({ error: 'Discord Guild not found' });
 
   const channel = (guild.channels.cache.get(targetChannelId) ||

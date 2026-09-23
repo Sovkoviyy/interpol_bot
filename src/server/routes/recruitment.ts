@@ -6,7 +6,7 @@ import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { RecruitmentService } from '../../bot/modules/recruitment/recruitmentService';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
-import { resolveGuildId } from '../utils/guild';
+import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const recruitmentRouter = Router();
 
@@ -140,12 +140,13 @@ recruitmentRouter.post('/post-panel', requireAuth, requirePermission('manageRecr
     return res.status(400).json({ error: 'Канал для публикации не выбран в настройках' });
   }
 
-  const guild = bot.guilds.cache.get(guildId);
+  const guild = await getDiscordGuild(guildId);
   if (!guild) {
     return res.status(400).json({ error: 'Бот не подключен к серверу Discord' });
   }
 
-  const channel = guild.channels.cache.get(recConfig.channelId) as TextChannel | undefined;
+  const channel = (guild.channels.cache.get(recConfig.channelId) ||
+    await guild.channels.fetch(recConfig.channelId).catch(() => null)) as TextChannel | null;
   if (!channel || !channel.isTextBased()) {
     return res.status(400).json({ error: 'Канал не найден или не является текстовым' });
   }

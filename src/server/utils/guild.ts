@@ -1,3 +1,5 @@
+import { Guild } from 'discord.js';
+import bot from '../../bot/client';
 import { AuthenticatedRequest } from '../middlewares/auth';
 import config from '../../config';
 
@@ -21,4 +23,12 @@ export function resolveGuildId(req: AuthenticatedRequest): string {
     return bodyGuild.trim();
   }
   return req.user?.guildId || config.discord.guildId || 'default';
+}
+
+/**
+ * Safely resolves Discord Guild from client cache or API fetch
+ */
+export async function getDiscordGuild(guildId: string): Promise<Guild | null> {
+  if (!guildId || guildId === 'default') return null;
+  return bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
 }

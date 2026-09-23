@@ -248,7 +248,8 @@ export class VoiceTrackerService {
 
     // Revert voice channel name
     if (config.voiceChannelId) {
-      const voiceChannel = guild.channels.cache.get(config.voiceChannelId) as VoiceChannel | undefined;
+      const voiceChannel = (guild.channels.cache.get(config.voiceChannelId) ||
+        await guild.channels.fetch(config.voiceChannelId).catch(() => null)) as VoiceChannel | null;
       if (voiceChannel) {
         await voiceChannel.setName(config.defaultVoiceName || 'Ожидание МП').catch(() => null);
       }
@@ -256,10 +257,14 @@ export class VoiceTrackerService {
 
     // Finalize all attendees durations
     if (active) {
+      const sessionDurationMs = now.getTime() - session.startedAt.getTime();
       for (const [userId, record] of active.attendees.entries()) {
         const leaveTime = record.leftAt || now;
-        const durationSec = Math.floor((leaveTime.getTime() - record.joinedAt.getTime()) / 1000);
-        const finalDuration = Math.max(record.durationSeconds, durationSec);
+        const currentPeriodSec = record.leftAt ? 0 : Math.floor((now.getTime() - record.joinedAt.getTime()) / 1000);
+        const finalDuration = record.durationSeconds + currentPeriodSec;
+        const isLeftEarly = Boolean(
+          record.leftAt && (sessionDurationMs <= 5 * 60 * 1000 || (now.getTime() - record.leftAt.getTime()) > 5 * 60 * 1000)
+        );
 
         attendeesList.push({
           userId,
@@ -269,7 +274,7 @@ export class VoiceTrackerService {
           durationMinutes: Math.floor(finalDuration / 60),
           durationSeconds: finalDuration,
           isLate: record.isLate,
-          leftEarly: record.leftEarly,
+          leftEarly: isLeftEarly,
         });
 
         // Credit to member profile safely
@@ -351,7 +356,8 @@ export class VoiceTrackerService {
    * Handle member voice state changes to track join/leave events
    */
   static async handleVoiceStateUpdate(oldState: VoiceState, newState: VoiceState) {
-    const guildId = newState.guild.id;
+    const guildId = newState.guild?.id || oldState.guild?.id;
+    if (!guildId) return;
     const active = this.activeSessions.get(guildId);
     if (!active) return;
 
@@ -372,6 +378,7 @@ export class VoiceTrackerService {
       if (existing) {
         existing.joinedAt = now;
         existing.leftAt = undefined;
+        existing.leftEarly = false;
       } else {
         active.attendees.set(userId, {
           userId,
@@ -384,7 +391,7 @@ export class VoiceTrackerService {
       }
     } else if (leftTarget) {
       const existing = active.attendees.get(userId);
-      if (existing) {
+      if (existing && !existing.leftAt) {
         const now = new Date();
         const durationThisPeriod = Math.floor((now.getTime() - existing.joinedAt.getTime()) / 1000);
         existing.durationSeconds += durationThisPeriod;
@@ -473,8 +480,9 @@ export class VoiceTrackerService {
         await guild.channels.fetch(config.controlChannelId).catch(() => null)) as TextChannel | null;
       if (!channel || !channel.isTextBased()) return;
 
+      if (!channel.messages || typeof channel.messages.fetch !== 'function') return;
       const msg = await channel.messages.fetch(config.controlMessageId).catch(() => null);
-      if (!msg) return;
+      if (!msg || typeof msg.edit !== 'function') return;
 
       const panelData = await this.buildControlPanelData(guild);
       await msg.edit(panelData);

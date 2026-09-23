@@ -33,6 +33,13 @@ export class LeaveService {
       throw new Error('У вас уже есть активная заявка на рассмотрении');
     }
 
+    // Ensure UserProfile exists before inserting LeaveRequest due to foreign key constraint
+    await prisma.userProfile.upsert({
+      where: { guildId_userId: { guildId, userId } },
+      update: { userTag },
+      create: { guildId, userId, userTag },
+    });
+
     return await prisma.leaveRequest.create({
       data: {
         guildId,

@@ -4,6 +4,7 @@ import {
   ChannelType,
   EmbedBuilder,
 } from 'discord.js';
+import bot from '../client';
 import prisma from '../../database/client';
 import { Command } from '../client';
 import { EventService } from '../modules/events/eventService';
@@ -96,7 +97,11 @@ export const eventCommand: Command = {
 
   execute: async (interaction: ChatInputCommandInteraction) => {
     const sub = interaction.options.getSubcommand();
-    const guild = interaction.guild!;
+    const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
+    if (!guild) {
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      return;
+    }
 
     if (sub === 'create') {
       await interaction.deferReply({ ephemeral: true });

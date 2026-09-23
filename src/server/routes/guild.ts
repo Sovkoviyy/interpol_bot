@@ -4,14 +4,14 @@ import config from '../../config';
 import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
-import { resolveGuildId } from '../utils/guild';
+import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const guildRouter = Router();
 
 // Get guild roles
 guildRouter.get('/roles', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
-  const guild = bot.guilds.cache.get(guildId);
+  const guild = await getDiscordGuild(guildId);
 
   if (!guild) {
     return res.json({ roles: [] });
@@ -33,7 +33,7 @@ guildRouter.get('/roles', requireAuth, async (req: AuthenticatedRequest, res: Re
 // Get guild channels
 guildRouter.get('/channels', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
-  const guild = bot.guilds.cache.get(guildId);
+  const guild = await getDiscordGuild(guildId);
 
   if (!guild) {
     return res.json({ channels: [] });

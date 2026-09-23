@@ -8,6 +8,11 @@ export class TranscriptService {
     let allMessages: Message[] = [];
     let lastId: string | undefined;
 
+    if (!channel?.messages || typeof channel.messages.fetch !== 'function') {
+      const buffer = Buffer.from(`========================================================\nТРАНСКРИПТ КАНАЛА: #${channel?.name || 'unknown'}\nНет сообщений или канал недоступен.\n========================================================\n`, 'utf-8');
+      return new AttachmentBuilder(buffer, { name: `transcript-${channel?.name || 'channel'}-${Date.now()}.txt` });
+    }
+
     // Fetch up to 500 messages
     for (let i = 0; i < 5; i++) {
       const options: { limit: number; before?: string } = { limit: 100 };
@@ -24,9 +29,9 @@ export class TranscriptService {
     allMessages.reverse();
 
     let transcript = `========================================================\n`;
-    transcript += `ТРАНСКРИПТ КАНАЛА: #${channel.name} (${channel.id})\n`;
+    transcript += `ТРАНСКРИПТ КАНАЛА: #${channel?.name || 'unknown'} (${channel?.id || 'unknown'})\n`;
     transcript += `ДАТА СОХРАНЕНИЯ: ${new Date().toLocaleString('ru-RU')}\n`;
-    transcript += `СЕРВЕР: ${channel.guild.name}\n`;
+    transcript += `СЕРВЕР: ${channel?.guild?.name || 'Discord'}\n`;
     transcript += `========================================================\n\n`;
 
     for (const msg of allMessages) {

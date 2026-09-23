@@ -5,8 +5,13 @@ import {
   TextInputBuilder, 
   TextInputStyle, 
   ActionRowBuilder, 
+  ButtonBuilder,
+  ButtonStyle,
+  PermissionFlagsBits,
+  TextChannel,
   GuildMember, 
-  EmbedBuilder 
+  EmbedBuilder,
+  Guild 
 } from 'discord.js';
 import bot from '../client';
 import { RecruitmentService } from '../modules/recruitment/recruitmentService';
@@ -17,7 +22,19 @@ import { ProfileService } from '../modules/profiles/profileService';
 import { LeaveService } from '../modules/leave/leaveService';
 import prisma from '../../database/client';
 
+let isInteractionHandlerRegistered = false;
+
+async function resolveGuild(interaction: { guild?: Guild | null; guildId?: string | null }): Promise<Guild | null> {
+  if (interaction.guild) return interaction.guild;
+  const guildId = interaction.guildId;
+  if (!guildId) return null;
+  return bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+}
+
 export function registerInteractionHandler() {
+  if (isInteractionHandlerRegistered) return;
+  isInteractionHandlerRegistered = true;
+
   bot.on(Events.InteractionCreate, async (interaction: Interaction) => {
     try {
       // 1. Slash commands
@@ -31,7 +48,11 @@ export function registerInteractionHandler() {
       // 2. Buttons
       if (interaction.isButton()) {
         const customId = interaction.customId;
+        const guild = await resolveGuild(interaction);
         const member = interaction.member as GuildMember;
+        if (member && !member.guild && guild) {
+          (member as any).guild = guild;
+        }
 
         // --- Academy Buttons ---
         if (customId === 'academy_submit_report_btn') {
@@ -100,8 +121,10 @@ export function registerInteractionHandler() {
           return;
         }
 
-        if (customId.startsWith('academy_approve_report_')) {
-          const reportId = customId.replace('academy_approve_report_', '');
+        if (customId.startsWith('academy_approve_report_') || customId.startsWith('academy_report_approve_')) {
+          const reportId = customId.startsWith('academy_report_approve_')
+            ? customId.replace('academy_report_approve_', '')
+            : customId.replace('academy_approve_report_', '');
           await interaction.deferReply();
           try {
             await AcademyService.reviewReport(reportId, member, true);
@@ -112,8 +135,10 @@ export function registerInteractionHandler() {
           return;
         }
 
-        if (customId.startsWith('academy_reject_report_')) {
-          const reportId = customId.replace('academy_reject_report_', '');
+        if (customId.startsWith('academy_reject_report_') || customId.startsWith('academy_report_reject_')) {
+          const reportId = customId.startsWith('academy_report_reject_')
+            ? customId.replace('academy_report_reject_', '')
+            : customId.replace('academy_reject_report_', '');
           const modal = new ModalBuilder()
             .setCustomId(`academy_reject_modal_${reportId}`)
             .setTitle('Отклонение отчета по МП');
@@ -130,8 +155,12 @@ export function registerInteractionHandler() {
           return;
         }
 
-        if (customId.startsWith('academy_promote_confirm_')) {
-          const academyChannelId = customId.replace('academy_promote_confirm_', '');
+        if (customId.startsWith('academy_promote_confirm_') || customId.startsWith('academy_promo_confirm_') || (customId.startsWith('academy_promote_') && !customId.startsWith('academy_promote_reject_') && !customId.startsWith('academy_promo_reject_'))) {
+          const academyChannelId = customId.startsWith('academy_promote_confirm_')
+            ? customId.replace('academy_promote_confirm_', '')
+            : customId.startsWith('academy_promo_confirm_')
+            ? customId.replace('academy_promo_confirm_', '')
+            : customId.replace('academy_promote_', '');
           await interaction.deferReply();
           try {
             await AcademyService.promoteAcademician(academyChannelId, member, true);
@@ -142,8 +171,10 @@ export function registerInteractionHandler() {
           return;
         }
 
-        if (customId.startsWith('academy_promote_reject_')) {
-          const academyChannelId = customId.replace('academy_promote_reject_', '');
+        if (customId.startsWith('academy_promote_reject_') || customId.startsWith('academy_promo_reject_')) {
+          const academyChannelId = customId.startsWith('academy_promote_reject_')
+            ? customId.replace('academy_promote_reject_', '')
+            : customId.replace('academy_promo_reject_', '');
           const modal = new ModalBuilder()
             .setCustomId(`academy_promo_reject_modal_${academyChannelId}`)
             .setTitle('Отклонение повышения');
@@ -172,10 +203,11 @@ export function registerInteractionHandler() {
         }
 
         // --- Voice Tracker Buttons ---
-        if (customId === 'voice_tracker_end_btn') {
+        if (customId === 'voice_tracker_end_btn' || customId === 'vt_end_button') {
           await interaction.deferReply({ ephemeral: true });
           try {
-            await VoiceTrackerService.endSession(interaction.guild!, member);
+            if (!guild) throw new Error('Сервер Discord не найден.');
+            await VoiceTrackerService.endSession(guild, member);
             await interaction.editReply({ content: '🏁 Текущее мероприятие успешно завершено. Статистика отправлена в лог.' });
           } catch (err: any) {
             await interaction.editReply({ content: `❌ ${err.message}` });
@@ -183,10 +215,26 @@ export function registerInteractionHandler() {
           return;
         }
 
-        if (customId === 'voice_tracker_status_btn') {
-          const config = await VoiceTrackerService.getConfig(interaction.guildId!);
-          const voiceChannel = config.voiceChannelId
-            ? interaction.guild!.channels.cache.get(config.voiceChannelId)
+        if (customId === 'vt_start_button' || customId === 'voice_tracker_start_btn') {
+          await interaction.deferReply({ ephemeral: true });
+          try {
+            if (!guild) throw new Error('Сервер Discord не найден.');
+            const mpTypes = await VoiceTrackerService.getAvailableMpTypes(guild.id);
+            const defaultMp = mpTypes[0]?.name || 'Сбор на МП';
+            await VoiceTrackerService.startSession(guild, defaultMp, member);
+            await interaction.editReply({
+              content: `⚔️ Мероприятие **«${defaultMp}»** успешно запущено! Войс-канал переименован, учет явки начался.`,
+            });
+          } catch (err: any) {
+            await interaction.editReply({ content: `❌ ${err.message}` });
+          }
+          return;
+        }
+
+        if (customId === 'voice_tracker_status_btn' || customId === 'vt_status_button' || customId === 'vt_status_btn') {
+          const config = await VoiceTrackerService.getConfig(interaction.guildId || (guild ? guild.id : ''));
+          const voiceChannel = config.voiceChannelId && guild
+            ? guild.channels.cache.get(config.voiceChannelId)
             : null;
 
           const session = await prisma.voiceTrackerSession.findFirst({
@@ -235,8 +283,10 @@ export function registerInteractionHandler() {
         }
 
         // --- Event Buttons ---
-        if (customId.startsWith('event_join_')) {
-          const eventId = customId.replace('event_join_', '');
+        if (customId.startsWith('event_join_') || customId.startsWith('event_confirm_')) {
+          const eventId = customId.startsWith('event_confirm_')
+            ? customId.replace('event_confirm_', '')
+            : customId.replace('event_join_', '');
           await EventService.handleJoin(interaction, eventId, false);
           return;
         }
@@ -323,12 +373,54 @@ export function registerInteractionHandler() {
           await interaction.showModal(modal);
           return;
         }
+
+        if (customId.startsWith('leave_approve_')) {
+          const leaveId = customId.replace('leave_approve_', '');
+          await interaction.deferReply();
+          try {
+            const isLeaderOrAdmin = member.permissions && typeof member.permissions.has === 'function'
+              ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
+              : false;
+            if (!isLeaderOrAdmin) {
+              await interaction.editReply({ content: '❌ Только руководство может одобрять отпуска.' });
+              return;
+            }
+            await LeaveService.reviewLeave(leaveId, member.id, member.user.tag, true);
+            await interaction.editReply({ content: `✅ Заявка на отпуск одобрена руководителем ${member}.` });
+          } catch (err: any) {
+            await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
+          }
+          return;
+        }
+
+        if (customId.startsWith('leave_reject_')) {
+          const leaveId = customId.replace('leave_reject_', '');
+          await interaction.deferReply();
+          try {
+            const isLeaderOrAdmin = member.permissions && typeof member.permissions.has === 'function'
+              ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
+              : false;
+            if (!isLeaderOrAdmin) {
+              await interaction.editReply({ content: '❌ Только руководство может отклонять отпуска.' });
+              return;
+            }
+            await LeaveService.reviewLeave(leaveId, member.id, member.user.tag, false, 'Отклонено руководством');
+            await interaction.editReply({ content: `❌ Заявка на отпуск отклонена руководителем ${member}.` });
+          } catch (err: any) {
+            await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
+          }
+          return;
+        }
       }
 
       // 3. Modals
       if (interaction.isModalSubmit()) {
         const customId = interaction.customId;
+        const guild = await resolveGuild(interaction);
         const member = interaction.member as GuildMember;
+        if (member && !member.guild && guild) {
+          (member as any).guild = guild;
+        }
 
         if (customId === 'academy_report_modal') {
           await interaction.deferReply({ ephemeral: true });
@@ -362,8 +454,10 @@ export function registerInteractionHandler() {
           return;
         }
 
-        if (customId.startsWith('academy_reject_modal_')) {
-          const reportId = customId.replace('academy_reject_modal_', '');
+        if (customId.startsWith('academy_reject_modal_') || customId.startsWith('academy_report_reject_modal_')) {
+          const reportId = customId.startsWith('academy_report_reject_modal_')
+            ? customId.replace('academy_report_reject_modal_', '')
+            : customId.replace('academy_reject_modal_', '');
           const reason = interaction.fields.getTextInputValue('reject_reason');
           await interaction.deferReply();
           try {
@@ -375,8 +469,10 @@ export function registerInteractionHandler() {
           return;
         }
 
-        if (customId.startsWith('academy_promo_reject_modal_')) {
-          const academyChannelId = customId.replace('academy_promo_reject_modal_', '');
+        if (customId.startsWith('academy_promo_reject_modal_') || customId.startsWith('academy_promote_reject_modal_')) {
+          const academyChannelId = customId.startsWith('academy_promote_reject_modal_')
+            ? customId.replace('academy_promote_reject_modal_', '')
+            : customId.replace('academy_promo_reject_modal_', '');
           const reason = interaction.fields.getTextInputValue('promo_reject_reason');
           const penalty = parseInt(interaction.fields.getTextInputValue('promo_penalty_count'), 10) || 2;
           await interaction.deferReply();
@@ -405,10 +501,12 @@ export function registerInteractionHandler() {
           await interaction.deferReply({ ephemeral: true });
           const staticId = interaction.fields.getTextInputValue('static_id');
           const characterName = interaction.fields.getTextInputValue('character_name') || undefined;
+          const targetGuildId = interaction.guildId || (guild ? guild.id : '');
 
           try {
+            if (!targetGuildId) throw new Error('Сервер Discord не определен.');
             await ProfileService.setStatic(
-              interaction.guildId!,
+              targetGuildId,
               interaction.user.id,
               staticId,
               characterName,
@@ -435,7 +533,9 @@ export function registerInteractionHandler() {
               if (parts[0].length === 4) {
                 return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
               } else {
-                return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+                let y = parseInt(parts[2], 10);
+                if (y < 100) y += 2000;
+                return new Date(y, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
               }
             }
             return new Date(str);
@@ -449,15 +549,56 @@ export function registerInteractionHandler() {
             return;
           }
 
+          const targetGuildId = interaction.guildId || (guild ? guild.id : '');
+          if (!targetGuildId) {
+            await interaction.editReply({ content: '❌ Сервер Discord не определен.' });
+            return;
+          }
+
           try {
-            await LeaveService.requestLeave(
-              interaction.guildId!,
+            const leave = await LeaveService.requestLeave(
+              targetGuildId,
               interaction.user.id,
               interaction.user.tag,
               startDate,
               endDate,
               reason
             );
+
+            if (guild) {
+              const guildConfig = await prisma.guildConfig.findUnique({ where: { guildId: targetGuildId } });
+              if (guildConfig?.leaveRequestChannelId) {
+                const leaveChannel = (guild.channels.cache.get(guildConfig.leaveRequestChannelId) ||
+                  await guild.channels.fetch(guildConfig.leaveRequestChannelId).catch(() => null)) as TextChannel | null;
+                if (leaveChannel && leaveChannel.isTextBased()) {
+                  const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+                  const leaveEmbed = new EmbedBuilder()
+                    .setColor(0xF59E0B)
+                    .setTitle('🏖️ Новая заявка на отпуск')
+                    .setDescription(
+                      `**Участник:** ${member || interaction.user} (\`${interaction.user.tag}\`)\n` +
+                      `**Период:** с **${startDate.toLocaleDateString('ru-RU')}** по **${endDate.toLocaleDateString('ru-RU')}** (\`${days} дн.\`)\n` +
+                      `**Причина:** ${reason}\n` +
+                      `**ID заявки:** \`${leave.id}\``
+                    )
+                    .setTimestamp();
+
+                  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                    new ButtonBuilder()
+                      .setCustomId(`leave_approve_${leave.id}`)
+                      .setLabel('✅ Одобрить')
+                      .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                      .setCustomId(`leave_reject_${leave.id}`)
+                      .setLabel('❌ Отклонить')
+                      .setStyle(ButtonStyle.Danger)
+                  );
+
+                  await leaveChannel.send({ embeds: [leaveEmbed], components: [actionRow] }).catch(() => null);
+                }
+              }
+            }
+
             await interaction.editReply({
               content: `✅ Заявка на отпуск с **${startDate.toLocaleDateString('ru-RU')}** по **${endDate.toLocaleDateString('ru-RU')}** успешно отправлена руководству на рассмотрение!`
             });
@@ -471,13 +612,18 @@ export function registerInteractionHandler() {
       // 4. Select Menus
       if (interaction.isStringSelectMenu()) {
         const customId = interaction.customId;
+        const guild = await resolveGuild(interaction);
         const member = interaction.member as GuildMember;
+        if (member && !member.guild && guild) {
+          (member as any).guild = guild;
+        }
 
-        if (customId === 'voice_tracker_select_mp') {
+        if (customId === 'voice_tracker_select_mp' || customId === 'vt_type_select') {
           const selectedMp = interaction.values[0];
           await interaction.deferReply({ ephemeral: true });
           try {
-            await VoiceTrackerService.startSession(interaction.guild!, selectedMp, member);
+            if (!guild) throw new Error('Сервер Discord не найден.');
+            await VoiceTrackerService.startSession(guild, selectedMp, member);
             await interaction.editReply({
               content: `⚔️ Мероприятие **«${selectedMp}»** успешно запущено! Войс-канал переименован, учет явки начался.`,
             });

@@ -7,7 +7,7 @@ import { requirePermission } from '../middlewares/rbac';
 import { EventService } from '../../bot/modules/events/eventService';
 import { TextChannel, EmbedBuilder } from 'discord.js';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
-import { resolveGuildId } from '../utils/guild';
+import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const eventsRouter = Router();
 
@@ -68,12 +68,13 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
     return res.status(400).json({ error: 'Заполните обязательные поля (название, тип, время явки, время начала, канал)' });
   }
 
-  const guild = bot.guilds.cache.get(guildId);
+  const guild = await getDiscordGuild(guildId);
   if (!guild) {
     return res.status(400).json({ error: 'Бот не подключен к серверу' });
   }
 
-  const channel = guild.channels.cache.get(channelId) as TextChannel | undefined;
+  const channel = (guild.channels.cache.get(channelId) ||
+    await guild.channels.fetch(channelId).catch(() => null)) as TextChannel | null;
   if (!channel || !channel.isTextBased()) {
     return res.status(400).json({ error: 'Канал для анонса не найден' });
   }
@@ -180,7 +181,7 @@ eventsRouter.post('/:id/status', requireAuth, requirePermission('manageEvents'),
     },
   });
 
-  const guild = bot.guilds.cache.get(event.guildId);
+  const guild = await getDiscordGuild(event.guildId);
   if (guild) {
     await EventService.refreshAnnouncement(guild, event.id);
 
@@ -229,7 +230,7 @@ eventsRouter.post('/:id/participants/:userId/kick', requireAuth, requirePermissi
     }
   }
 
-  const guild = bot.guilds.cache.get(event.guildId);
+  const guild = await getDiscordGuild(event.guildId);
   if (guild) {
     await EventService.refreshAnnouncement(guild, event.id);
 

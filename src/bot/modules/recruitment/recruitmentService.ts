@@ -19,8 +19,16 @@ import { FormQuestion } from '../../../shared/types';
 import { TranscriptService } from './transcript';
 import { AuditLogger } from '../logging/auditLogger';
 import { AcademyService } from '../academy/academyService';
+import bot from '../../client';
 
 export class RecruitmentService {
+  private static async resolveGuild(interaction: { guild?: Guild | null; guildId?: string | null }): Promise<Guild | null> {
+    if (interaction.guild) return interaction.guild;
+    const guildId = interaction.guildId;
+    if (!guildId) return null;
+    return bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+  }
+
   /**
    * Get default form questions if none configured in DB
    */
@@ -321,10 +329,17 @@ export class RecruitmentService {
    * Check if member is a recruiter or admin
    */
   public static async isRecruiter(member: GuildMember): Promise<boolean> {
-    if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+    if (!member) return false;
+    const hasAdmin = member.permissions && typeof member.permissions.has === 'function'
+      ? member.permissions.has(PermissionFlagsBits.Administrator)
+      : false;
+    if (hasAdmin) return true;
+
+    const guildId = member.guild?.id;
+    if (!guildId) return false;
 
     const config = await prisma.recruitmentConfig.findUnique({
-      where: { guildId: member.guild.id },
+      where: { guildId },
     });
     if (!config) return false;
 
@@ -335,7 +350,12 @@ export class RecruitmentService {
       roles = [];
     }
 
-    return roles.some(r => member.roles.cache.has(r));
+    if (member.roles && 'cache' in member.roles && member.roles.cache) {
+      return roles.some(r => member.roles.cache.has(r));
+    } else if (Array.isArray(member.roles)) {
+      return roles.some(r => (member.roles as any).includes(r));
+    }
+    return false;
   }
 
   /**
@@ -403,12 +423,18 @@ export class RecruitmentService {
 
     await interaction.deferReply();
 
+    const guild = await this.resolveGuild(interaction);
+    if (!guild) {
+      await interaction.editReply({ content: '❌ Сервер Discord не найден.' });
+      return;
+    }
+
     const config = await prisma.recruitmentConfig.findUnique({
-      where: { guildId: interaction.guildId! },
+      where: { guildId: guild.id },
     });
 
     // 1. Give role to applicant
-    const targetMember = await interaction.guild!.members.fetch(application.userId).catch(() => null);
+    const targetMember = await guild.members.fetch(application.userId).catch(() => null);
     if (targetMember && config?.memberRoleId) {
       await targetMember.roles.add(config.memberRoleId).catch(e => {
         console.error('Failed to grant family role:', e);
@@ -428,7 +454,7 @@ export class RecruitmentService {
         }
       } catch {}
 
-      await AcademyService.createAcademyChannel(interaction.guild!, targetMember, staticId).catch(err => {
+      await AcademyService.createAcademyChannel(guild, targetMember, staticId).catch(err => {
         console.warn('[Academy] Could not auto-create academy channel:', err.message);
       });
     }
@@ -436,7 +462,7 @@ export class RecruitmentService {
     // 2. Send DM notification
     if (targetMember) {
       await targetMember.send({
-        content: `🎉 **Поздравляем!** Ваша заявка в семью на сервере **${interaction.guild!.name}** была **одобрена** рекрутером ${interaction.user.tag}!\nВам выдана роль участника семьи. Добро пожаловать!`,
+        content: `🎉 **Поздравляем!** Ваша заявка в семью на сервере **${guild.name}** была **одобрена** рекрутером ${interaction.user.tag}!\nВам выдана роль участника семьи. Добро пожаловать!`,
       }).catch(() => {
         console.log(`Could not send approval DM to ${application.userId} (DMs closed)`);
       });
@@ -455,11 +481,12 @@ export class RecruitmentService {
 
     // 4. Generate Transcript and send to log channel
     const channel = interaction.channel as TextChannel;
-    const transcriptAttachment = await TranscriptService.generateTranscript(channel);
+    const transcriptAttachment = channel ? await TranscriptService.generateTranscript(channel) : null;
 
     const logChannelId = config?.logChannelId;
-    if (logChannelId) {
-      const logChannel = interaction.guild!.channels.cache.get(logChannelId) as TextChannel | undefined;
+    if (logChannelId && transcriptAttachment) {
+      const logChannel = (guild.channels.cache.get(logChannelId) ||
+        await guild.channels.fetch(logChannelId).catch(() => null)) as TextChannel | null;
       if (logChannel && logChannel.isTextBased()) {
         const logEmbed = new EmbedBuilder()
           .setColor(0x57F287)
@@ -467,7 +494,7 @@ export class RecruitmentService {
           .setDescription(
             `**Кандидат:** <@${application.userId}> (\`${application.userId}\`)\n` +
             `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-            `**Канал:** \`#${channel.name}\`\n` +
+            `**Канал:** \`#${channel?.name || 'ticket'}\`\n` +
             `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
           )
           .setTimestamp();
@@ -486,14 +513,16 @@ export class RecruitmentService {
         `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
       )
       .setTimestamp();
-    await AuditLogger.sendLog(interaction.guild!, 'BOT', botEmbed);
+    await AuditLogger.sendLog(guild, 'BOT', botEmbed);
 
     await interaction.editReply({
       content: `✅ Заявка одобрена! Роль выдана. Канал будет удален через 5 секунд...`,
     });
 
     setTimeout(async () => {
-      await channel.delete('Application approved').catch(() => null);
+      if (channel && typeof channel.delete === 'function') {
+        await channel.delete('Application approved').catch(() => null);
+      }
     }, 5000);
   }
 
@@ -530,6 +559,12 @@ export class RecruitmentService {
     const reason = interaction.fields.getTextInputValue('rejection_reason');
     await interaction.deferReply();
 
+    const guild = await this.resolveGuild(interaction);
+    if (!guild) {
+      await interaction.editReply({ content: '❌ Сервер Discord не найден.' });
+      return;
+    }
+
     const application = await prisma.recruitmentApplication.findUnique({
       where: { id: applicationId },
     });
@@ -539,15 +574,15 @@ export class RecruitmentService {
     }
 
     const config = await prisma.recruitmentConfig.findUnique({
-      where: { guildId: interaction.guildId! },
+      where: { guildId: guild.id },
     });
 
-    const targetMember = await interaction.guild!.members.fetch(application.userId).catch(() => null);
+    const targetMember = await guild.members.fetch(application.userId).catch(() => null);
 
     // 1. Send DM with rejection reason
     if (targetMember) {
       await targetMember.send({
-        content: `❌ Здравствуйте. К сожалению, вы не прошли собеседование в семью на сервере **${interaction.guild!.name}**.\n\n**Причина отказа:**\n${reason}`,
+        content: `❌ Здравствуйте. К сожалению, вы не прошли собеседование в семью на сервере **${guild.name}**.\n\n**Причина отказа:**\n${reason}`,
       }).catch(() => {
         console.log(`Could not send rejection DM to ${application.userId} (DMs closed)`);
       });
@@ -572,11 +607,12 @@ export class RecruitmentService {
 
     // 3. Transcript & Logs
     const channel = interaction.channel as TextChannel;
-    const transcriptAttachment = await TranscriptService.generateTranscript(channel);
+    const transcriptAttachment = channel ? await TranscriptService.generateTranscript(channel) : null;
 
     const logChannelId = config?.logChannelId;
-    if (logChannelId) {
-      const logChannel = interaction.guild!.channels.cache.get(logChannelId) as TextChannel | undefined;
+    if (logChannelId && transcriptAttachment) {
+      const logChannel = (guild.channels.cache.get(logChannelId) ||
+        await guild.channels.fetch(logChannelId).catch(() => null)) as TextChannel | null;
       if (logChannel && logChannel.isTextBased()) {
         const logEmbed = new EmbedBuilder()
           .setColor(0xED4245)
@@ -604,14 +640,16 @@ export class RecruitmentService {
         `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
       )
       .setTimestamp();
-    await AuditLogger.sendLog(interaction.guild!, 'BOT', botEmbed);
+    await AuditLogger.sendLog(guild, 'BOT', botEmbed);
 
     await interaction.editReply({
       content: `❌ Заявка отклонена. Пользователь кикнут. Канал будет удален через 5 секунд...`,
     });
 
     setTimeout(async () => {
-      await channel.delete('Application rejected').catch(() => null);
+      if (channel && typeof channel.delete === 'function') {
+        await channel.delete('Application rejected').catch(() => null);
+      }
     }, 5000);
   }
 }

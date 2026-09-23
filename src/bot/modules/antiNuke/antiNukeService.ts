@@ -1,12 +1,14 @@
 import { 
   Guild, 
   GuildChannel, 
+  GuildMember,
   DMChannel, 
   AuditLogEvent, 
   EmbedBuilder, 
   ChannelType, 
   PermissionOverwrites, 
-  Role 
+  Role,
+  TextChannel 
 } from 'discord.js';
 import prisma from '../../../database/client';
 
@@ -148,7 +150,8 @@ export class AntiNukeService {
 
       // 5. Send alert to configured alertChannel
       if (config.alertChannelId) {
-        const alertChannel = guild.channels.cache.get(config.alertChannelId);
+        const alertChannel = (guild.channels.cache.get(config.alertChannelId) ||
+          await guild.channels.fetch(config.alertChannelId).catch(() => null)) as TextChannel | null;
         if (alertChannel && alertChannel.isTextBased()) {
           await (alertChannel as any).send({ embeds: [alertEmbed] }).catch(() => null);
         }
@@ -159,34 +162,141 @@ export class AntiNukeService {
   }
 
   /**
+   * Triggered when a bot is added to the guild (GuildMemberAdd where member.user.bot === true)
+   */
+  static async handleBotAdd(member: GuildMember) {
+    if (!member || !member.user?.bot) return;
+    try {
+      const guild = member.guild;
+      if (!guild || !guild.id) return;
+
+      const config = await this.getConfig(guild.id);
+      if (!config.enabled) return;
+
+      // Fetch Audit Logs to find who added the bot
+      const auditLogs = typeof guild.fetchAuditLogs === 'function'
+        ? await guild.fetchAuditLogs({
+            limit: 1,
+            type: AuditLogEvent.BotAdd,
+          }).catch(() => null)
+        : null;
+
+      const entry = auditLogs?.entries?.first ? auditLogs.entries.first() : null;
+      const executor = entry?.executor;
+
+      // Do not punish if added by server owner or the bot itself
+      if (executor && (executor.id === guild.ownerId || executor.id === guild.client?.user?.id)) {
+        return;
+      }
+
+      // Check if entry is recent (within 15 seconds) if available
+      if (entry && entry.createdTimestamp) {
+        const isRecent = (Date.now() - entry.createdTimestamp) < 15000;
+        if (!isRecent) return;
+      }
+
+      console.warn(`[AntiNuke] Bot "${member.user.tag}" (${member.id}) added by unauthorized user ${executor?.tag || 'unknown'} (${executor?.id || 'unknown'}). Taking emergency action.`);
+
+      // 1. Kick or ban the added bot
+      let botKicked = false;
+      if (member.kickable) {
+        await member.kick('ANTI-NUKE: Несанкционированное добавление бота').catch(() => null);
+        botKicked = true;
+      }
+
+      // 2. Action on offender: Strip all manageable roles
+      let offenderStripped = false;
+      if (executor?.id) {
+        const offender = await guild.members.fetch(executor.id).catch(() => null);
+        if (offender && offender.manageable) {
+          const rolesToRemove = offender.roles.cache.filter(r => r.id !== guild.id);
+          await offender.roles.remove(rolesToRemove, 'ANTI-NUKE: Несанкционированное добавление бота').catch(() => null);
+          offenderStripped = true;
+        }
+      }
+
+      // 3. Send emergency alert to high ranks and server owner
+      let alertUserIds: string[] = [];
+      try {
+        alertUserIds = JSON.parse(config.alertUserIdsJson);
+      } catch {}
+      if (!alertUserIds.includes(guild.ownerId)) {
+        alertUserIds.push(guild.ownerId);
+      }
+
+      const alertEmbed = new EmbedBuilder()
+        .setColor(0xED4245)
+        .setTitle('🚨 СРАБОТАЛА ЗАЩИТА СЕРВЕРА (ANTI-NUKE): ДОБАВЛЕН БОТ')
+        .setDescription(
+          `**Добавленный бот:** ${member} (\`${member.user.tag}\` / \`${member.id}\`)\n` +
+          `**Инициатор добавления:** ${executor ? `<@${executor.id}> (\`${executor.tag}\` / \`${executor.id}\`)` : 'Неизвестно (аудит-лог недоступен)'}\n` +
+          `**Примененные меры:**\n` +
+          (botKicked ? `• 👢 Добавленный бот немедленно исключен с сервера.\n` : `• ⚠️ Не удалось исключить бота (проверьте права бота).\n`) +
+          (offenderStripped ? `• ❌ С пользователя ${executor?.tag} сняты все роли доступа.\n` : '')
+        )
+        .setThumbnail(member.user.displayAvatarURL())
+        .setTimestamp();
+
+      for (const adminId of alertUserIds) {
+        try {
+          const user = await guild.client.users.fetch(adminId).catch(() => null);
+          if (user) {
+            await user.send({ embeds: [alertEmbed] }).catch(() => null);
+          }
+        } catch {}
+      }
+
+      // 4. Send alert to configured alertChannel
+      if (config.alertChannelId) {
+        const alertChannel = (guild.channels.cache.get(config.alertChannelId) ||
+          await guild.channels.fetch(config.alertChannelId).catch(() => null)) as TextChannel | null;
+        if (alertChannel && alertChannel.isTextBased()) {
+          await (alertChannel as any).send({ embeds: [alertEmbed] }).catch(() => null);
+        }
+      }
+
+      // 5. Send to BOT and MEMBERS audit logs
+      const { AuditLogger } = await import('../logging/auditLogger');
+      await AuditLogger.sendLog(guild, 'BOT', alertEmbed);
+      await AuditLogger.sendLog(guild, 'MEMBERS', alertEmbed);
+    } catch (err) {
+      console.error('[AntiNuke] Error handling bot add:', err);
+    }
+  }
+
+  /**
    * Create a full server snapshot backup (categories, channels, roles, permissions)
    */
   static async createSnapshot(guild: Guild, name: string, createdById?: string, createdByTag?: string) {
-    const rolesData = guild.roles.cache
-      .filter(r => r.id !== guild.id)
-      .map(r => ({
+    const rolesList = 'values' in guild.roles.cache ? Array.from((guild.roles.cache as any).values()) : Array.from((guild.roles.cache as any) || []);
+    const rolesData = (rolesList as any[])
+      .filter((r: any) => r.id !== guild.id)
+      .map((r: any) => ({
         id: r.id,
         name: r.name,
-        color: r.hexColor,
-        hoist: r.hoist,
-        permissions: r.permissions.bitfield.toString(),
-        position: r.position,
-        mentionable: r.mentionable,
+        color: r.hexColor || '#000000',
+        hoist: Boolean(r.hoist),
+        permissions: r.permissions?.bitfield ? r.permissions.bitfield.toString() : '0',
+        position: r.position || 0,
+        mentionable: Boolean(r.mentionable),
       }));
 
-    const channelsData = guild.channels.cache.map((c: any) => ({
+    const channelsList = 'values' in guild.channels.cache ? Array.from((guild.channels.cache as any).values()) : Array.from((guild.channels.cache as any) || []);
+    const channelsData = (channelsList as any[]).map((c: any) => ({
       id: c.id,
       name: c.name,
       type: c.type,
       parentId: c.parentId,
       position: c.rawPosition ?? 0,
       topic: c.topic || null,
-      permissionOverwrites: c.permissionOverwrites ? c.permissionOverwrites.cache.map((po: any) => ({
-        id: po.id,
-        allow: po.allow.bitfield.toString(),
-        deny: po.deny.bitfield.toString(),
-        type: po.type,
-      })) : [],
+      permissionOverwrites: c.permissionOverwrites ? (
+        'cache' in c.permissionOverwrites ? Array.from(c.permissionOverwrites.cache.values()).map((po: any) => ({
+          id: po.id,
+          allow: po.allow?.bitfield ? po.allow.bitfield.toString() : '0',
+          deny: po.deny?.bitfield ? po.deny.bitfield.toString() : '0',
+          type: po.type,
+        })) : []
+      ) : [],
     }));
 
     const snapshotData = {

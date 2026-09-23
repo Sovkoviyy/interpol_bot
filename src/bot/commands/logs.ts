@@ -3,7 +3,7 @@ import {
   ChatInputCommandInteraction, 
   PermissionFlagsBits 
 } from 'discord.js';
-import { Command } from '../client';
+import bot, { Command } from '../client';
 import { AuditLogger } from '../modules/logging/auditLogger';
 
 export const logsCommand: Command = {
@@ -19,10 +19,15 @@ export const logsCommand: Command = {
 
   execute: async (interaction: ChatInputCommandInteraction) => {
     const sub = interaction.options.getSubcommand();
-    const guild = interaction.guild!;
+    const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
 
     if (sub === 'setup') {
       await interaction.deferReply({ ephemeral: true });
+
+      if (!guild) {
+        await interaction.editReply({ content: '❌ Сервер Discord не найден.' });
+        return;
+      }
 
       const result = await AuditLogger.setupLogChannels(guild);
 

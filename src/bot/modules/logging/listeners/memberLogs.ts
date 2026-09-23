@@ -11,10 +11,16 @@ import bot from '../../../client';
 import prisma from '../../../../database/client';
 import { AuditLogger } from '../auditLogger';
 import { RolePersistenceService } from '../../roles/rolePersistenceService';
+import { AntiNukeService } from '../../antiNuke/antiNukeService';
 
 export function registerMemberLogs() {
   // Member Join
   bot.on(Events.GuildMemberAdd, async (member: GuildMember) => {
+    // If a bot is added, run Anti-Nuke security checks
+    if (member.user.bot) {
+      await AntiNukeService.handleBotAdd(member);
+    }
+
     // Restore roles if member was previously in server
     await RolePersistenceService.restoreMemberRoles(member);
 
@@ -27,7 +33,8 @@ export function registerMemberLogs() {
         where: { guildId: member.guild.id },
       });
       if (msgConfig && msgConfig.welcomeEnabled && msgConfig.welcomeChannelId) {
-        const welcomeChannel = member.guild.channels.cache.get(msgConfig.welcomeChannelId) as TextChannel | undefined;
+        const welcomeChannel = (member.guild.channels.cache.get(msgConfig.welcomeChannelId) ||
+          await member.guild.channels.fetch(msgConfig.welcomeChannelId).catch(() => null)) as TextChannel | null;
         if (welcomeChannel && welcomeChannel.isTextBased()) {
           const rawColor = msgConfig.welcomeEmbedColor?.replace('#', '') || 'EC4899';
           const colorInt = parseInt(rawColor, 16) || 0xEC4899;
@@ -90,7 +97,8 @@ export function registerMemberLogs() {
         where: { guildId: member.guild.id },
       });
       if (msgConfig && msgConfig.leaveEnabled && msgConfig.leaveChannelId) {
-        const leaveChannel = member.guild.channels.cache.get(msgConfig.leaveChannelId) as TextChannel | undefined;
+        const leaveChannel = (member.guild.channels.cache.get(msgConfig.leaveChannelId) ||
+          await member.guild.channels.fetch(msgConfig.leaveChannelId).catch(() => null)) as TextChannel | null;
         if (leaveChannel && leaveChannel.isTextBased()) {
           const userTag = member.user?.tag || member.id;
           const formattedDesc = (msgConfig.leaveMessage || '{user} покинул наш сервер.')

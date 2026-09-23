@@ -25,12 +25,15 @@ export const profileCommand = {
     const member = interaction.member as GuildMember;
 
     // Check if requesting another person's profile
-    if (!isSelf) {
-      const isHighRank = member.permissions.has(PermissionFlagsBits.Administrator) ||
-        member.permissions.has(PermissionFlagsBits.ManageGuild);
+    if (!isSelf && member) {
+      const isHighRank = member.permissions && typeof member.permissions.has === 'function'
+        ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
+        : false;
 
       // Check RBAC permissions
-      const userRoles = member.roles.cache.map(r => r.id);
+      const userRoles = member?.roles?.cache
+        ? (typeof member.roles.cache.map === 'function' ? member.roles.cache.map((r: any) => r.id) : Array.from(member.roles.cache.values()).map((r: any) => r.id || r))
+        : (Array.isArray(member?.roles) ? (member.roles as any) : []);
       const allowed = await prisma.rolePermission.findFirst({
         where: {
           guildId: interaction.guildId!,
@@ -190,10 +193,13 @@ export const penaltyCommand = {
 
   async execute(interaction: ChatInputCommandInteraction) {
     const member = interaction.member as GuildMember;
-    const isHighRank = member.permissions.has(PermissionFlagsBits.Administrator) ||
-      member.permissions.has(PermissionFlagsBits.ManageGuild);
+    const isHighRank = member && member.permissions && typeof member.permissions.has === 'function'
+      ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
+      : false;
 
-    const userRoles = member.roles.cache.map(r => r.id);
+    const userRoles = member?.roles?.cache
+      ? (typeof member.roles.cache.map === 'function' ? member.roles.cache.map((r: any) => r.id) : Array.from(member.roles.cache.values()).map((r: any) => r.id || r))
+      : (Array.isArray(member?.roles) ? (member.roles as any) : []);
     const allowed = await prisma.rolePermission.findFirst({
       where: {
         guildId: interaction.guildId!,

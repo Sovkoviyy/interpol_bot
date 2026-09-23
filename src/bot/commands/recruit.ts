@@ -8,8 +8,9 @@ import {
   ButtonBuilder, 
   ButtonStyle 
 } from 'discord.js';
-import prisma from '../../database/client';
+import bot from '../client';
 import { Command } from '../client';
+import prisma from '../../database/client';
 
 export const recruitCommand: Command = {
   data: new SlashCommandBuilder()
@@ -49,7 +50,11 @@ export const recruitCommand: Command = {
 
   execute: async (interaction: ChatInputCommandInteraction) => {
     const sub = interaction.options.getSubcommand();
-    const guild = interaction.guild!;
+    const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
+    if (!guild) {
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      return;
+    }
 
     if (sub === 'post') {
       const channel = (interaction.options.getChannel('channel') || interaction.channel) as any;

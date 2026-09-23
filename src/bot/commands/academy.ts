@@ -4,6 +4,7 @@ import {
   PermissionFlagsBits,
   GuildMember
 } from 'discord.js';
+import bot from '../client';
 import { AcademyService } from '../modules/academy/academyService';
 
 export const academyCommand = {
@@ -23,7 +24,13 @@ export const academyCommand = {
     const targetUser = interaction.options.getUser('member', true);
     const staticId = interaction.options.getString('static') || undefined;
 
-    const targetMember = await interaction.guild!.members.fetch(targetUser.id).catch(() => null);
+    const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
+    if (!guild) {
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      return;
+    }
+
+    const targetMember = await guild.members.fetch(targetUser.id).catch(() => null);
     if (!targetMember) {
       await interaction.reply({ content: '❌ Участник не найден на сервере.', ephemeral: true });
       return;
@@ -33,7 +40,7 @@ export const academyCommand = {
 
     try {
       const { channel } = await AcademyService.createAcademyChannel(
-        interaction.guild!,
+        guild,
         targetMember,
         staticId
       );
