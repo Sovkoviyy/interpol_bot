@@ -51,7 +51,7 @@ guildRouter.get('/channels', requireAuth, async (req: AuthenticatedRequest, res:
 
 // Get guild general config
 guildRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = (req.headers['x-guild-id'] as string) || req.user?.guildId || config.discord.guildId;
   const guildConfig = await prisma.guildConfig.findUnique({
     where: { guildId: guildId || 'default' },
   });
@@ -63,14 +63,15 @@ guildRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: R
       eventsEnabled: true,
       loggingEnabled: true,
       restoreRolesOnJoin: true,
+      restoreNicknamesOnJoin: true,
     },
   });
 });
 
 // Update guild general config
 guildRouter.post('/config', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
-  const { recruitmentEnabled, eventsEnabled, loggingEnabled, restoreRolesOnJoin } = req.body;
+  const guildId = (req.headers['x-guild-id'] as string) || req.user?.guildId || config.discord.guildId;
+  const { recruitmentEnabled, eventsEnabled, loggingEnabled, restoreRolesOnJoin, restoreNicknamesOnJoin } = req.body;
 
   const updated = await prisma.guildConfig.upsert({
     where: { guildId: guildId || 'default' },
@@ -79,6 +80,7 @@ guildRouter.post('/config', requireAuth, requirePermission('manageSettings'), as
       eventsEnabled: Boolean(eventsEnabled),
       loggingEnabled: Boolean(loggingEnabled),
       restoreRolesOnJoin: restoreRolesOnJoin !== undefined ? Boolean(restoreRolesOnJoin) : true,
+      restoreNicknamesOnJoin: restoreNicknamesOnJoin !== undefined ? Boolean(restoreNicknamesOnJoin) : true,
     },
     create: {
       guildId: guildId || 'default',
@@ -86,6 +88,7 @@ guildRouter.post('/config', requireAuth, requirePermission('manageSettings'), as
       eventsEnabled: Boolean(eventsEnabled),
       loggingEnabled: Boolean(loggingEnabled),
       restoreRolesOnJoin: restoreRolesOnJoin !== undefined ? Boolean(restoreRolesOnJoin) : true,
+      restoreNicknamesOnJoin: restoreNicknamesOnJoin !== undefined ? Boolean(restoreNicknamesOnJoin) : true,
     },
   });
 

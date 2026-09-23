@@ -63,12 +63,13 @@ export class ServerSetupService {
     }
 
     // Load configurations from DB
-    const [guildCfg, recruitCfg, academyCfg, voiceCfg, logCfg] = await Promise.all([
+    const [guildCfg, recruitCfg, academyCfg, voiceCfg, logCfg, botMsgCfg] = await Promise.all([
       prisma.guildConfig.findUnique({ where: { guildId } }),
       prisma.recruitmentConfig.findUnique({ where: { guildId } }),
       prisma.academyConfig.findUnique({ where: { guildId } }),
       prisma.voiceTrackerConfig.findUnique({ where: { guildId } }),
       prisma.loggingConfig.findUnique({ where: { guildId } }),
+      prisma.botMessagesConfig.findUnique({ where: { guildId } }),
     ]);
 
     const channels = guild.channels.cache.map(c => ({
@@ -98,6 +99,8 @@ export class ServerSetupService {
         academyArchiveCategoryId: academyCfg?.archiveCategoryId || null,
         logsCategoryId: logCfg?.categoryId || null,
         messageLogsChannelId: logCfg?.messageLogsChannelId || null,
+        welcomeChannelId: botMsgCfg?.welcomeChannelId || null,
+        welcomeEnabled: botMsgCfg?.welcomeEnabled ?? false,
       },
     };
   }
@@ -258,6 +261,19 @@ export class ServerSetupService {
         guildId: guild.id,
         voiceChannelId: eventVoiceChannel.id,
         logChannelId: logSetup.channels.voiceLogsChannelId || logSetup.channels.botLogsChannelId,
+      },
+    });
+
+    await prisma.botMessagesConfig.upsert({
+      where: { guildId: guild.id },
+      update: {
+        welcomeChannelId: welcomeChannel.id,
+        welcomeEnabled: true,
+      },
+      create: {
+        guildId: guild.id,
+        welcomeChannelId: welcomeChannel.id,
+        welcomeEnabled: true,
       },
     });
 
@@ -465,6 +481,8 @@ export class ServerSetupService {
     recruitmentReviewChannelId?: string;
     academyCategoryId?: string;
     academyArchiveCategoryId?: string;
+    welcomeChannelId?: string;
+    welcomeEnabled?: boolean;
   }) {
     if (
       bindings.staticBindingChannelId !== undefined ||
@@ -525,6 +543,21 @@ export class ServerSetupService {
         where: { guildId },
         update: { voiceChannelId: bindings.eventVoiceChannelId },
         create: { guildId, voiceChannelId: bindings.eventVoiceChannelId },
+      });
+    }
+
+    if (bindings.welcomeChannelId !== undefined || bindings.welcomeEnabled !== undefined) {
+      await prisma.botMessagesConfig.upsert({
+        where: { guildId },
+        update: {
+          ...(bindings.welcomeChannelId !== undefined && { welcomeChannelId: bindings.welcomeChannelId || null }),
+          ...(bindings.welcomeEnabled !== undefined && { welcomeEnabled: Boolean(bindings.welcomeEnabled) }),
+        },
+        create: {
+          guildId,
+          welcomeChannelId: bindings.welcomeChannelId || null,
+          welcomeEnabled: Boolean(bindings.welcomeEnabled),
+        },
       });
     }
 

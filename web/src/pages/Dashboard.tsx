@@ -9,7 +9,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Shield,
-  ArrowUpRight
+  ArrowUpRight,
+  Tag
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
@@ -231,6 +232,30 @@ export const Dashboard: React.FC = () => {
               className="text-slate-300 hover:text-white"
             >
               {config?.restoreRolesOnJoin ? (
+                <ToggleRight className="w-8 h-8 text-pink-500" />
+              ) : (
+                <ToggleLeft className="w-8 h-8 text-slate-500" />
+              )}
+            </button>
+          </div>
+
+          {/* Restore Nicknames Module */}
+          <div className="p-4 rounded-xl bg-[#1E232F]/50 border border-[#1E232F] flex items-center justify-between hover:border-pink-500/30 transition-all">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                <Tag className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-100">Возврат ников</p>
+                <p className="text-xs text-slate-400">Сохранять никнейм</p>
+              </div>
+            </div>
+            <button
+              onClick={() => handleToggleModule('restoreNicknamesOnJoin', config?.restoreNicknamesOnJoin)}
+              disabled={saving}
+              className="text-slate-300 hover:text-white"
+            >
+              {config?.restoreNicknamesOnJoin ? (
                 <ToggleRight className="w-8 h-8 text-pink-500" />
               ) : (
                 <ToggleLeft className="w-8 h-8 text-slate-500" />

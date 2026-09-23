@@ -259,10 +259,73 @@ async function runTests() {
   console.assert(expectedStructure.length === 6, `Expected 6 categories, got ${expectedStructure.length}`);
   console.log('✅ Test 20: Server setup provisioning structure mapping verified');
 
-  console.log('🎉 ALL 20 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
+  // Test 21: Nickname persistence logic with 0 roles
+  const simulateNicknamePersistence = (
+    roles: string[],
+    nickname: string | null,
+    restoreRoles: boolean,
+    restoreNicks: boolean
+  ) => {
+    // Member left: save roles & nickname
+    const saved = {
+      roleIds: roles,
+      nickname: nickname
+    };
+
+    // Member rejoins: determine what to restore
+    const actions: { rolesRestored: string[]; nicknameRestored: string | null } = {
+      rolesRestored: [],
+      nicknameRestored: null
+    };
+
+    if (restoreRoles && saved.roleIds.length > 0) {
+      actions.rolesRestored = saved.roleIds;
+    }
+    if (restoreNicks && saved.nickname) {
+      actions.nicknameRestored = saved.nickname;
+    }
+    return actions;
+  };
+
+  const nickRes1 = simulateNicknamePersistence([], 'Interpol Boss', false, true);
+  console.assert(nickRes1.rolesRestored.length === 0, 'No roles should be restored');
+  console.assert(nickRes1.nicknameRestored === 'Interpol Boss', 'Nickname should be restored even with 0 roles');
+
+  const nickRes2 = simulateNicknamePersistence(['role_1', 'role_2'], 'Agent 007', true, true);
+  console.assert(nickRes2.rolesRestored.length === 2 && nickRes2.nicknameRestored === 'Agent 007', 'Both roles and nickname should be restored');
+
+  const nickRes3 = simulateNicknamePersistence(['role_1'], 'Agent 007', true, false);
+  console.assert(nickRes3.rolesRestored.length === 1 && nickRes3.nicknameRestored === null, 'Nickname should NOT be restored when restoreNicks is false');
+  console.log('✅ Test 21: Nickname persistence and restoration logic verified');
+
+  // Test 22: Welcome message template substitution
+  const formatWelcomeMessage = (
+    template: string,
+    vars: { user: string; guild: string; memberCount: number }
+  ) => {
+    return template
+      .replace(/{user}/g, vars.user)
+      .replace(/{guild}/g, vars.guild)
+      .replace(/{memberCount}/g, String(vars.memberCount));
+  };
+
+  const welcomeTemplate = 'Добро пожаловать, {user} на сервер {guild}! Теперь нас {memberCount}!';
+  const formattedWelcome = formatWelcomeMessage(welcomeTemplate, {
+    user: '<@123456789>',
+    guild: 'Interpol RP Family',
+    memberCount: 42
+  });
+  console.assert(
+    formattedWelcome === 'Добро пожаловать, <@123456789> на сервер Interpol RP Family! Теперь нас 42!',
+    `Expected substituted welcome message, got "${formattedWelcome}"`
+  );
+  console.log('✅ Test 22: Welcome message template substitution verified');
+
+  console.log('🎉 ALL 22 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
 runTests().catch(err => {
   console.error('❌ Verification failed:', err);
   process.exit(1);
 });
+

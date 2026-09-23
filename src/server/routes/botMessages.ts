@@ -11,7 +11,7 @@ export const botMessagesRouter = Router();
 
 // Get bot messages configuration
 botMessagesRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || req.user?.guildId || config.discord.guildId;
 
   let cfg = await prisma.botMessagesConfig.findUnique({
     where: { guildId },
@@ -40,7 +40,7 @@ botMessagesRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: R
 
 // Update bot messages configuration
 botMessagesRouter.post('/', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || req.body?.guildId || req.user?.guildId || config.discord.guildId;
   const {
     welcomeEnabled,
     welcomeChannelId,
@@ -108,7 +108,7 @@ botMessagesRouter.post('/', requireAuth, requirePermission('manageSettings'), as
 
 // Test sending a welcome or leave message
 botMessagesRouter.post('/test', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = req.user?.guildId || config.discord.guildId;
+  const guildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || req.body?.guildId || req.user?.guildId || config.discord.guildId;
   const { type, channelId } = req.body; // type: 'welcome' | 'leave'
 
   const cfg = await prisma.botMessagesConfig.findUnique({

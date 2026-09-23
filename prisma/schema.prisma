@@ -15,6 +15,7 @@ model GuildConfig {
   eventsEnabled      Boolean  @default(true)
   loggingEnabled     Boolean  @default(true)
   restoreRolesOnJoin Boolean  @default(true)
+  restoreNicknamesOnJoin Boolean @default(true)
   // Event defaults for memorizing choices
   defaultEventChannelId String?
   defaultVoiceChannelId String?

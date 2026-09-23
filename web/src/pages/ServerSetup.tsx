@@ -19,7 +19,10 @@ import {
   CalendarDays,
   GraduationCap,
   ScrollText,
-  HelpCircle
+  HelpCircle,
+  UserCheck,
+  MessageSquare,
+  ExternalLink
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -44,6 +47,7 @@ export const ServerSetup: React.FC = () => {
     academyCategoryId: '',
     academyArchiveCategoryId: '',
     welcomeChannelId: '',
+    welcomeEnabled: true,
   });
 
   const [savingBindings, setSavingBindings] = useState(false);
@@ -85,7 +89,8 @@ export const ServerSetup: React.FC = () => {
           recruitmentReviewChannelId: res.data.bindings.recruitmentReviewChannelId || '',
           academyCategoryId: res.data.bindings.academyCategoryId || '',
           academyArchiveCategoryId: res.data.bindings.academyArchiveCategoryId || '',
-          welcomeChannelId: '',
+          welcomeChannelId: res.data.bindings.welcomeChannelId || '',
+          welcomeEnabled: res.data.bindings.welcomeEnabled ?? true,
         });
       }
     } catch (err) {
@@ -629,6 +634,68 @@ export const ServerSetup: React.FC = () => {
                 <span className="font-mono text-gray-300">
                   {state?.bindings?.messageLogsChannelId ? `OK` : '—'}
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 7: Welcome Messages */}
+          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Приветственные сообщения (Welcome)</h3>
+                  <p className="text-[11px] text-gray-400">Авто-сообщение в канал при входе игрока на сервер</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleDeploySpecificPanel('welcome', bindings.welcomeChannelId)}
+                disabled={deployingPanel === 'welcome' || !bindings.welcomeChannelId}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-pink-500/20 text-pink-400 border border-dark-700 hover:border-pink-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
+                title="Отправить тестовое приветствие"
+              >
+                <Send className="w-3 h-3" />
+                {deployingPanel === 'welcome' ? 'Отправка...' : 'Тестовая отправка'}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-dark-800/40 rounded-xl border border-dark-800">
+                <div>
+                  <span className="text-xs font-semibold text-white block">Включить отправку приветствий</span>
+                  <span className="text-[11px] text-gray-400">Бот отправляет настроенный Embed новым участникам</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={bindings.welcomeEnabled}
+                  onChange={(e) => setBindings({ ...bindings, welcomeEnabled: e.target.checked })}
+                  className="w-4 h-4 rounded text-pink-600 focus:ring-pink-500 bg-dark-800 border-dark-700 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал для приветствий</label>
+                <select
+                  value={bindings.welcomeChannelId}
+                  onChange={(e) => setBindings({ ...bindings, welcomeChannelId: e.target.value })}
+                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
+                >
+                  <option value="">Не выбран (выберите канал)...</option>
+                  {textChannels.map((ch: any) => (
+                    <option key={ch.id} value={ch.id}>
+                      #{ch.name} (ID: {ch.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="text-[11px] text-gray-400 flex items-center justify-between pt-1">
+                <span>Текст, цвет и переменные ({`{user}, {guild}`})</span>
+                <a href="/messages" className="text-pink-400 hover:text-pink-300 underline inline-flex items-center gap-1 font-medium">
+                  В модуль сообщений <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
             </div>
           </div>
