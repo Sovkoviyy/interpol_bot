@@ -1,5 +1,6 @@
-import { Router } from 'express';
-import { requireAuth } from '../middlewares/auth';
+import { Router, Response } from 'express';
+import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/rbac';
 import config from '../../config';
 import bot from '../../bot/client';
 import { AntiNukeService } from '../../bot/modules/antiNuke/antiNukeService';
@@ -8,12 +9,17 @@ const router = Router();
 
 router.use(requireAuth);
 
+function resolveGuildId(req: AuthenticatedRequest): string {
+  const headerGuild = req.headers['x-guild-id'] as string;
+  return headerGuild || req.user?.guildId || config.discord.guildId || 'default';
+}
+
 /**
  * GET /api/anti-nuke/config
  */
-router.get('/config', async (req, res) => {
+router.get('/config', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const guildId = resolveGuildId(req);
     const cfg = await AntiNukeService.getConfig(guildId);
     res.json({ config: cfg });
   } catch (err: any) {
@@ -24,9 +30,9 @@ router.get('/config', async (req, res) => {
 /**
  * POST /api/anti-nuke/config
  */
-router.post('/config', async (req, res) => {
+router.post('/config', requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const guildId = resolveGuildId(req);
     const updated = await AntiNukeService.saveConfig(guildId, req.body);
     res.json({ config: updated });
   } catch (err: any) {
@@ -37,9 +43,9 @@ router.post('/config', async (req, res) => {
 /**
  * GET /api/anti-nuke/snapshots
  */
-router.get('/snapshots', async (req, res) => {
+router.get('/snapshots', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const guildId = resolveGuildId(req);
     const snapshots = await AntiNukeService.listSnapshots(guildId);
     res.json({ snapshots });
   } catch (err: any) {
@@ -50,22 +56,23 @@ router.get('/snapshots', async (req, res) => {
 /**
  * POST /api/anti-nuke/snapshots
  */
-router.post('/snapshots', async (req, res) => {
+router.post('/snapshots', requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId;
-    if (!guildId) return res.status(400).json({ error: 'GUILD_ID не настроен' });
+    const guildId = resolveGuildId(req);
+    if (!guildId || guildId === 'default') return res.status(400).json({ error: 'Сервер Discord не выбран' });
 
-    const guild = bot.guilds.cache.get(guildId);
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
     if (!guild) return res.status(400).json({ error: 'Бот не подключен к серверу' });
 
-    const user: any = (req as any).user;
+    const userId = req.user?.userId || (req.user as any)?.id || 'unknown';
+    const userTag = req.user?.username || 'Admin';
     const { name } = req.body;
 
     const snapshot = await AntiNukeService.createSnapshot(
       guild,
       name,
-      user.id,
-      user.tag || user.username
+      userId,
+      userTag
     );
 
     res.json({ snapshot });

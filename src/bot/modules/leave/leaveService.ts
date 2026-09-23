@@ -26,6 +26,13 @@ export class LeaveService {
       throw new Error('Максимальная продолжительность отпуска — 14 дней (2 недели)');
     }
 
+    const existingPending = await prisma.leaveRequest.findFirst({
+      where: { guildId, userId, status: 'PENDING' },
+    });
+    if (existingPending) {
+      throw new Error('У вас уже есть активная заявка на рассмотрении');
+    }
+
     return await prisma.leaveRequest.create({
       data: {
         guildId,

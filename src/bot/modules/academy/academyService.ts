@@ -12,6 +12,7 @@ import {
 import prisma from '../../../database/client';
 import { ProfileService } from '../profiles/profileService';
 import { AuditLogger } from '../logging/auditLogger';
+import { RecruitmentService } from '../recruitment/recruitmentService';
 
 export class AcademyService {
   /**
@@ -293,6 +294,15 @@ export class AcademyService {
     if (!report) throw new Error('Отчет не найден');
     if (report.status !== 'PENDING') throw new Error('Этот отчет уже был проверен');
 
+    if (reviewer.id === report.userId) {
+      throw new Error('Вы не можете проверять собственный отчет');
+    }
+
+    const isRecruiter = await RecruitmentService.isRecruiter(reviewer);
+    if (!isRecruiter) {
+      throw new Error('У вас нет роли рекрутера для проверки отчетов');
+    }
+
     const updated = await prisma.mpReport.update({
       where: { id: reportId },
       data: {
@@ -394,6 +404,15 @@ export class AcademyService {
     });
 
     if (!academy) throw new Error('Ветка академии не найдена');
+
+    if (reviewer.id === academy.userId) {
+      throw new Error('Вы не можете подтвердить собственное повышение');
+    }
+
+    const isRecruiter = await RecruitmentService.isRecruiter(reviewer);
+    if (!isRecruiter) {
+      throw new Error('У вас нет роли рекрутера для подтверждения повышения');
+    }
 
     const config = await this.getConfig(reviewer.guild.id);
     const targetMember = await reviewer.guild.members.fetch(academy.userId).catch(() => null);

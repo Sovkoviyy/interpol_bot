@@ -1,5 +1,6 @@
-import { Router } from 'express';
-import { requireAuth } from '../middlewares/auth';
+import { Router, Response } from 'express';
+import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/rbac';
 import config from '../../config';
 import { BlacklistService } from '../../bot/modules/blacklist/blacklistService';
 
@@ -7,12 +8,17 @@ const router = Router();
 
 router.use(requireAuth);
 
+function resolveGuildId(req: AuthenticatedRequest): string {
+  const headerGuild = req.headers['x-guild-id'] as string;
+  return headerGuild || req.user?.guildId || config.discord.guildId || 'default';
+}
+
 /**
  * GET /api/blacklist
  */
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const guildId = resolveGuildId(req);
     const search = req.query.search as string;
     const entries = await BlacklistService.listEntries(guildId, search);
     res.json({ entries });
@@ -24,10 +30,11 @@ router.get('/', async (req, res) => {
 /**
  * POST /api/blacklist
  */
-router.post('/', async (req, res) => {
+router.post('/', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
-    const user: any = (req as any).user;
+    const guildId = resolveGuildId(req);
+    const userId = req.user?.userId || (req.user as any)?.id || 'unknown';
+    const userTag = req.user?.username || 'Recruiter';
     const { staticId, discordId, name, reason, proofUrl } = req.body;
 
     if (!reason) {
@@ -40,8 +47,8 @@ router.post('/', async (req, res) => {
       name,
       reason,
       proofUrl,
-      addedById: user.id,
-      addedByTag: user.tag || user.username,
+      addedById: userId,
+      addedByTag: userTag,
     });
 
     res.json({ entry });
@@ -53,10 +60,10 @@ router.post('/', async (req, res) => {
 /**
  * DELETE /api/blacklist/:id
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
-    await BlacklistService.removeEntry(guildId, req.params.id);
+    const guildId = resolveGuildId(req);
+    await BlacklistService.removeEntry(guildId, String(req.params.id));
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

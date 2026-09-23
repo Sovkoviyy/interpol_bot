@@ -1,6 +1,7 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { TextChannel } from 'discord.js';
-import { requireAuth } from '../middlewares/auth';
+import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/rbac';
 import config from '../../config';
 import prisma from '../../database/client';
 import bot from '../../bot/client';
@@ -10,13 +11,18 @@ const router = Router();
 
 router.use(requireAuth);
 
+function resolveGuildId(req: AuthenticatedRequest): string {
+  const headerGuild = req.headers['x-guild-id'] as string;
+  return headerGuild || req.user?.guildId || config.discord.guildId || 'default';
+}
+
 /**
  * GET /api/profiles
  * List profiles with search and filter
  */
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const guildId = resolveGuildId(req);
     const search = req.query.search as string;
 
     const profiles = search
@@ -36,9 +42,9 @@ router.get('/', async (req, res) => {
 /**
  * GET /api/profiles/leaderboard
  */
-router.get('/leaderboard', async (req, res) => {
+router.get('/leaderboard', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const guildId = resolveGuildId(req);
     const topMp = await ProfileService.getTopByMp(guildId, 10);
     const topVoice = await ProfileService.getTopByVoice(guildId, 10);
 
@@ -51,10 +57,10 @@ router.get('/leaderboard', async (req, res) => {
 /**
  * GET /api/profiles/:userId
  */
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
-    const profile = await ProfileService.getOrCreateProfile(guildId, req.params.userId);
+    const guildId = resolveGuildId(req);
+    const profile = await ProfileService.getOrCreateProfile(guildId, String(req.params.userId));
     res.json({ profile });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -64,15 +70,24 @@ router.get('/:userId', async (req, res) => {
 /**
  * POST /api/profiles/:userId/static
  */
-router.post('/:userId/static', async (req, res) => {
+router.post('/:userId/static', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const authUser = req.user;
+    const targetUserId = String(req.params.userId);
+    const isSelf = authUser?.userId === targetUserId;
+    const hasPerm = authUser?.permissions.isAdmin || authUser?.permissions.manageSettings || authUser?.permissions.manageRecruiting;
+
+    if (!isSelf && !hasPerm) {
+      return res.status(403).json({ error: 'Forbidden: You cannot modify another member\'s profile' });
+    }
+
+    const guildId = resolveGuildId(req);
     const { staticId, characterName } = req.body;
     if (!staticId) return res.status(400).json({ error: 'Укажите Static ID' });
 
     const updated = await ProfileService.setStatic(
       guildId,
-      req.params.userId,
+      targetUserId,
       staticId,
       characterName
     );
@@ -86,15 +101,15 @@ router.post('/:userId/static', async (req, res) => {
 /**
  * POST /api/profiles/:userId/penalty
  */
-router.post('/:userId/penalty', async (req, res) => {
+router.post('/:userId/penalty', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const guildId = resolveGuildId(req);
     const { count, reason } = req.body;
     const penaltyCount = parseInt(count, 10) || 1;
 
     const updated = await ProfileService.addPenaltyMp(
       guildId,
-      req.params.userId,
+      String(req.params.userId),
       penaltyCount,
       reason
     );
@@ -109,15 +124,15 @@ router.post('/:userId/penalty', async (req, res) => {
  * POST /api/profiles/deploy-panel
  * Send interactive static binding message to Discord channel
  */
-router.post('/deploy-panel', async (req, res) => {
+router.post('/deploy-panel', requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { channelId } = req.body;
     if (!channelId) return res.status(400).json({ error: 'Укажите ID текстового канала' });
 
-    const guildId = config.discord.guildId;
-    if (!guildId) return res.status(400).json({ error: 'GUILD_ID не настроен' });
+    const guildId = resolveGuildId(req);
+    if (!guildId || guildId === 'default') return res.status(400).json({ error: 'Сервер Discord не выбран' });
 
-    const guild = bot.guilds.cache.get(guildId);
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
     if (!guild) return res.status(400).json({ error: 'Бот не подключен к серверу Discord' });
 
     const channel = (guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null)) as TextChannel | null;

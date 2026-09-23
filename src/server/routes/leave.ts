@@ -1,6 +1,7 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { TextChannel } from 'discord.js';
-import { requireAuth } from '../middlewares/auth';
+import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/rbac';
 import config from '../../config';
 import prisma from '../../database/client';
 import bot from '../../bot/client';
@@ -10,12 +11,17 @@ const router = Router();
 
 router.use(requireAuth);
 
+function resolveGuildId(req: AuthenticatedRequest): string {
+  const headerGuild = req.headers['x-guild-id'] as string;
+  return headerGuild || req.user?.guildId || config.discord.guildId || 'default';
+}
+
 /**
  * GET /api/leave
  */
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
+    const guildId = resolveGuildId(req);
     const status = req.query.status as string;
     const requests = await LeaveService.getAllRequests(guildId, status);
     res.json({ requests });
@@ -28,10 +34,11 @@ router.get('/', async (req, res) => {
  * POST /api/leave
  * Request a leave
  */
-router.post('/', async (req, res) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const guildId = config.discord.guildId || 'default';
-    const user: any = (req as any).user;
+    const guildId = resolveGuildId(req);
+    const userId = req.user?.userId || (req.user as any)?.id || 'unknown';
+    const userTag = req.user?.username || 'Member';
     const { startDate, endDate, reason } = req.body;
 
     if (!startDate || !endDate || !reason) {
@@ -40,8 +47,8 @@ router.post('/', async (req, res) => {
 
     const leave = await LeaveService.requestLeave(
       guildId,
-      user.id,
-      user.tag || user.username,
+      userId,
+      userTag,
       new Date(startDate),
       new Date(endDate),
       reason
@@ -56,15 +63,16 @@ router.post('/', async (req, res) => {
 /**
  * POST /api/leave/:id/review
  */
-router.post('/:id/review', async (req, res) => {
+router.post('/:id/review', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const user: any = (req as any).user;
+    const userId = req.user?.userId || (req.user as any)?.id || 'unknown';
+    const userTag = req.user?.username || 'Reviewer';
     const { approved, rejectionReason } = req.body;
 
     const updated = await LeaveService.reviewLeave(
-      req.params.id,
-      user.id,
-      user.tag || user.username,
+      String(req.params.id),
+      userId,
+      userTag,
       Boolean(approved),
       rejectionReason
     );
@@ -79,15 +87,15 @@ router.post('/:id/review', async (req, res) => {
  * POST /api/leave/deploy-panel
  * Send interactive leave request message with button to Discord channel
  */
-router.post('/deploy-panel', async (req, res) => {
+router.post('/deploy-panel', requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { channelId } = req.body;
     if (!channelId) return res.status(400).json({ error: 'Укажите ID текстового канала' });
 
-    const guildId = config.discord.guildId;
-    if (!guildId) return res.status(400).json({ error: 'GUILD_ID не настроен' });
+    const guildId = resolveGuildId(req);
+    if (!guildId || guildId === 'default') return res.status(400).json({ error: 'Сервер Discord не выбран' });
 
-    const guild = bot.guilds.cache.get(guildId);
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
     if (!guild) return res.status(400).json({ error: 'Бот не подключен к серверу Discord' });
 
     const channel = (guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null)) as TextChannel | null;

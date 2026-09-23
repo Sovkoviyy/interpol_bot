@@ -121,7 +121,8 @@ export class RolePersistenceService {
           })
         : [];
 
-      const targetNickname = (restoreNicks ? (saved?.nickname || profile?.characterName) : null) || null;
+      const rawNick = (restoreNicks ? (saved?.nickname || profile?.characterName) : null) || null;
+      const targetNickname = rawNick ? rawNick.trim().slice(0, 32) : null;
 
       if (rolesToAssign.length > 0 || (targetNickname && member.nickname !== targetNickname)) {
         // Wait 1.5 seconds after join so Discord finishes initial member registration

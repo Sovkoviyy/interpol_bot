@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/rbac';
 import { getBotStatus, restartBot } from '../../bot';
 
 const router = Router();
@@ -22,7 +23,7 @@ router.get('/status', (req, res) => {
  * POST /api/bot/restart
  * Dynamically reloads the Discord bot without stopping Express
  */
-router.post('/restart', async (req, res) => {
+router.post('/restart', requirePermission('manageSettings'), async (req, res) => {
   try {
     const result = await restartBot();
     res.json(result);
