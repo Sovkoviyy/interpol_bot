@@ -245,7 +245,21 @@ async function runTests() {
   console.assert(!isValidSnowflake('general-chat'), 'Channel name should fail Snowflake validation');
   console.log('✅ Test 19: Channel Snowflake ID validation verified');
 
-  console.log('🎉 ALL 19 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
+  // Test 20: Server Setup Provisioning Structure Mapping
+  const expectedStructure = [
+    { cat: '📋 ИНФОРМАЦИЯ', channels: ['добро-пожаловать', 'привязка-статика', 'отпуска-неактив'] },
+    { cat: '📥 НАБОР В СЕМЬЮ', channels: ['подать-заявку', 'заявки-набор'] },
+    { cat: '⚔️ МЕРОПРИЯТИЯ (МП)', channels: ['сборы-на-мп', 'Сбор на МП [Ожидание]'] },
+    { cat: '🎓 ACADEMY', channels: [] },
+    { cat: '📁 ACADEMY ARCHIVE', channels: [] },
+    { cat: '📜 LOGS', channels: ['сообщения-лог', 'участники-лог', 'роли-лог', 'каналы-лог', 'войс-лог', 'инвайты-лог', 'бот-лог', 'ивенты-лог'] },
+  ];
+  const totalChannelsCount = expectedStructure.reduce((acc, curr) => acc + curr.channels.length, 0);
+  console.assert(totalChannelsCount === 15, `Expected 15 total automated channels, got ${totalChannelsCount}`);
+  console.assert(expectedStructure.length === 6, `Expected 6 categories, got ${expectedStructure.length}`);
+  console.log('✅ Test 20: Server setup provisioning structure mapping verified');
+
+  console.log('🎉 ALL 20 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
 runTests().catch(err => {

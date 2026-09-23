@@ -17,7 +17,8 @@ import {
   ShieldAlert,
   CalendarOff,
   IdCard,
-  UserX
+  UserX,
+  FolderTree
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
 
   const links = [
     { to: '/dashboard', label: 'Обзор', icon: LayoutDashboard, visible: true },
+    { to: '/setup', label: 'Каналы & Сервер', icon: FolderTree, visible: isAdmin || userPermissions?.manageSettings },
     { to: '/profiles', label: 'Профили & Статики', icon: IdCard, visible: true },
     { to: '/academy', label: 'Академия (1-2 ранг)', icon: GraduationCap, visible: true },
     { to: '/voice-tracker', label: 'Умный войс (МП)', icon: Radio, visible: true },

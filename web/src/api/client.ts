@@ -10,6 +10,10 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const selectedGuildId = localStorage.getItem('selectedGuildId');
+  if (selectedGuildId) {
+    config.headers['x-guild-id'] = selectedGuildId;
+  }
   return config;
 });
 

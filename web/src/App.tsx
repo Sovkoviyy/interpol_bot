@@ -20,6 +20,7 @@ import { AntiNuke } from './pages/AntiNuke';
 import { Blacklist } from './pages/Blacklist';
 import { Leaves } from './pages/Leaves';
 import { Profiles } from './pages/Profiles';
+import { ServerSetup } from './pages/ServerSetup';
 import { ModalProvider } from './context/ModalContext';
 
 export const App: React.FC = () => {
@@ -81,6 +82,7 @@ export const App: React.FC = () => {
                     <main className="flex-1 p-8 overflow-y-auto">
                       <Routes>
                         <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/setup" element={<ServerSetup />} />
                         <Route path="/profiles" element={<Profiles />} />
                         <Route path="/academy" element={<Academy />} />
                         <Route path="/voice-tracker" element={<VoiceTracker />} />
