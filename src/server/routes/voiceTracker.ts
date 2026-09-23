@@ -22,7 +22,8 @@ router.get('/config', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const cfg = await VoiceTrackerService.getConfig(guildId);
-    res.json({ config: cfg });
+    const availableMpTypes = await VoiceTrackerService.getAvailableMpTypes(guildId);
+    res.json({ config: cfg, availableMpTypes });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -35,7 +36,8 @@ router.post('/config', requirePermission('manageSettings'), async (req: Authenti
   try {
     const guildId = resolveGuildId(req);
     const updated = await VoiceTrackerService.saveConfig(guildId, req.body);
-    res.json({ config: updated });
+    const availableMpTypes = await VoiceTrackerService.getAvailableMpTypes(guildId);
+    res.json({ config: updated, availableMpTypes });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

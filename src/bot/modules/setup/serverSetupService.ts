@@ -15,6 +15,7 @@ import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
 import { ProfileService } from '../profiles/profileService';
 import { LeaveService } from '../leave/leaveService';
+import { VoiceTrackerService } from '../voiceTracker/voiceTrackerService';
 
 export interface ProvisionResult {
   guildId: string;
@@ -255,11 +256,13 @@ export class ServerSetupService {
       where: { guildId: guild.id },
       update: {
         voiceChannelId: eventVoiceChannel.id,
+        controlChannelId: eventAnnounceChannel.id,
         logChannelId: logSetup.channels.voiceLogsChannelId || logSetup.channels.botLogsChannelId,
       },
       create: {
         guildId: guild.id,
         voiceChannelId: eventVoiceChannel.id,
+        controlChannelId: eventAnnounceChannel.id,
         logChannelId: logSetup.channels.voiceLogsChannelId || logSetup.channels.botLogsChannelId,
       },
     });
@@ -349,6 +352,14 @@ export class ServerSetupService {
       } catch (e: any) {
         console.error('[ServerSetup] Failed to deploy welcome embed:', e.message);
       }
+
+      // Voice tracker MP control panel
+      try {
+        await VoiceTrackerService.postControlPanel(guild, eventAnnounceChannel.id);
+        panelsDeployed.push('Пульт управления МП');
+      } catch (e: any) {
+        console.error('[ServerSetup] Failed to deploy voice tracker panel:', e.message);
+      }
     }
 
     return {
@@ -377,7 +388,7 @@ export class ServerSetupService {
    */
   public static async deployPanel(
     guildId: string, 
-    panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs', 
+    panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs' | 'voice-tracker', 
     channelId?: string
   ) {
     const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
@@ -462,6 +473,10 @@ export class ServerSetupService {
           .setTimestamp();
 
         const msg = await channel.send({ embeds: [welcomeEmbed] });
+        return { success: true, messageId: msg.id, channelId: channel.id };
+      }
+      case 'voice-tracker': {
+        const msg = await VoiceTrackerService.postControlPanel(guild, channel.id);
         return { success: true, messageId: msg.id, channelId: channel.id };
       }
       default:

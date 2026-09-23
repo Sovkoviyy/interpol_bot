@@ -137,10 +137,142 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Categorized Modules Navigation */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-white">Каталог модулей управления</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Все разделы системы, сгруппированные по направлениям работы</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Group 1: Состав & Рекрутинг */}
+          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
+              <div className="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Состав & Рекрутинг</h3>
+                <p className="text-[11px] text-slate-400">Управление бойцами, академией и отпусками</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <Link to="/profiles" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Профили & Статики</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/academy" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Академия (1-2 ранг)</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/recruitment" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Заявки в семью</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/leaves" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Отпуска & Неактив</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/payroll" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all sm:col-span-2">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Выплаты рекрутерам (Зарплаты)</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Group 2: Мероприятия (МП) */}
+          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
+              <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
+                <CalendarDays className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Мероприятия (МП)</h3>
+                <p className="text-[11px] text-slate-400">Дропы, цех, ВЗМ, учет явки и войс</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <Link to="/voice-tracker" className="p-3 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex flex-col justify-between group transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-200 group-hover:text-pink-400">Умный войс & МП</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+                </div>
+                <span className="text-[11px] text-slate-400 mt-1">Авто-подсчет явки, типы МП и пульт</span>
+              </Link>
+              <Link to="/events" className="p-3 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex flex-col justify-between group transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-200 group-hover:text-pink-400">Сборы на МП</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+                </div>
+                <span className="text-[11px] text-slate-400 mt-1">Анонсы, таймеры сборов и пинги</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Group 3: Безопасность */}
+          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Безопасность & Доступ</h3>
+                <p className="text-[11px] text-slate-400">Защита от сливов, черный список и аудит</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <Link to="/anti-nuke" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Защита сервера</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/blacklist" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Черный список (ЧС)</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/logs" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Аудит сервера</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/roles" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Уровни доступа</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Group 4: Настройки & Бот */}
+          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
+              <div className="w-8 h-8 rounded-lg bg-fuchsia-500/10 text-fuchsia-400 flex items-center justify-center">
+                <Tag className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Настройки & Бот</h3>
+                <p className="text-[11px] text-slate-400">Автоматическая настройка, эмбеды и сообщения</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <Link to="/setup" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all sm:col-span-2">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Инициализация каналов & Сервер</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/messages" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Сообщения бота</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+              <Link to="/embeds" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Embed Генератор</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Modules Toggles Box */}
       <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6">
-        <h2 className="text-base font-bold text-white mb-1">Управление модулями</h2>
-        <p className="text-xs text-slate-400 mb-6">Включение и мгновенное отключение функций бота</p>
+        <h2 className="text-base font-bold text-white mb-1">Мгновенные переключатели модулей</h2>
+        <p className="text-xs text-slate-400 mb-6">Включение и отключение функций бота в реальном времени</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Recruitment Module */}

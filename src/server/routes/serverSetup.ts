@@ -76,7 +76,7 @@ serverSetupRouter.post('/deploy-panel', requireAuth, requirePermission('manageSe
 
     const { panelType, channelId } = req.body;
     if (!panelType) {
-      return res.status(400).json({ error: 'Укажите тип панели (static, leave, recruit, welcome, logs)' });
+      return res.status(400).json({ error: 'Укажите тип панели (static, leave, recruit, welcome, logs, voice-tracker)' });
     }
 
     const result = await ServerSetupService.deployPanel(guildId, panelType, channelId);

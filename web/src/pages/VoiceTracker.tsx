@@ -11,20 +11,42 @@ import {
   ChevronDown, 
   ChevronRight,
   AlertTriangle,
-  History
+  History,
+  Plus,
+  Trash2,
+  Edit3,
+  ListPlus,
+  Layers
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
 
+export interface MpType {
+  id: string;
+  name: string;
+  description?: string;
+  emoji?: string;
+}
+
 export const VoiceTracker: React.FC = () => {
   const modal = useModal();
-  const [tab, setTab] = useState<'live' | 'history' | 'settings'>('live');
+  const [tab, setTab] = useState<'live' | 'history' | 'mp-types' | 'settings'>('live');
   const [config, setConfig] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
+  const [availableMpTypes, setAvailableMpTypes] = useState<MpType[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+
+  // MP Types Modal
+  const [mpModalOpen, setMpModalOpen] = useState(false);
+  const [editingMpId, setEditingMpId] = useState<string | null>(null);
+  const [mpForm, setMpForm] = useState<{ name: string; description: string; emoji: string }>({
+    name: '',
+    description: '',
+    emoji: '⚔️',
+  });
 
   // Start MP Form
   const [startMpModalOpen, setStartMpModalOpen] = useState(false);
@@ -40,6 +62,10 @@ export const VoiceTracker: React.FC = () => {
         api.get('/guild/channels'),
       ]);
       setConfig(cfgRes.data.config);
+      setAvailableMpTypes(cfgRes.data.availableMpTypes || []);
+      if (cfgRes.data.availableMpTypes && cfgRes.data.availableMpTypes.length > 0) {
+        setSelectedMpName(cfgRes.data.availableMpTypes[0].name);
+      }
       setSessions(sessRes.data.sessions || []);
       setChannels(chRes.data.channels || []);
     } catch (err) {
@@ -52,6 +78,103 @@ export const VoiceTracker: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleOpenAddMp = () => {
+    setEditingMpId(null);
+    setMpForm({ name: '', description: '', emoji: '⚔️' });
+    setMpModalOpen(true);
+  };
+
+  const handleOpenEditMp = (mp: MpType) => {
+    setEditingMpId(mp.id);
+    setMpForm({
+      name: mp.name,
+      description: mp.description || '',
+      emoji: mp.emoji || '⚔️',
+    });
+    setMpModalOpen(true);
+  };
+
+  const handleSaveMp = async () => {
+    const name = mpForm.name.trim();
+    if (!name) {
+      modal.alert({ title: 'Ошибка', message: 'Введите название мероприятия', type: 'error' });
+      return;
+    }
+
+    let updatedList: MpType[];
+    if (editingMpId) {
+      updatedList = availableMpTypes.map((m) =>
+        m.id === editingMpId
+          ? { ...m, name, description: mpForm.description.trim(), emoji: mpForm.emoji.trim() || '⚔️' }
+          : m
+      );
+    } else {
+      const newMp: MpType = {
+        id: `mp_${Date.now()}`,
+        name,
+        description: mpForm.description.trim(),
+        emoji: mpForm.emoji.trim() || '⚔️',
+      };
+      updatedList = [...availableMpTypes, newMp];
+    }
+
+    try {
+      setSaving(true);
+      const res = await api.post('/voice-tracker/config', {
+        ...config,
+        availableMpTypes: updatedList,
+      });
+      setAvailableMpTypes(res.data.availableMpTypes || updatedList);
+      setMpModalOpen(false);
+      modal.alert({
+        title: 'Успешно сохранено',
+        message: 'Список типов МП сохранен! Пульт управления в Discord автоматически обновлен.',
+        type: 'success',
+      });
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось сохранить тип МП',
+        type: 'error',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteMp = async (mp: MpType) => {
+    const confirmed = await modal.confirm({
+      title: 'Удалить тип МП',
+      message: `Вы уверены, что хотите удалить «${mp.name}» из списка доступных мероприятий?`,
+      confirmText: 'Удалить',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    const updatedList = availableMpTypes.filter((m) => m.id !== mp.id);
+    try {
+      setSaving(true);
+      const res = await api.post('/voice-tracker/config', {
+        ...config,
+        availableMpTypes: updatedList,
+      });
+      setAvailableMpTypes(res.data.availableMpTypes || updatedList);
+      modal.alert({
+        title: 'Удалено',
+        message: `Мероприятие «${mp.name}» удалено. Пульт в Discord синхронизирован.`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось удалить тип МП',
+        type: 'error',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const activeSession = sessions.find((s) => s.status === 'ACTIVE');
 
@@ -185,6 +308,16 @@ export const VoiceTracker: React.FC = () => {
             }`}
           >
             История сессий ({sessions.length})
+          </button>
+          <button
+            onClick={() => setTab('mp-types')}
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              tab === 'mp-types'
+                ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            📋 Доступные МП ({availableMpTypes.length})
           </button>
           <button
             onClick={() => setTab('settings')}
@@ -327,6 +460,77 @@ export const VoiceTracker: React.FC = () => {
         </div>
       )}
 
+      {tab === 'mp-types' && (
+        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 space-y-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#1E232F] pb-4">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <ListPlus className="w-5 h-5 text-pink-500" />
+                Доступные мероприятия (МП)
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Этот список отображается в пульте управления в Discord и в быстром запуске сборов на сайте.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddMp}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-md shadow-pink-600/25 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Добавить тип МП</span>
+            </button>
+          </div>
+
+          {availableMpTypes.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-xs">
+              Список мероприятий пуст. Нажмите «Добавить тип МП», чтобы создать первое.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {availableMpTypes.map((mp, idx) => (
+                <div
+                  key={mp.id || idx}
+                  className="bg-[#0B0E14] border border-[#1E232F] hover:border-pink-500/40 rounded-xl p-4 flex flex-col justify-between transition-all group"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl p-2 rounded-lg bg-pink-500/10 border border-pink-500/20">
+                        {mp.emoji || '⚔️'}
+                      </span>
+                      <div>
+                        <h3 className="font-bold text-white text-sm group-hover:text-pink-400 transition-colors">
+                          {mp.name}
+                        </h3>
+                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">
+                          {mp.description || 'Без описания'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-[#1E232F]/60">
+                    <button
+                      onClick={() => handleOpenEditMp(mp)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#1E232F] transition-colors"
+                      title="Редактировать"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMp(mp)}
+                      className="p-1.5 rounded-lg text-rose-400/80 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      title="Удалить"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === 'settings' && (
         <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 space-y-4 max-w-3xl">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
@@ -431,12 +635,14 @@ export const VoiceTracker: React.FC = () => {
                   onChange={(e) => setSelectedMpName(e.target.value)}
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                 >
-                  <option value="Дроп [16:00]">Дроп (16:00)</option>
-                  <option value="Дроп [20:00]">Дроп (20:00)</option>
-                  <option value="Цех">Завод / Цех</option>
-                  <option value="ВЗМ">ВЗМ (Война за материалы)</option>
-                  <option value="МЦЛ">МЦЛ</option>
-                  <option value="Капт">Капт (Война за территорию)</option>
+                  {availableMpTypes.map((mp) => (
+                    <option key={mp.id} value={mp.name}>
+                      {mp.emoji || '⚔️'} {mp.name}
+                    </option>
+                  ))}
+                  {availableMpTypes.length === 0 && (
+                    <option value="Мероприятие">⚔️ Мероприятие</option>
+                  )}
                 </select>
               </div>
 
@@ -464,6 +670,81 @@ export const VoiceTracker: React.FC = () => {
                 className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-md shadow-pink-600/25"
               >
                 Запустить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit MP Type Modal */}
+      {mpModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
+              <h3 className="font-bold text-white text-base">
+                {editingMpId ? 'Редактировать тип МП' : 'Добавить новое мероприятие'}
+              </h3>
+              <button
+                onClick={() => setMpModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="col-span-1">
+                  <label className="block text-slate-400 mb-1 font-medium">Эмодзи</label>
+                  <input
+                    type="text"
+                    value={mpForm.emoji}
+                    onChange={(e) => setMpForm({ ...mpForm, emoji: e.target.value })}
+                    placeholder="⚔️"
+                    className="w-full text-center bg-[#0B0E14] border border-[#1E232F] rounded-xl px-2 py-2 text-slate-200 text-base"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <label className="block text-slate-400 mb-1 font-medium">Название мероприятия *</label>
+                  <input
+                    type="text"
+                    value={mpForm.name}
+                    onChange={(e) => setMpForm({ ...mpForm, name: e.target.value })}
+                    placeholder="например: Остров, Цех, Поезд"
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Краткое описание (для пульта в Discord)</label>
+                <input
+                  type="text"
+                  value={mpForm.description}
+                  onChange={(e) => setMpForm({ ...mpForm, description: e.target.value })}
+                  placeholder="например: Вечерний сбор на поезд"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <div className="p-3 bg-pink-500/10 border border-pink-500/20 rounded-xl text-pink-300 text-[11px] leading-relaxed">
+                💡 <b>Синхронизация с Discord:</b> после сохранения это МП автоматически появится в выпадающем списке пульта управления в Discord!
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                onClick={() => setMpModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-[#1E232F] text-slate-300 hover:text-white text-xs"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleSaveMp}
+                disabled={saving}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-md shadow-pink-600/25 disabled:opacity-50"
+              >
+                {saving ? 'Сохранение...' : 'Сохранить'}
               </button>
             </div>
           </div>

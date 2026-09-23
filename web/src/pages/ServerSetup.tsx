@@ -194,7 +194,7 @@ export const ServerSetup: React.FC = () => {
   };
 
   // 5. Deploy / Re-deploy specific panel
-  const handleDeploySpecificPanel = async (panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs', channelId?: string) => {
+  const handleDeploySpecificPanel = async (panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs' | 'voice-tracker', channelId?: string) => {
     try {
       setDeployingPanel(panelType);
       await api.post('/setup/deploy-panel', {
@@ -507,14 +507,25 @@ export const ServerSetup: React.FC = () => {
 
           {/* Card 4: Events & Voice */}
           <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-                <CalendarDays className="w-4 h-4" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                  <CalendarDays className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Сборы на мероприятия (МП)</h3>
+                  <p className="text-[11px] text-gray-400">Пульт управления МП и войс канал сбора</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-white">Сборы на мероприятия (МП)</h3>
-                <p className="text-[11px] text-gray-400">Канал анонсов и голосовой канал сбора</p>
-              </div>
+              <button
+                onClick={() => handleDeploySpecificPanel('voice-tracker', bindings.eventAnnounceChannelId)}
+                disabled={deployingPanel === 'voice-tracker' || !bindings.eventAnnounceChannelId}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-rose-500/20 text-rose-400 border border-dark-700 hover:border-rose-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
+                title="Отправить пульт управления МП в выбранный канал"
+              >
+                <Send className="w-3 h-3" />
+                {deployingPanel === 'voice-tracker' ? 'Отправка...' : 'Отправить пульт МП'}
+              </button>
             </div>
 
             <div className="space-y-3">

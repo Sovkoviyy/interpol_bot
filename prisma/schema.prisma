@@ -307,6 +307,7 @@ model VoiceTrackerConfig {
   controlChannelId     String?  // Channel for staff MP start/stop control panel
   controlMessageId     String?  // Persistent control message
   logChannelId         String?  // Log channel for attendance summaries
+  availableMpTypesJson String   @default("[]") // Custom configured MPs (JSON array of { id, name, description, emoji })
   updatedAt            DateTime @updatedAt
   createdAt            DateTime @default(now())
 }

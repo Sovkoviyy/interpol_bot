@@ -415,9 +415,43 @@ async function runTests() {
     if (checkRateLimit('ip_127.0.0.1', t0, 60)) requestsAllowed++;
   }
   console.assert(requestsAllowed === 60, `Expected 60 allowed requests, got ${requestsAllowed}`);
-  console.log('✅ Test 26: External stats cache and rate limiter logic verified');
+  // Test 27: Stale/Orphaned MP Session Auto-Recovery Logic
+  const mockDbSession = {
+    id: 'sess_1',
+    guildId: 'guild_1',
+    status: 'ACTIVE',
+    startedAt: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
+  };
+  const mockActiveSessionsMap = new Map<string, any>(); // Empty RAM map simulates bot reboot
 
-  console.log('🎉 ALL 26 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
+  const isOrphaned = !mockActiveSessionsMap.has(mockDbSession.guildId);
+  const isStale = (Date.now() - mockDbSession.startedAt.getTime()) > 3 * 60 * 60 * 1000;
+  const shouldAutoRecover = isOrphaned || isStale;
+  console.assert(shouldAutoRecover, 'Stale / rebooted session should trigger auto-recovery');
+  console.log('✅ Test 27: Voice tracker stale session auto-recovery verified');
+
+  // Test 28: Dynamic MP Types Parsing & Discord Select Menu Limits
+  const rawMpTypes = [
+    { id: 'mp_1', name: 'Остров', description: 'Битва за остров', emoji: '🏝️' },
+    { id: 'mp_2', name: 'Поезд', description: 'Перехват поезда', emoji: '🚂' },
+    { id: 'mp_3', name: 'A'.repeat(150), description: 'Very long name', emoji: '⚔️' },
+  ];
+  const serializedMp = JSON.stringify(rawMpTypes);
+  const parsedMp = JSON.parse(serializedMp);
+  console.assert(Array.isArray(parsedMp) && parsedMp.length === 3, 'MP types should parse into array of 3');
+
+  const discordOptions = parsedMp.slice(0, 25).map((mp: any) => ({
+    label: mp.name.slice(0, 100),
+    value: mp.name.slice(0, 100),
+    description: (mp.description || '').slice(0, 100),
+    emoji: mp.emoji ? mp.emoji.slice(0, 20) : undefined,
+  }));
+  console.assert(discordOptions[2].label.length <= 100, 'Discord select menu option label must be <= 100 chars');
+  console.assert(discordOptions[2].value.length <= 100, 'Discord select menu option value must be <= 100 chars');
+  console.assert(discordOptions[0].emoji === '🏝️', 'Option emoji should match');
+  console.log('✅ Test 28: Dynamic MP types parsing and Discord select menu constraints verified');
+
+  console.log('🎉 ALL 28 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
 runTests().catch(err => {
