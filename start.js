@@ -94,32 +94,63 @@ if (process.argv.includes('--setup-only')) {
   process.exit(0);
 }
 
-// 5. Запуск готового приложения
+// 5. Запуск готового приложения с защитой от крашей (Supervisor Watchdog)
 console.log('\n====================================================================');
-console.log('✨ Все компоненты готовы! Запуск приложения...');
+console.log('✨ Все компоненты готовы! Запуск приложения с защитой от падений...');
 console.log('====================================================================\n');
 
-const child = spawn('node', [backendDist], {
-  cwd: ROOT_DIR,
-  stdio: 'inherit',
-  shell: true,
-  env: {
-    ...process.env,
-    NODE_ENV: process.env.NODE_ENV || 'production',
-  },
-});
+let isManualExit = false;
+let restartCount = 0;
+let lastRestartTime = Date.now();
 
-child.on('close', (code) => {
-  process.exit(code || 0);
-});
+function startApp() {
+  const child = spawn('node', [backendDist], {
+    cwd: ROOT_DIR,
+    stdio: 'inherit',
+    shell: true,
+    env: {
+      ...process.env,
+      NODE_ENV: process.env.NODE_ENV || 'production',
+    },
+  });
 
-// Обработка прерываний (Ctrl+C)
-process.on('SIGINT', () => {
-  child.kill('SIGINT');
-  process.exit(0);
-});
+  child.on('close', (code, signal) => {
+    if (isManualExit) {
+      process.exit(code || 0);
+      return;
+    }
 
-process.on('SIGTERM', () => {
-  child.kill('SIGTERM');
-  process.exit(0);
-});
+    const now = Date.now();
+    if (now - lastRestartTime > 60000) {
+      restartCount = 0;
+    }
+    restartCount++;
+    lastRestartTime = now;
+
+    if (restartCount > 10) {
+      console.error('\n💥 [SUPERVISOR] Слишком много аварийных перезапусков (>10 за минуту). Пауза 15 секунд...');
+      setTimeout(startApp, 15000);
+      return;
+    }
+
+    console.warn(`\n⚠️ [SUPERVISOR] Процесс бота завершился (код: ${code}, сигнал: ${signal || 'none'}).`);
+    console.log(`🔄 [SUPERVISOR] Автоматический перезапуск через 2 секунды (перезапуск #${restartCount})...\n`);
+    setTimeout(startApp, 2000);
+  });
+
+  // Обработка прерываний (Ctrl+C)
+  const handleExit = (sig) => {
+    isManualExit = true;
+    try {
+      child.kill(sig);
+    } catch (e) {}
+    process.exit(0);
+  };
+
+  process.removeAllListeners('SIGINT');
+  process.removeAllListeners('SIGTERM');
+  process.on('SIGINT', () => handleExit('SIGINT'));
+  process.on('SIGTERM', () => handleExit('SIGTERM'));
+}
+
+startApp();

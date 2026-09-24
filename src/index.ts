@@ -3,12 +3,12 @@ import { startBot } from './bot';
 import { startServer } from './server/server';
 
 // Global Process Resilience Handlers
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('⚠️ [Process] Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (reason: any, promise) => {
+  console.error('⚠️ [Process Resilience] Unhandled Rejection at:', promise, 'reason:', reason?.stack || reason);
 });
 
-process.on('uncaughtException', (err) => {
-  console.error('💥 [Process] Uncaught Exception:', err);
+process.on('uncaughtException', (err: Error) => {
+  console.error('💥 [Process Resilience] Uncaught Exception intercepted:', err?.stack || err);
 });
 
 async function main() {

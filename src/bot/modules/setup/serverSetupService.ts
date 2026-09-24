@@ -187,16 +187,20 @@ export class ServerSetupService {
     // 2. Category: НАБОР В СЕМЬЮ
     const recruitCat = await getOrCreateCategory('📥 НАБОР В СЕМЬЮ');
     const recruitApplyChannel = await getOrCreateTextChannel('подать-заявку', recruitCat.id);
-    const recruitReviewChannel = await getOrCreateTextChannel('заявки-набор', recruitCat.id, [
+    const botUserId = guild.members.me?.id || guild.client?.user?.id;
+    const reviewOverwrites: any[] = [
       {
         id: guild.roles.everyone.id,
         deny: [PermissionFlagsBits.ViewChannel],
       },
-      {
-        id: guild.members.me?.id || '',
+    ];
+    if (botUserId) {
+      reviewOverwrites.push({
+        id: botUserId,
         allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks],
-      },
-    ]);
+      });
+    }
+    const recruitReviewChannel = await getOrCreateTextChannel('заявки-набор', recruitCat.id, reviewOverwrites);
 
     // 3. Category: МЕРОПРИЯТИЯ (МП)
     const eventsCat = await getOrCreateCategory('⚔️ МЕРОПРИЯТИЯ (МП)');

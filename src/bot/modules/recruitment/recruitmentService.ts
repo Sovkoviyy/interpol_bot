@@ -125,98 +125,96 @@ export class RecruitmentService {
    * Handles user submission of the modal
    */
   public static async handleModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
-    const guild = interaction.guild;
-    if (!guild) return;
-
-    await interaction.deferReply({ ephemeral: true });
-
-    // Check if recruitment is enabled
-    const guildConfig = await prisma.guildConfig.findUnique({ where: { guildId: guild.id } });
-    if (guildConfig && !guildConfig.recruitmentEnabled) {
-      await interaction.editReply({ content: '❌ Прием заявок в семью в данный момент закрыт.' });
-      return;
-    }
-
-    const recConfig = await prisma.recruitmentConfig.findUnique({ where: { guildId: guild.id } });
-    if (!recConfig) {
-      await interaction.editReply({ content: '❌ Модуль заявок еще не настроен администратором.' });
-      return;
-    }
-
-    // Check if user already has an active application
-    const existing = await prisma.recruitmentApplication.findFirst({
-      where: {
-        guildId: guild.id,
-        userId: interaction.user.id,
-        status: { in: ['PENDING', 'UNDER_REVIEW'] },
-      },
-    });
-
-    if (existing && existing.channelId) {
-      await interaction.editReply({
-        content: `❌ У вас уже есть открытая заявка в канале <#${existing.channelId}>!`,
-      });
-      return;
-    }
-
-    // Parse answers
-    const answers: Record<string, string> = {};
-    let questions: FormQuestion[] = [];
     try {
-      questions = JSON.parse(recConfig.questionsJson || '[]');
-    } catch {
-      questions = this.getDefaultQuestions();
-    }
-    if (questions.length === 0) questions = this.getDefaultQuestions();
-
-    for (const q of questions.slice(0, 5)) {
-      try {
-        const val = interaction.fields.getTextInputValue(q.id);
-        answers[q.label] = val;
-      } catch {
-        // Field wasn't in modal
+      const guild = await this.resolveGuild(interaction);
+      if (!guild) {
+        const errorContent = '❌ Сервер Discord не определен.';
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({ content: errorContent }).catch(() => null);
+        } else {
+          await interaction.reply({ content: errorContent, ephemeral: true }).catch(() => null);
+        }
+        return;
       }
-    }
 
-    // Recruiter role IDs
-    let recruiterRoleIds: string[] = [];
-    try {
-      recruiterRoleIds = JSON.parse(recConfig.recruiterRoleIds || '[]');
-    } catch {
-      recruiterRoleIds = [];
-    }
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ ephemeral: true }).catch(() => null);
+      }
 
-    // Create private ticket channel
-    const overwrites: any[] = [
-      {
-        id: guild.roles.everyone.id,
-        deny: [PermissionFlagsBits.ViewChannel],
-      },
-      {
-        id: interaction.user.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.AttachFiles,
-          PermissionFlagsBits.ReadMessageHistory,
-        ],
-      },
-      {
-        id: guild.members.me?.id || '',
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ManageChannels,
-          PermissionFlagsBits.EmbedLinks,
-          PermissionFlagsBits.AttachFiles,
-        ],
-      },
-    ];
+      // Check if recruitment is enabled
+      const guildConfig = await prisma.guildConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
+      if (guildConfig && !guildConfig.recruitmentEnabled) {
+        await interaction.editReply({ content: '❌ Прием заявок в семью в данный момент закрыт.' }).catch(() => null);
+        return;
+      }
 
-    for (const roleId of recruiterRoleIds) {
-      if (guild.roles.cache.has(roleId)) {
+      const recConfig = await prisma.recruitmentConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
+      if (!recConfig) {
+        await interaction.editReply({ content: '❌ Модуль заявок еще не настроен администратором.' }).catch(() => null);
+        return;
+      }
+
+      // Check if user already has an active application
+      const existing = await prisma.recruitmentApplication.findFirst({
+        where: {
+          guildId: guild.id,
+          userId: interaction.user.id,
+          status: { in: ['PENDING', 'UNDER_REVIEW'] },
+        },
+      }).catch(() => null);
+
+      if (existing && existing.channelId) {
+        await interaction.editReply({
+          content: `❌ У вас уже есть открытая заявка в канале <#${existing.channelId}>!`,
+        }).catch(() => null);
+        return;
+      }
+
+      // Parse answers
+      const answers: Record<string, string> = {};
+      let questions: FormQuestion[] = [];
+      try {
+        questions = JSON.parse(recConfig.questionsJson || '[]');
+      } catch {
+        questions = this.getDefaultQuestions();
+      }
+      if (questions.length === 0) questions = this.getDefaultQuestions();
+
+      for (const q of questions.slice(0, 5)) {
+        try {
+          const val = interaction.fields.getTextInputValue(q.id);
+          answers[q.label] = val;
+        } catch {
+          // Field wasn't in modal
+        }
+      }
+
+      // Recruiter role IDs
+      let recruiterRoleIds: string[] = [];
+      try {
+        recruiterRoleIds = JSON.parse(recConfig.recruiterRoleIds || '[]');
+      } catch {
+        recruiterRoleIds = [];
+      }
+
+      // Resolve bot user ID safely
+      const botUserId = guild.members.me?.id || bot.user?.id;
+
+      // Create private ticket channel with strictly valid snowflakes
+      const overwrites: any[] = [];
+
+      // @everyone deny
+      if (guild.roles.everyone?.id) {
         overwrites.push({
-          id: roleId,
+          id: guild.roles.everyone.id,
+          deny: [PermissionFlagsBits.ViewChannel],
+        });
+      }
+
+      // Candidate allow
+      if (interaction.user.id) {
+        overwrites.push({
+          id: interaction.user.id,
           allow: [
             PermissionFlagsBits.ViewChannel,
             PermissionFlagsBits.SendMessages,
@@ -225,104 +223,190 @@ export class RecruitmentService {
           ],
         });
       }
-    }
 
-    const channelName = `заявка-${interaction.user.username.replace(/[^a-zA-Z0-9А-Яа-я_-]/g, '').slice(0, 20)}`;
-    const ticketChannel = await guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      parent: recConfig.categoryId || undefined,
-      permissionOverwrites: overwrites,
-    });
-
-    // Save DB application
-    const application = await prisma.recruitmentApplication.create({
-      data: {
-        guildId: guild.id,
-        userId: interaction.user.id,
-        userTag: interaction.user.tag,
-        channelId: ticketChannel.id,
-        status: 'PENDING',
-        answersJson: JSON.stringify(answers),
-      },
-    });
-
-    // Create ticket embed
-    const embed = new EmbedBuilder()
-      .setColor(0x3498DB)
-      .setTitle(`📋 Новая заявка в семью: ${interaction.user.username}`)
-      .setDescription(
-        `**Кандидат:** ${interaction.user} (\`${interaction.user.tag}\` / \`${interaction.user.id}\`)\n` +
-        `**Дата подачи:** <t:${Math.floor(Date.now() / 1000)}:F> (<t:${Math.floor(Date.now() / 1000)}:R>)\n` +
-        `**Статус:** ⏳ Ожидает рассмотрения\n\n` +
-        `*Рекрутеры могут нажать кнопку ниже, чтобы взять заявку в работу.*`
-      )
-      .setThumbnail(interaction.user.displayAvatarURL({ size: 256 }));
-
-    for (const [question, answer] of Object.entries(answers)) {
-      embed.addFields({ name: question, value: answer || 'Не указано', inline: false });
-    }
-
-    const buttonsRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`recruit_claim_${application.id}`)
-        .setLabel('Взять на рассмотрение')
-        .setEmoji('📌')
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(`recruit_approve_${application.id}`)
-        .setLabel('Одобрить')
-        .setEmoji('✅')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`recruit_reject_${application.id}`)
-        .setLabel('Отклонить')
-        .setEmoji('❌')
-        .setStyle(ButtonStyle.Danger)
-    );
-
-    // Mention recruiter roles if configured
-    const recruiterPings = recruiterRoleIds.map(r => `<@&${r}>`).join(' ');
-    await ticketChannel.send({
-      content: `${interaction.user} ${recruiterPings}`,
-      embeds: [embed],
-      components: [buttonsRow],
-    });
-
-    // Send custom candidate greeting/instructions from BotMessagesConfig if present
-    try {
-      const botMsgConfig = await prisma.botMessagesConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
-      if (botMsgConfig && botMsgConfig.ticketGreetingDesc) {
-        const greetingTitle = botMsgConfig.ticketGreetingTitle || 'Заявка в семью INTERPOL';
-        const greetingDesc = botMsgConfig.ticketGreetingDesc
-          .replace(/{user}/g, `<@${interaction.user.id}>`)
-          .replace(/{guild}/g, guild.name);
-        
-        const greetingEmbed = new EmbedBuilder()
-          .setColor(0xEC4899)
-          .setTitle(`🌸 ${greetingTitle}`)
-          .setDescription(greetingDesc);
-        await ticketChannel.send({ embeds: [greetingEmbed] }).catch(() => null);
+      // Bot allow
+      if (botUserId) {
+        overwrites.push({
+          id: botUserId,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ManageChannels,
+            PermissionFlagsBits.EmbedLinks,
+            PermissionFlagsBits.AttachFiles,
+          ],
+        });
       }
-    } catch (err) {
-      console.error('[Recruitment] Error sending ticket greeting:', err);
+
+      // Recruiter roles
+      for (const roleId of recruiterRoleIds) {
+        if (typeof roleId === 'string' && /^\d{17,20}$/.test(roleId) && guild.roles.cache.has(roleId)) {
+          overwrites.push({
+            id: roleId,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages,
+              PermissionFlagsBits.AttachFiles,
+              PermissionFlagsBits.ReadMessageHistory,
+            ],
+          });
+        }
+      }
+
+      // Channel name: lowercase, valid symbols only, non-empty fallback
+      const cleanUsername = interaction.user.username.toLowerCase().replace(/[^a-z0-9а-я_-]/g, '').slice(0, 20);
+      const channelName = `заявка-${cleanUsername || interaction.user.id.slice(-4)}`;
+
+      // Validate parent category: must exist, be GuildCategory, and have < 50 channels
+      let parentCategoryId: string | undefined = undefined;
+      if (recConfig.categoryId && typeof recConfig.categoryId === 'string' && /^\d{17,20}$/.test(recConfig.categoryId)) {
+        const cat = guild.channels.cache.get(recConfig.categoryId) || await guild.channels.fetch(recConfig.categoryId).catch(() => null);
+        if (cat && cat.type === ChannelType.GuildCategory) {
+          const childCount = guild.channels.cache.filter(c => c.parentId === cat.id).size;
+          if (childCount < 50) {
+            parentCategoryId = cat.id;
+          } else {
+            console.warn(`[Recruitment] Category ${cat.name} (${cat.id}) is full (50 channels max). Creating ticket channel at root level.`);
+          }
+        } else {
+          console.warn(`[Recruitment] Category ID ${recConfig.categoryId} is invalid or not a GuildCategory. Falling back to root level.`);
+        }
+      }
+
+      // Resilient channel creation with automatic fallback on Discord API 50035 / permissions errors
+      let ticketChannel: TextChannel;
+      try {
+        ticketChannel = (await guild.channels.create({
+          name: channelName,
+          type: ChannelType.GuildText,
+          parent: parentCategoryId,
+          permissionOverwrites: overwrites,
+        })) as TextChannel;
+      } catch (createErr: any) {
+        console.warn(`[Recruitment] Initial channel creation failed (${createErr.message}). Retrying with safe minimal fallback...`);
+        
+        const fallbackOverwrites: any[] = [];
+        if (guild.roles.everyone?.id) {
+          fallbackOverwrites.push({
+            id: guild.roles.everyone.id,
+            deny: [PermissionFlagsBits.ViewChannel],
+          });
+        }
+        fallbackOverwrites.push({
+          id: interaction.user.id,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+        });
+        if (botUserId) {
+          fallbackOverwrites.push({
+            id: botUserId,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels],
+          });
+        }
+
+        ticketChannel = (await guild.channels.create({
+          name: `заявка-${interaction.user.id.slice(-4)}`,
+          type: ChannelType.GuildText,
+          permissionOverwrites: fallbackOverwrites,
+        })) as TextChannel;
+      }
+
+      // Save DB application
+      const application = await prisma.recruitmentApplication.create({
+        data: {
+          guildId: guild.id,
+          userId: interaction.user.id,
+          userTag: interaction.user.tag,
+          channelId: ticketChannel.id,
+          status: 'PENDING',
+          answersJson: JSON.stringify(answers),
+        },
+      });
+
+      // Create ticket embed
+      const embed = new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setTitle(`📋 Новая заявка в семью: ${interaction.user.username}`)
+        .setDescription(
+          `**Кандидат:** ${interaction.user} (\`${interaction.user.tag}\` / \`${interaction.user.id}\`)\n` +
+          `**Дата подачи:** <t:${Math.floor(Date.now() / 1000)}:F> (<t:${Math.floor(Date.now() / 1000)}:R>)\n` +
+          `**Статус:** ⏳ Ожидает рассмотрения\n\n` +
+          `*Рекрутеры могут нажать кнопку ниже, чтобы взять заявку в работу.*`
+        )
+        .setThumbnail(interaction.user.displayAvatarURL({ size: 256 }));
+
+      for (const [question, answer] of Object.entries(answers)) {
+        embed.addFields({ name: question, value: answer || 'Не указано', inline: false });
+      }
+
+      const buttonsRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`recruit_claim_${application.id}`)
+          .setLabel('Взять на рассмотрение')
+          .setEmoji('📌')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`recruit_approve_${application.id}`)
+          .setLabel('Одобрить')
+          .setEmoji('✅')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`recruit_reject_${application.id}`)
+          .setLabel('Отклонить')
+          .setEmoji('❌')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      // Mention recruiter roles if configured
+      const recruiterPings = recruiterRoleIds.filter(r => guild.roles.cache.has(r)).map(r => `<@&${r}>`).join(' ');
+      await ticketChannel.send({
+        content: `${interaction.user} ${recruiterPings}`.trim(),
+        embeds: [embed],
+        components: [buttonsRow],
+      }).catch(err => console.error('[Recruitment] Error sending initial ticket message:', err));
+
+      // Send custom candidate greeting/instructions from BotMessagesConfig if present
+      try {
+        const botMsgConfig = await prisma.botMessagesConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
+        if (botMsgConfig && botMsgConfig.ticketGreetingDesc) {
+          const greetingTitle = botMsgConfig.ticketGreetingTitle || 'Заявка в семью INTERPOL';
+          const greetingDesc = botMsgConfig.ticketGreetingDesc
+            .replace(/{user}/g, `<@${interaction.user.id}>`)
+            .replace(/{guild}/g, guild.name);
+          
+          const greetingEmbed = new EmbedBuilder()
+            .setColor(0xEC4899)
+            .setTitle(`🌸 ${greetingTitle}`)
+            .setDescription(greetingDesc);
+          await ticketChannel.send({ embeds: [greetingEmbed] }).catch(() => null);
+        }
+      } catch (err) {
+        console.error('[Recruitment] Error sending ticket greeting:', err);
+      }
+
+      await interaction.editReply({
+        content: `✅ Ваша заявка успешно создана! Перейдите в канал: <#${ticketChannel.id}>`,
+      }).catch(() => null);
+
+      // Log to BOT logs
+      const logEmbed = new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setTitle('📋 Создана новая заявка')
+        .setDescription(
+          `**Кандидат:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
+          `**Канал:** <#${ticketChannel.id}>\n` +
+          `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
+        )
+        .setTimestamp();
+      await AuditLogger.sendLog(guild, 'BOT', logEmbed).catch(() => null);
+    } catch (err: any) {
+      console.error('[Recruitment handleModalSubmit Error]:', err);
+      const userErrorMsg = `❌ Не удалось создать заявку (${err.message || 'Ошибка прав Discord'}). Убедитесь, что у бота есть право «Управлять каналами» (Manage Channels).`;
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: userErrorMsg }).catch(() => null);
+      } else {
+        await interaction.reply({ content: userErrorMsg, ephemeral: true }).catch(() => null);
+      }
     }
-
-    await interaction.editReply({
-      content: `✅ Ваша заявка успешно создана! Перейдите в канал: <#${ticketChannel.id}>`,
-    });
-
-    // Log to BOT logs
-    const logEmbed = new EmbedBuilder()
-      .setColor(0x3498DB)
-      .setTitle('📋 Создана новая заявка')
-      .setDescription(
-        `**Кандидат:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-        `**Канал:** <#${ticketChannel.id}>\n` +
-        `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-      )
-      .setTimestamp();
-    await AuditLogger.sendLog(guild, 'BOT', logEmbed);
   }
 
   /**

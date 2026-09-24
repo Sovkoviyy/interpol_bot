@@ -86,19 +86,23 @@ export class AcademyService {
         c => c.type === ChannelType.GuildCategory && (c.name.toUpperCase() === 'ACADEMY' || c.name.toUpperCase() === 'АКАДЕМИЯ')
       );
       if (!cat) {
+        const catBotId = guild.members.me?.id || bot.user?.id;
+        const catOverwrites: any[] = [
+          {
+            id: guild.roles.everyone.id,
+            deny: [PermissionFlagsBits.ViewChannel],
+          },
+        ];
+        if (catBotId) {
+          catOverwrites.push({
+            id: catBotId,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages],
+          });
+        }
         cat = await guild.channels.create({
           name: 'ACADEMY',
           type: ChannelType.GuildCategory,
-          permissionOverwrites: [
-            {
-              id: guild.roles.everyone.id,
-              deny: [PermissionFlagsBits.ViewChannel],
-            },
-            {
-              id: guild.members.me?.id || '',
-              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages],
-            },
-          ],
+          permissionOverwrites: catOverwrites,
         });
         await prisma.academyConfig.update({
           where: { guildId: guild.id },
@@ -109,9 +113,10 @@ export class AcademyService {
     }
 
     // Permissions: private to @everyone, visible to member and recruiters
+    const botUserId = guild.members.me?.id || bot.user?.id;
     const permissionOverwrites: any[] = [
       {
-        id: guild.id,
+        id: guild.roles.everyone?.id || guild.id,
         deny: [PermissionFlagsBits.ViewChannel],
       },
       {
@@ -126,13 +131,26 @@ export class AcademyService {
       },
     ];
 
+    if (botUserId) {
+      permissionOverwrites.push({
+        id: botUserId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ManageChannels,
+          PermissionFlagsBits.EmbedLinks,
+          PermissionFlagsBits.AttachFiles,
+        ],
+      });
+    }
+
     // Grant recruiters view permissions if configured in RecruitmentConfig
-    const recruitConfig = await prisma.recruitmentConfig.findUnique({ where: { guildId: guild.id } });
+    const recruitConfig = await prisma.recruitmentConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
     if (recruitConfig && recruitConfig.recruiterRoleIds) {
       try {
         const recruiterRoleIds: string[] = JSON.parse(recruitConfig.recruiterRoleIds);
         for (const roleId of recruiterRoleIds) {
-          if (guild.roles.cache.has(roleId)) {
+          if (typeof roleId === 'string' && /^\d{17,20}$/.test(roleId) && guild.roles.cache.has(roleId)) {
             permissionOverwrites.push({
               id: roleId,
               allow: [
@@ -149,13 +167,37 @@ export class AcademyService {
       }
     }
 
-    const channel = await guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      parent: targetCategoryId || undefined,
-      permissionOverwrites,
-      topic: `Личный канал отчетов академика ${member.user.tag} (Статик: ${effectiveStatic})`,
-    });
+    let channel: TextChannel;
+    try {
+      channel = (await guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        parent: targetCategoryId || undefined,
+        permissionOverwrites,
+        topic: `Личный канал отчетов академика ${member.user.tag} (Статик: ${effectiveStatic})`,
+      })) as TextChannel;
+    } catch (createErr: any) {
+      console.warn(`[Academy] Failed to create channel with category (${createErr.message}). Retrying fallback...`);
+      channel = (await guild.channels.create({
+        name: `${prefix}${member.id.slice(-4)}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          {
+            id: guild.roles.everyone?.id || guild.id,
+            deny: [PermissionFlagsBits.ViewChannel],
+          },
+          {
+            id: member.id,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+          },
+          ...(botUserId ? [{
+            id: botUserId,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels],
+          }] : []),
+        ],
+        topic: `Личный канал отчетов академика ${member.user.tag} (Статик: ${effectiveStatic})`,
+      })) as TextChannel;
+    }
 
     const academyRecord = await prisma.academyChannel.create({
       data: {

@@ -638,12 +638,15 @@ export function registerInteractionHandler() {
           return;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[InteractionHandler Error]:', error);
       if (interaction.isRepliable()) {
-        const replyOptions = { content: '❌ Произошла ошибка при выполнении действия.', ephemeral: true };
+        const errorText = '❌ Произошла непредвиденная ошибка при выполнении действия. Проверьте права бота или повторите попытку позже.';
+        const replyOptions = { content: errorText, ephemeral: true };
         if (interaction.deferred || interaction.replied) {
-          await interaction.followUp(replyOptions).catch(() => null);
+          await interaction.editReply(replyOptions).catch(async () => {
+            await interaction.followUp(replyOptions).catch(() => null);
+          });
         } else {
           await interaction.reply(replyOptions).catch(() => null);
         }

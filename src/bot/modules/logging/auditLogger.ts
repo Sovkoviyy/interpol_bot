@@ -30,19 +30,23 @@ export class AuditLogger {
     }
 
     if (!category) {
+      const botUserId = guild.members.me?.id || guild.client?.user?.id;
+      const catOverwrites: any[] = [
+        {
+          id: guild.roles.everyone.id,
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+      ];
+      if (botUserId) {
+        catOverwrites.push({
+          id: botUserId,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks],
+        });
+      }
       category = await guild.channels.create({
         name: 'LOGS',
         type: ChannelType.GuildCategory,
-        permissionOverwrites: [
-          {
-            id: guild.roles.everyone.id,
-            deny: [PermissionFlagsBits.ViewChannel],
-          },
-          {
-            id: guild.members.me?.id || '',
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks],
-          },
-        ],
+        permissionOverwrites: catOverwrites,
       });
     }
 
