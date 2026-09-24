@@ -21,7 +21,6 @@ import { Blacklist } from './pages/Blacklist';
 import { Leaves } from './pages/Leaves';
 import { Profiles } from './pages/Profiles';
 import { ServerSetup } from './pages/ServerSetup';
-import { ApiDocs } from './pages/ApiDocs';
 import { ModalProvider } from './context/ModalContext';
 
 export const App: React.FC = () => {
@@ -99,8 +98,6 @@ export const App: React.FC = () => {
                         <Route path="/logs" element={<Logs />} />
                         <Route path="/roles" element={<Roles />} />
                         <Route path="/stats" element={<Stats />} />
-                        <Route path="/docs" element={<ApiDocs />} />
-                        <Route path="/api-docs" element={<ApiDocs />} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                       </Routes>
                     </main>

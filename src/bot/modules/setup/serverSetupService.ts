@@ -241,12 +241,14 @@ export class ServerSetupService {
       where: { guildId: guild.id },
       update: {
         channelId: recruitApplyChannel.id,
-        categoryId: recruitReviewChannel.id,
+        categoryId: recruitCat.id,
+        logChannelId: recruitReviewChannel.id,
       },
       create: {
         guildId: guild.id,
         channelId: recruitApplyChannel.id,
-        categoryId: recruitReviewChannel.id,
+        categoryId: recruitCat.id,
+        logChannelId: recruitReviewChannel.id,
       },
     });
 

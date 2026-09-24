@@ -8,30 +8,19 @@ import {
   Calendar, 
   Mic, 
   ShieldAlert, 
-  Key, 
-  Copy, 
-  Check, 
-  Terminal, 
-  Sparkles,
   Bot
 } from 'lucide-react';
 import api from '../api/client';
-import { useModal } from '../context/ModalContext';
 
 export const Stats: React.FC = () => {
-  const modal = useModal();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [generatingKey, setGeneratingKey] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const fetchStats = async () => {
     try {
       setLoading(true);
       const res = await api.get('/stats');
       setStats(res.data);
-      setApiKey(res.data.apiKey);
     } catch (err) {
       console.error(err);
     } finally {
@@ -42,48 +31,6 @@ export const Stats: React.FC = () => {
   useEffect(() => {
     fetchStats();
   }, []);
-
-  const handleGenerateKey = async () => {
-    if (apiKey) {
-      const confirmed = await modal.confirm({
-        title: 'Перевыпуск ключа',
-        message: 'Старый API-ключ перестанет действовать. Вы уверены, что хотите перевыпустить новый ключ?',
-        confirmText: 'Перевыпустить',
-        type: 'pink',
-      });
-      if (!confirmed) return;
-    }
-
-    try {
-      setGeneratingKey(true);
-      const res = await api.post('/stats/api-key/generate');
-      if (res.data?.apiKey) {
-        setApiKey(res.data.apiKey);
-        modal.alert({
-          title: 'Успешно',
-          message: 'Новый API-ключ успешно сгенерирован!',
-          type: 'success',
-        });
-      }
-    } catch (err) {
-      modal.alert({
-        title: 'Ошибка',
-        message: 'Ошибка при генерации ключа API',
-        type: 'error',
-      });
-    } finally {
-      setGeneratingKey(false);
-    }
-  };
-
-  const handleCopyCurl = () => {
-    if (!apiKey) return;
-    const origin = window.location.origin;
-    const curl = `curl -H "X-API-Key: ${apiKey}" ${origin}/api/stats/external`;
-    navigator.clipboard.writeText(curl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   if (loading) {
     return (
@@ -245,74 +192,6 @@ export const Stats: React.FC = () => {
         </div>
       </div>
 
-      {/* External API Access Section */}
-      <div className="bg-[#151921] border border-pink-500/20 rounded-2xl p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-pink-600/10 rounded-full blur-3xl pointer-events-none"></div>
-
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
-              <Key className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                Внешний доступ к статистике по REST API
-                <span className="px-2 py-0.5 rounded-full bg-pink-500/10 border border-pink-500/30 text-[10px] text-pink-400 font-semibold">
-                  API Key
-                </span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Используйте этот эндпоинт для автоматической выгрузки статистики на ваш сайт, форум или во внешние боты
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleGenerateKey}
-            disabled={generatingKey}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs transition-all shadow-md shadow-pink-600/25 disabled:opacity-50"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{apiKey ? 'Перевыпустить ключ' : 'Создать API ключ'}</span>
-          </button>
-        </div>
-
-        {apiKey ? (
-          <div className="space-y-3 mt-4">
-            <div>
-              <label className="block text-[11px] font-medium text-slate-400 mb-1">Ваш секретный API-ключ:</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={apiKey}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-pink-300 font-mono"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-medium text-slate-400 mb-1">Пример cURL запроса:</label>
-              <div className="relative">
-                <pre className="p-3 bg-[#0B0E14] border border-[#1E232F] rounded-xl text-slate-300 text-xs font-mono overflow-x-auto">
-                  {`curl -X GET "${window.location.origin}/api/stats/external" \\\n  -H "X-API-Key: ${apiKey}"`}
-                </pre>
-                <button
-                  onClick={handleCopyCurl}
-                  className="absolute top-2.5 right-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-[#1E232F] text-slate-300 hover:text-white border border-[#1E232F] text-[11px] transition-all"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Скопировано!' : 'Копировать'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-slate-400 italic">
-            Ключ пока не создан. Нажмите кнопку «Создать API ключ», чтобы получить доступ к внешнему API.
-          </p>
-        )}
-      </div>
     </div>
   );
 };

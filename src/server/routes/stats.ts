@@ -1,10 +1,7 @@
-import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
+import { Router, Response } from 'express';
 import bot from '../../bot/client';
-import config from '../../config';
 import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
-import { ChannelType } from 'discord.js';
 import { resolveGuildId } from '../utils/guild';
 
 export const statsRouter = Router();
@@ -137,89 +134,11 @@ async function getCachedStatsData(guildId: string, forceFresh = false) {
   return data;
 }
 
-// Simple in-memory rate limiter: max 60 req/min per IP/Key
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(clientIdentifier: string): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(clientIdentifier);
-  if (!record || now > record.resetAt) {
-    rateLimitMap.set(clientIdentifier, { count: 1, resetAt: now + 60000 });
-    return true;
-  }
-  if (record.count >= 60) {
-    return false;
-  }
-  record.count++;
-  return true;
-}
-
-// 1. Dashboard internal stats endpoint
+// Dashboard internal stats endpoint
 statsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
-  const data = await getCachedStatsData(guildId, true); // internal dashboard gets fresh data
-
-  const guildConfig = await prisma.guildConfig.findUnique({
-    where: { guildId },
-    select: { statsApiKey: true },
-  });
-
-  return res.json({
-    ...data,
-    apiKey: guildConfig?.statsApiKey || null,
-  });
-});
-
-// 2. Generate/Regenerate API Key for external access
-statsRouter.post('/api-key/generate', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = resolveGuildId(req);
-  const newApiKey = 'interpol_' + crypto.randomBytes(24).toString('hex');
-
-  await prisma.guildConfig.upsert({
-    where: { guildId },
-    update: { statsApiKey: newApiKey },
-    create: { guildId, statsApiKey: newApiKey },
-  });
-
-  return res.json({ success: true, apiKey: newApiKey });
-});
-
-// 3. External API endpoint (authenticated via X-API-Key, Bearer token, or query param)
-statsRouter.get('/external', async (req: Request, res: Response) => {
-  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
-  const apiKey = (req.headers['x-api-key'] || req.query.api_key || req.headers.authorization?.replace(/^Bearer\s+/i, '')) as string;
-
-  if (!checkRateLimit(apiKey || clientIp)) {
-    return res.status(429).json({ error: 'Too Many Requests: Rate limit exceeded (60 req/min)' });
-  }
-
-  if (!apiKey || typeof apiKey !== 'string' || apiKey.length < 10) {
-    return res.status(401).json({
-      error: 'Unauthorized: missing or invalid API key format',
-      usage: 'Pass your API key in header "X-API-Key: <key>" or query param "?api_key=<key>"',
-    });
-  }
-
-  // Find guild with this API key
-  const guildConfig = await prisma.guildConfig.findFirst({
-    where: { statsApiKey: apiKey },
-  });
-
-  // If no guild matches directly, check if it matches .env fallback
-  let targetGuildId = guildConfig?.guildId;
-  if (!targetGuildId && process.env.STATS_API_KEY && process.env.STATS_API_KEY === apiKey) {
-    targetGuildId = config.discord.guildId;
-  }
-
-  if (!targetGuildId) {
-    return res.status(403).json({ error: 'Forbidden: Invalid API key' });
-  }
-
-  const data = await getCachedStatsData(targetGuildId);
-  return res.json({
-    success: true,
-    data,
-  });
+  const data = await getCachedStatsData(guildId, true);
+  return res.json(data);
 });
 
 export default statsRouter;

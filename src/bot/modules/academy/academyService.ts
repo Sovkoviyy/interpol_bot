@@ -7,7 +7,8 @@ import {
   ActionRowBuilder, 
   ButtonBuilder, 
   ButtonStyle, 
-  TextChannel 
+  TextChannel,
+  Message
 } from 'discord.js';
 import prisma from '../../../database/client';
 import bot from '../../client';
@@ -216,26 +217,76 @@ export class AcademyService {
       await member.roles.add(config.academicRoleId).catch(() => null);
     }
 
-    // Post initial greeting embed with button to submit report
-    const welcomeEmbed = new EmbedBuilder()
-      .setColor(0xEC4899)
-      .setTitle(`🎓 Личный канал академии | ${effectiveStatic}`)
+    // Post initial greeting embed with button to submit report and pin it
+    const welcomeEmbed = this.buildStatusEmbed(
+      { id: member.id, tag: member.user.tag, avatarUrl: member.user.displayAvatarURL() },
+      effectiveStatic,
+      0,
+      academyRecord.requiredMp,
+      academyRecord.penaltyMp
+    );
+    const row = this.getStatusButtonsRow();
+
+    const welcomeMsg = await channel.send({ content: `${member}`, embeds: [welcomeEmbed], components: [row] });
+    if (welcomeMsg && typeof welcomeMsg.pin === 'function') {
+      await Promise.resolve(welcomeMsg.pin()).catch(e => console.warn('[Academy] Could not pin welcome message:', e));
+    }
+
+    await prisma.academyChannel.update({
+      where: { id: academyRecord.id },
+      data: { pinnedMessageId: welcomeMsg?.id || null },
+    }).catch(() => null);
+
+    return { channel, academyRecord };
+  }
+
+  /**
+   * Builds the live status embed for an academician's personal channel
+   */
+  public static buildStatusEmbed(
+    memberUser: { id: string; tag?: string; avatarUrl?: string },
+    staticId: string,
+    approvedCount: number,
+    requiredMp: number,
+    penaltyMp: number
+  ): EmbedBuilder {
+    const totalNeeded = requiredMp + penaltyMp;
+    const remaining = Math.max(0, totalNeeded - approvedCount);
+    const percent = Math.min(100, Math.round((approvedCount / (totalNeeded || 1)) * 100));
+
+    // Visual progress bar [████░░░░░░]
+    const totalBars = 10;
+    const filledBars = Math.min(totalBars, Math.round((approvedCount / (totalNeeded || 1)) * totalBars));
+    const emptyBars = totalBars - filledBars;
+    const progressBar = '█'.repeat(filledBars) + '░'.repeat(emptyBars);
+
+    return new EmbedBuilder()
+      .setColor(approvedCount >= totalNeeded ? 0x10B981 : 0xEC4899)
+      .setTitle(`🎓 Личный канал академии | ${staticId}`)
       .setDescription(
-        `Приветствуем тебя в семье, ${member}!\n\n` +
-        `**Твой статик:** \`${effectiveStatic}\`\n` +
-        `**Условие повышения на 2 ранг:** Отыграть и сдать отчеты по **${academyRecord.requiredMp + academyRecord.penaltyMp} МП**.\n\n` +
+        `Приветствуем тебя в семье, <@${memberUser.id}>!\n\n` +
+        `**Твой статик:** \`${staticId}\`\n` +
+        `**Условие повышения на 2 ранг:** Отыграть и сдать отчеты по **${totalNeeded} МП**.\n\n` +
+        `\`[${progressBar}]\` **${percent}%** (${approvedCount}/${totalNeeded} МП)\n\n` +
         `📌 **Как сдавать отчеты:**\n` +
-        `После участия в мероприятии (Дроп, Цех, ВЗМ, МЦЛ, Капт) нажми на кнопку ниже **«Сдать отчет по МП»**, укажи тип МП и прикрепи ссылку на скриншот (или загрузи скрин прямо сюда).\n\n` +
-        `Рекрутеры проверят твой отчет, и бот обновит твой прогресс. Удачи!`
+        `После участия в мероприятии (Дроп, Цех, ВЗМ, МЦЛ, Капт) нажми на кнопку ниже **«📸 Сдать отчет по МП»**, укажи тип МП и прикрепи ссылку на скриншот (или загрузи скрин прямо сюда).\n\n` +
+        `Рекрутеры проверят твой отчет. После одобрения/отклонения сообщение с отчетом удаляется, а этот закрепленный статус обновляется автоматически.`
       )
       .addFields(
-        { name: '📊 Текущий прогресс', value: `0 / ${academyRecord.requiredMp + academyRecord.penaltyMp} МП`, inline: true },
-        { name: '⚖️ Штрафы', value: `${academyRecord.penaltyMp} МП`, inline: true }
+        { name: '📊 Сдано отчетов', value: `\`${approvedCount} / ${totalNeeded} МП\``, inline: true },
+        { name: '⚖️ Штрафов', value: `\`${penaltyMp} МП\``, inline: true },
+        { name: '⏳ Осталось сдать', value: `\`${remaining} МП\``, inline: true }
       )
-      .setThumbnail(member.user.displayAvatarURL())
+      .setThumbnail(memberUser.avatarUrl || null)
+      .setFooter({ text: 'INTERPOL Academy • Статус обновляется автоматически' })
       .setTimestamp();
+  }
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  /**
+   * Action buttons for the academy channel status message
+   */
+  public static getStatusButtonsRow(): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('academy_submit_report_btn')
         .setLabel('📸 Сдать отчет по МП')
@@ -245,10 +296,84 @@ export class AcademyService {
         .setLabel('📊 Мой прогресс')
         .setStyle(ButtonStyle.Secondary)
     );
+  }
 
-    await channel.send({ content: `${member}`, embeds: [welcomeEmbed], components: [row] });
+  /**
+   * Refreshes the pinned status message in the academy channel with live MP/penalty counts
+   */
+  public static async refreshStatusMessage(channel: TextChannel, academyChannelId?: string): Promise<void> {
+    try {
+      if (!channel || !channel.isTextBased()) return;
 
-    return { channel, academyRecord };
+      const academy = academyChannelId
+        ? await prisma.academyChannel.findUnique({ where: { id: academyChannelId } })
+        : await prisma.academyChannel.findFirst({ where: { channelId: channel.id } });
+
+      if (!academy) return;
+
+      const profile = await prisma.userProfile.findUnique({
+        where: { guildId_userId: { guildId: academy.guildId, userId: academy.userId } },
+      }).catch(() => null);
+
+      const penaltyMp = profile ? profile.penaltyMp : academy.penaltyMp;
+      const approvedCount = academy.approvedMpCount;
+      const requiredMp = academy.requiredMp;
+
+      const guild = channel.guild || (bot.guilds.cache.get(academy.guildId) || await bot.guilds.fetch(academy.guildId).catch(() => null));
+      const member = guild ? await guild.members.fetch(academy.userId).catch(() => null) : null;
+      const avatarUrl = (member && typeof member.user?.displayAvatarURL === 'function')
+        ? member.user.displayAvatarURL()
+        : undefined;
+
+      const embed = this.buildStatusEmbed(
+        { id: academy.userId, tag: academy.userTag || member?.user?.tag, avatarUrl },
+        academy.staticId || profile?.staticId || '—',
+        approvedCount,
+        requiredMp,
+        penaltyMp
+      );
+
+      const row = this.getStatusButtonsRow();
+
+      let msg: Message | null = null;
+      if (academy.pinnedMessageId && typeof channel.messages?.fetch === 'function') {
+        msg = await channel.messages.fetch(academy.pinnedMessageId).catch(() => null);
+      }
+
+      if (!msg && typeof channel.messages?.fetchPinned === 'function') {
+        // Try to find existing pinned bot message
+        const pinned = await channel.messages.fetchPinned().catch(() => null);
+        if (pinned) {
+          msg = pinned.find(m => m.author.id === channel.client?.user?.id) || null;
+        }
+      }
+
+      if (msg) {
+        if (typeof msg.edit === 'function') {
+          await msg.edit({ embeds: [embed], components: [row] }).catch(() => null);
+        }
+        if (typeof msg.pin === 'function' && !msg.pinned) {
+          await Promise.resolve(msg.pin()).catch(() => null);
+        }
+        if (academy.pinnedMessageId !== msg.id) {
+          await prisma.academyChannel.update({
+            where: { id: academy.id },
+            data: { pinnedMessageId: msg.id },
+          }).catch(() => null);
+        }
+      } else {
+        const newMsg = await channel.send({ content: `<@${academy.userId}>`, embeds: [embed], components: [row] });
+        if (newMsg && typeof newMsg.pin === 'function') {
+          await Promise.resolve(newMsg.pin()).catch(() => null);
+        }
+        await prisma.academyChannel.update({
+          where: { id: academy.id },
+          data: { pinnedMessageId: newMsg?.id || null },
+        }).catch(() => null);
+      }
+    } catch (err) {
+      console.error('[Academy] refreshStatusMessage error:', err);
+    }
   }
 
   /**
@@ -361,6 +486,18 @@ export class AcademyService {
     const guild = reviewer.guild || (report.guildId ? (bot.guilds.cache.get(report.guildId) || await bot.guilds.fetch(report.guildId).catch(() => null)) : null);
     const channel = guild ? ((guild.channels.cache.get(report.channelId) || await guild.channels.fetch(report.channelId).catch(() => null)) as TextChannel | null) : null;
 
+    // Delete the report message itself after review
+    if (report.messageId && channel && typeof channel.messages?.fetch === 'function') {
+      try {
+        const reportMsg = await channel.messages.fetch(report.messageId).catch(() => null);
+        if (reportMsg && typeof reportMsg.delete === 'function') {
+          await Promise.resolve(reportMsg.delete()).catch(() => null);
+        }
+      } catch (err) {
+        console.warn('[Academy] Could not delete report message:', err);
+      }
+    }
+
     if (approved) {
       // Increment MP count
       const updatedChannel = await prisma.academyChannel.update({
@@ -369,6 +506,11 @@ export class AcademyService {
       });
 
       await ProfileService.incrementMp(guild ? guild.id : report.guildId, report.userId, 1);
+
+      // Refresh the pinned status message
+      if (channel) {
+        await this.refreshStatusMessage(channel, updatedChannel.id);
+      }
 
       const neededTotal = updatedChannel.requiredMp + updatedChannel.penaltyMp;
       const current = updatedChannel.approvedMpCount;
@@ -417,6 +559,8 @@ export class AcademyService {
       }
     } else {
       if (channel) {
+        await this.refreshStatusMessage(channel, report.academyChannelId || undefined);
+
         const rejectEmbed = new EmbedBuilder()
           .setColor(0xEF4444)
           .setTitle('❌ Отчет по МП отклонен')
@@ -529,6 +673,8 @@ export class AcademyService {
       }) || academy;
 
       if (channel && channel.isTextBased()) {
+        await this.refreshStatusMessage(channel, academyChannelId);
+
         const penaltyEmbed = new EmbedBuilder()
           .setColor(0xEF4444)
           .setTitle('⚠️ Повышение отклонено | Назначен штраф')

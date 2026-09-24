@@ -18,10 +18,7 @@ import {
   CalendarOff,
   IdCard,
   UserX,
-  FolderTree,
-  Terminal,
-  Code2,
-  ExternalLink
+  FolderTree
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -80,7 +77,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
         { to: '/setup', label: 'Каналы & Сервер', icon: FolderTree, visible: isAdmin || userPermissions?.manageSettings },
         { to: '/messages', label: 'Сообщения бота', icon: MessageSquare, visible: isAdmin || userPermissions?.manageSettings },
         { to: '/embeds', label: 'Embed Генератор', icon: Sparkles, visible: isAdmin || userPermissions?.manageSettings },
-        { to: '/docs', label: 'API & Документация', icon: Terminal, visible: true },
       ],
     },
   ];
@@ -135,27 +131,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
             );
           })}
         </nav>
-      </div>
-
-      {/* Bottom API Quick Access Box */}
-      <div className="p-2.5 border-t border-[#1E232F] bg-[#0E1118]/80 shrink-0">
-        <NavLink
-          to="/docs"
-          className={({ isActive }) =>
-            `flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-              isActive
-                ? 'bg-pink-600 text-white font-semibold shadow-md shadow-pink-600/25'
-                : 'bg-[#151922] text-slate-300 hover:text-white hover:bg-pink-600/20 border border-slate-700/40 hover:border-pink-500/40'
-            }`
-          }
-        >
-          <Code2 className="w-4 h-4 text-pink-400 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="truncate font-semibold text-[11px]">API Документация</div>
-            <div className="text-[9px] text-slate-400 truncate">REST API & X-API-Key</div>
-          </div>
-          <ExternalLink className="w-3 h-3 text-slate-500 shrink-0" />
-        </NavLink>
       </div>
 
       {/* Footer Info */}

@@ -1,5 +1,6 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
 import prisma from '../../../database/client';
+import bot from '../../client';
 
 export class ProfileService {
   /**
@@ -63,6 +64,22 @@ export class ProfileService {
         penaltyMp: { increment: count },
       },
     });
+
+    try {
+      const { AcademyService } = await import('../academy/academyService');
+      const activeChannels = await prisma.academyChannel.findMany({
+        where: { guildId, userId, status: 'ACTIVE' },
+      });
+      const g = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+      if (g) {
+        for (const ac of activeChannels) {
+          const ch = (g.channels.cache.get(ac.channelId) || await g.channels.fetch(ac.channelId).catch(() => null)) as any;
+          if (ch && ch.isTextBased()) {
+            await AcademyService.refreshStatusMessage(ch, ac.id);
+          }
+        }
+      }
+    } catch {}
 
     return updated;
   }

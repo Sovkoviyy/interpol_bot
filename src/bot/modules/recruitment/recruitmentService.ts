@@ -30,6 +30,50 @@ export class RecruitmentService {
   }
 
   /**
+   * Helper to send recruitment audit logs to the designated recruitment review/log channel (#заявки-набор)
+   */
+  public static async sendRecruitmentLog(
+    guild: Guild,
+    embed: EmbedBuilder,
+    files: any[] = []
+  ): Promise<void> {
+    try {
+      if (!guild) return;
+      const config = await prisma.recruitmentConfig.findUnique({
+        where: { guildId: guild.id },
+      }).catch(() => null);
+
+      let logChannel: TextChannel | null = null;
+      if (config?.logChannelId) {
+        logChannel = (guild.channels.cache.get(config.logChannelId) ||
+          await guild.channels.fetch(config.logChannelId).catch(() => null)) as TextChannel | null;
+      }
+
+      // Fallback by channel name if not configured or if logChannelId points to wrong type/deleted
+      if (!logChannel || !logChannel.isTextBased()) {
+        logChannel = (guild.channels.cache.find(
+          c => c.type === ChannelType.GuildText && (c.name.toLowerCase() === 'заявки-набор' || c.name.toLowerCase() === 'лог-заявок')
+        ) || null) as TextChannel | null;
+
+        if (logChannel && config && config.logChannelId !== logChannel.id) {
+          await prisma.recruitmentConfig.update({
+            where: { guildId: guild.id },
+            data: { logChannelId: logChannel.id },
+          }).catch(() => null);
+        }
+      }
+
+      if (logChannel && logChannel.isTextBased()) {
+        await logChannel.send({ embeds: [embed], files }).catch(e => {
+          console.error('[Recruitment] Error sending log to recruitReviewChannel:', e);
+        });
+      }
+    } catch (err) {
+      console.error('[Recruitment] sendRecruitmentLog error:', err);
+    }
+  }
+
+  /**
    * Get default form questions if none configured in DB
    */
   public static getDefaultQuestions(): FormQuestion[] {
@@ -387,6 +431,24 @@ export class RecruitmentService {
         content: `✅ Ваша заявка успешно создана! Перейдите в канал: <#${ticketChannel.id}>`,
       }).catch(() => null);
 
+      // Log to Recruitment Channel (#заявки-набор)
+      const recruitLogEmbed = new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setTitle(`📋 Новая заявка на вступление: ${interaction.user.tag}`)
+        .setDescription(
+          `**Кандидат:** ${interaction.user} (\`${interaction.user.tag}\` / \`${interaction.user.id}\`)\n` +
+          `**Канал заявки:** <#${ticketChannel.id}>\n` +
+          `**Время подачи:** <t:${Math.floor(Date.now() / 1000)}:F> (<t:${Math.floor(Date.now() / 1000)}:R>)`
+        )
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .setTimestamp();
+
+      for (const [q, a] of Object.entries(answers)) {
+        recruitLogEmbed.addFields({ name: q, value: a || 'Не указано', inline: false });
+      }
+
+      await this.sendRecruitmentLog(guild, recruitLogEmbed);
+
       // Log to BOT logs
       const logEmbed = new EmbedBuilder()
         .setColor(0x3498DB)
@@ -472,6 +534,21 @@ export class RecruitmentService {
     await interaction.reply({
       content: `📌 Рекрутер ${interaction.user} взял заявку на рассмотрение.`,
     });
+
+    const guild = await this.resolveGuild(interaction);
+    if (guild) {
+      const claimEmbed = new EmbedBuilder()
+        .setColor(0xFEE75C)
+        .setTitle(`📌 Заявка взята на рассмотрение: ${application.userTag}`)
+        .setDescription(
+          `**Кандидат:** <@${application.userId}> (\`${application.userTag}\`)\n` +
+          `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
+          (application.channelId ? `**Канал заявки:** <#${application.channelId}>\n` : '') +
+          `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
+        )
+        .setTimestamp();
+      await this.sendRecruitmentLog(guild, claimEmbed);
+    }
 
     // Update original embed if possible
     if (interaction.message && interaction.message.embeds.length > 0) {
@@ -567,25 +644,18 @@ export class RecruitmentService {
     const channel = interaction.channel as TextChannel;
     const transcriptAttachment = channel ? await TranscriptService.generateTranscript(channel) : null;
 
-    const logChannelId = config?.logChannelId;
-    if (logChannelId && transcriptAttachment) {
-      const logChannel = (guild.channels.cache.get(logChannelId) ||
-        await guild.channels.fetch(logChannelId).catch(() => null)) as TextChannel | null;
-      if (logChannel && logChannel.isTextBased()) {
-        const logEmbed = new EmbedBuilder()
-          .setColor(0x57F287)
-          .setTitle(`✅ Заявка одобрена: ${application.userTag}`)
-          .setDescription(
-            `**Кандидат:** <@${application.userId}> (\`${application.userId}\`)\n` +
-            `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-            `**Канал:** \`#${channel?.name || 'ticket'}\`\n` +
-            `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-          )
-          .setTimestamp();
+    const logEmbed = new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle(`✅ Заявка одобрена: ${application.userTag}`)
+      .setDescription(
+        `**Кандидат:** <@${application.userId}> (\`${application.userId}\`)\n` +
+        `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
+        `**Канал:** \`#${channel?.name || 'ticket'}\`\n` +
+        `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
+      )
+      .setTimestamp();
 
-        await logChannel.send({ embeds: [logEmbed], files: [transcriptAttachment] });
-      }
-    }
+    await this.sendRecruitmentLog(guild, logEmbed, transcriptAttachment ? [transcriptAttachment] : []);
 
     // Bot log
     const botEmbed = new EmbedBuilder()
@@ -693,25 +763,18 @@ export class RecruitmentService {
     const channel = interaction.channel as TextChannel;
     const transcriptAttachment = channel ? await TranscriptService.generateTranscript(channel) : null;
 
-    const logChannelId = config?.logChannelId;
-    if (logChannelId && transcriptAttachment) {
-      const logChannel = (guild.channels.cache.get(logChannelId) ||
-        await guild.channels.fetch(logChannelId).catch(() => null)) as TextChannel | null;
-      if (logChannel && logChannel.isTextBased()) {
-        const logEmbed = new EmbedBuilder()
-          .setColor(0xED4245)
-          .setTitle(`❌ Заявка отклонена: ${application.userTag}`)
-          .setDescription(
-            `**Кандидат:** <@${application.userId}> (\`${application.userId}\`)\n` +
-            `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-            `**Причина:** ${reason}\n` +
-            `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-          )
-          .setTimestamp();
+    const logEmbed = new EmbedBuilder()
+      .setColor(0xED4245)
+      .setTitle(`❌ Заявка отклонена: ${application.userTag}`)
+      .setDescription(
+        `**Кандидат:** <@${application.userId}> (\`${application.userId}\`)\n` +
+        `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
+        `**Причина:** ${reason}\n` +
+        `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
+      )
+      .setTimestamp();
 
-        await logChannel.send({ embeds: [logEmbed], files: [transcriptAttachment] });
-      }
-    }
+    await this.sendRecruitmentLog(guild, logEmbed, transcriptAttachment ? [transcriptAttachment] : []);
 
     // Bot log
     const botEmbed = new EmbedBuilder()

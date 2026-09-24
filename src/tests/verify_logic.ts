@@ -70,10 +70,17 @@ async function runTests() {
   console.assert(checkinDiffMinutes === 10, 'Checkin default offset should be 10 minutes');
   console.log('✅ Test 5: Quick date and checkin time calculations verified');
 
-  // Test 6: API Key format
-  const sampleApiKey = 'interpol_3f8a91b2c4d5e6f7a8b9c0d1e2f3a4b5';
-  console.assert(sampleApiKey.startsWith('interpol_'), 'API key must start with interpol_ prefix');
-  console.log('✅ Test 6: External stats API key format verified');
+  // Test 6: Academy Pinned Message & Progress Calculation
+  const academyTargetMps = 10;
+  const academyPenaltyMps = 2;
+  const academyApproved = 7;
+  const academyTotalNeeded = academyTargetMps + academyPenaltyMps;
+  const academyRemaining = Math.max(0, academyTotalNeeded - academyApproved);
+  const academyPercent = Math.min(100, Math.round((academyApproved / (academyTotalNeeded || 1)) * 100));
+  console.assert(academyTotalNeeded === 12, 'Total needed should include base + penalty');
+  console.assert(academyRemaining === 5, 'Remaining should be 5');
+  console.assert(academyPercent === 58, 'Percentage should calculate accurately');
+  console.log('✅ Test 6: Academy pinned message live progress calculation verified');
 
   // Test 7: 30-Minute Message Cleanup Check
   const eventFinishedAt = new Date(Date.now() - 31 * 60 * 1000); // 31 minutes ago

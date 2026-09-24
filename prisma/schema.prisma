@@ -260,6 +260,7 @@ model AcademyChannel {
   userTag         String?
   staticId        String?
   channelId       String      @unique // Discord text channel ID
+  pinnedMessageId String?     // ID of pinned status embed message
   status          String      @default("ACTIVE") // ACTIVE, PROMOTED, ARCHIVED
   approvedMpCount Int         @default(0)
   requiredMp      Int         @default(10)
