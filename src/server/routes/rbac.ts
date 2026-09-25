@@ -14,7 +14,18 @@ rbacRouter.get('/', requireAuth, requirePermission('manageSettings'), async (req
     where: { guildId },
   });
 
-  return res.json({ permissions });
+  const parsed = permissions.map((p) => {
+    let modular: Record<string, boolean> = {};
+    try {
+      if (p.permissionsJson) modular = JSON.parse(p.permissionsJson);
+    } catch {}
+    return {
+      ...p,
+      modular,
+    };
+  });
+
+  return res.json({ permissions: parsed });
 });
 
 // Update or set permissions for a role
@@ -29,10 +40,14 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
     viewLogs,
     manageAcademy,
     manageVoiceTracker,
-    antiNukeAlerts
+    antiNukeAlerts,
+    modular,
+    permissionsJson
   } = req.body;
 
   if (!roleId) return res.status(400).json({ error: 'Role ID is required' });
+
+  const finalJson = permissionsJson || (modular ? JSON.stringify(modular) : null);
 
   const record = await prisma.rolePermission.upsert({
     where: {
@@ -47,6 +62,7 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageAcademy: Boolean(manageAcademy),
       manageVoiceTracker: Boolean(manageVoiceTracker),
       antiNukeAlerts: Boolean(antiNukeAlerts),
+      permissionsJson: finalJson,
     },
     create: {
       guildId,
@@ -59,6 +75,7 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageAcademy: Boolean(manageAcademy),
       manageVoiceTracker: Boolean(manageVoiceTracker),
       antiNukeAlerts: Boolean(antiNukeAlerts),
+      permissionsJson: finalJson,
     },
   });
 

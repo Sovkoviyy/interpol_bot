@@ -2,6 +2,7 @@ import {
   Guild,
   GuildMember,
   TextChannel,
+  VoiceChannel,
   ChannelType,
   PermissionFlagsBits,
   EmbedBuilder,
@@ -19,6 +20,9 @@ import { FormQuestion } from '../../../shared/types';
 import { TranscriptService } from './transcript';
 import { AuditLogger } from '../logging/auditLogger';
 import { AcademyService } from '../academy/academyService';
+import { ProfileService } from '../profiles/profileService';
+import { buildCustomTemplateEmbed } from '../../utils/templateEmbed';
+import { NicknameService } from '../nicknames/nicknameService';
 import bot from '../../client';
 
 export class RecruitmentService {
@@ -52,7 +56,7 @@ export class RecruitmentService {
       // Fallback by channel name if not configured or if logChannelId points to wrong type/deleted
       if (!logChannel || !logChannel.isTextBased()) {
         logChannel = (guild.channels.cache.find(
-          c => c.type === ChannelType.GuildText && (c.name.toLowerCase() === 'заявки-набор' || c.name.toLowerCase() === 'лог-заявок')
+          c => c.type === ChannelType.GuildText && (c.name.toLowerCase() === 'заявки-лог' || c.name.toLowerCase() === 'заявки-набор' || c.name.toLowerCase() === 'лог-заявок')
         ) || null) as TextChannel | null;
 
         if (logChannel && config && config.logChannelId !== logChannel.id) {
@@ -241,6 +245,45 @@ export class RecruitmentService {
         recruiterRoleIds = [];
       }
 
+      // Parse candidate character name and static ID from answers
+      let candidateStaticId = '';
+      let candidateCharName = '';
+      for (const [key, val] of Object.entries(answers)) {
+        const k = key.toLowerCase();
+        if (!candidateCharName && (k.includes('имя') || k.includes('ник') || k.includes('name') || k.includes('rp'))) {
+          candidateCharName = val.trim();
+        }
+        if (!candidateStaticId && (k.includes('статик') || k.includes('static') || k.includes('паспорт') || k.includes('id'))) {
+          candidateStaticId = val.replace(/[^\d]/g, '').trim() || val.trim();
+        }
+      }
+
+      // Automatically bind provided data directly into UserProfile
+      try {
+        if (candidateStaticId) {
+          await ProfileService.setStatic(
+            guild.id,
+            interaction.user.id,
+            candidateStaticId,
+            candidateCharName,
+            interaction.user.tag,
+            true
+          );
+        } else {
+          await ProfileService.getOrCreateProfile(guild.id, interaction.user.id, interaction.user.tag);
+        }
+      } catch (bindErr: any) {
+        console.warn('[Recruitment] Could not auto-bind static on modal submit:', bindErr.message);
+      }
+
+      // Channel name: format like hit-251156 (candidateName-staticId)
+      const cleanNick = (candidateCharName || interaction.user.username)
+        .toLowerCase()
+        .replace(/[^a-z0-9а-я_-]/gi, '')
+        .slice(0, 15);
+      const cleanStatic = candidateStaticId ? candidateStaticId.slice(0, 10) : interaction.user.id.slice(-4);
+      const channelName = `${cleanNick || 'кандидат'}-${cleanStatic}`;
+
       // Resolve bot user ID safely
       const botUserId = guild.members.me?.id || bot.user?.id;
 
@@ -297,10 +340,6 @@ export class RecruitmentService {
         }
       }
 
-      // Channel name: lowercase, valid symbols only, non-empty fallback
-      const cleanUsername = interaction.user.username.toLowerCase().replace(/[^a-z0-9а-я_-]/g, '').slice(0, 20);
-      const channelName = `заявка-${cleanUsername || interaction.user.id.slice(-4)}`;
-
       // Validate parent category: must exist, be GuildCategory, and have < 50 channels
       let parentCategoryId: string | undefined = undefined;
       if (recConfig.categoryId && typeof recConfig.categoryId === 'string' && /^\d{17,20}$/.test(recConfig.categoryId)) {
@@ -309,11 +348,40 @@ export class RecruitmentService {
           const childCount = guild.channels.cache.filter(c => c.parentId === cat.id).size;
           if (childCount < 50) {
             parentCategoryId = cat.id;
-          } else {
-            console.warn(`[Recruitment] Category ${cat.name} (${cat.id}) is full (50 channels max). Creating ticket channel at root level.`);
           }
-        } else {
-          console.warn(`[Recruitment] Category ID ${recConfig.categoryId} is invalid or not a GuildCategory. Falling back to root level.`);
+        }
+      }
+
+      // If no valid category configured or it is full, find or auto-create dedicated "📨 ЗАЯВКИ" category
+      if (!parentCategoryId) {
+        let cat = guild.channels.cache.find(
+          c => c.type === ChannelType.GuildCategory && (c.name.includes('ЗАЯВКИ') || c.name.toUpperCase().includes('TICKETS'))
+        );
+        if (!cat) {
+          const catOverwrites: any[] = [
+            { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+          ];
+          if (botUserId) {
+            catOverwrites.push({
+              id: botUserId,
+              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages],
+            });
+          }
+          cat = (await guild.channels.create({
+            name: '📨 ЗАЯВКИ В СЕМЬЮ',
+            type: ChannelType.GuildCategory,
+            permissionOverwrites: catOverwrites,
+          }).catch(() => undefined)) as any;
+
+          if (cat) {
+            await prisma.recruitmentConfig.update({
+              where: { guildId: guild.id },
+              data: { categoryId: cat.id },
+            }).catch(() => null);
+          }
+        }
+        if (cat && cat.type === ChannelType.GuildCategory) {
+          parentCategoryId = cat.id;
         }
       }
 
@@ -394,6 +462,11 @@ export class RecruitmentService {
           .setEmoji('✅')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
+          .setCustomId(`recruit_interview_${application.id}`)
+          .setLabel('Обзвон')
+          .setEmoji('🎙️')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
           .setCustomId(`recruit_reject_${application.id}`)
           .setLabel('Отклонить')
           .setEmoji('❌')
@@ -411,17 +484,34 @@ export class RecruitmentService {
       // Send custom candidate greeting/instructions from BotMessagesConfig if present
       try {
         const botMsgConfig = await prisma.botMessagesConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
-        if (botMsgConfig && botMsgConfig.ticketGreetingDesc) {
-          const greetingTitle = botMsgConfig.ticketGreetingTitle || 'Заявка в семью INTERPOL';
-          const greetingDesc = botMsgConfig.ticketGreetingDesc
-            .replace(/{user}/g, `<@${interaction.user.id}>`)
-            .replace(/{guild}/g, guild.name);
-          
-          const greetingEmbed = new EmbedBuilder()
-            .setColor(0xEC4899)
-            .setTitle(`🌸 ${greetingTitle}`)
-            .setDescription(greetingDesc);
-          await ticketChannel.send({ embeds: [greetingEmbed] }).catch(() => null);
+        if (botMsgConfig) {
+          let customTemplate: any = null;
+          if (botMsgConfig.ticketTemplateId) {
+            customTemplate = await prisma.customEmbedTemplate.findUnique({
+              where: { id: botMsgConfig.ticketTemplateId },
+            }).catch(() => null);
+          }
+
+          if (customTemplate) {
+            const embed = buildCustomTemplateEmbed(customTemplate, {
+              user: `<@${interaction.user.id}>`,
+              username: interaction.user.username,
+              guild: guild.name,
+              memberCount: String(guild.memberCount),
+            });
+            await ticketChannel.send({ embeds: [embed] }).catch(() => null);
+          } else if (botMsgConfig.ticketGreetingDesc) {
+            const greetingTitle = botMsgConfig.ticketGreetingTitle || 'Заявка в семью INTERPOL';
+            const greetingDesc = botMsgConfig.ticketGreetingDesc
+              .replace(/{user}/g, `<@${interaction.user.id}>`)
+              .replace(/{guild}/g, guild.name);
+            
+            const greetingEmbed = new EmbedBuilder()
+              .setColor(0xEC4899)
+              .setTitle(`🌸 ${greetingTitle}`)
+              .setDescription(greetingDesc);
+            await ticketChannel.send({ embeds: [greetingEmbed] }).catch(() => null);
+          }
         }
       } catch (err) {
         console.error('[Recruitment] Error sending ticket greeting:', err);
@@ -565,6 +655,164 @@ export class RecruitmentService {
   }
 
   /**
+   * Handle calling candidate to interview by creating a private voice channel
+   */
+  public static async handleInterview(interaction: ButtonInteraction, applicationId: string): Promise<void> {
+    const member = interaction.member as GuildMember;
+    if (!(await this.isRecruiter(member))) {
+      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', ephemeral: true });
+      return;
+    }
+
+    const application = await prisma.recruitmentApplication.findUnique({
+      where: { id: applicationId },
+    });
+    if (!application) {
+      await interaction.reply({ content: '❌ Заявка не найдена в базе данных.', ephemeral: true });
+      return;
+    }
+
+    const guild = await this.resolveGuild(interaction);
+    if (!guild) {
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      return;
+    }
+
+    await interaction.deferReply();
+
+    // Check if voice channel already exists
+    if (application.interviewVoiceId) {
+      const existingVoice = guild.channels.cache.get(application.interviewVoiceId);
+      if (existingVoice) {
+        await interaction.editReply({
+          content: `ℹ️ Комната для обзвона уже создана: <#${existingVoice.id}>! Перейдите туда для проведения собеседования.`,
+        });
+        return;
+      }
+    }
+
+    const recConfig = await prisma.recruitmentConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
+    let recruiterRoleIds: string[] = [];
+    try {
+      recruiterRoleIds = JSON.parse(recConfig?.recruiterRoleIds || '[]');
+    } catch {
+      recruiterRoleIds = [];
+    }
+
+    // Permission overwrites: only candidate + recruiters + bot
+    const overwrites: any[] = [
+      {
+        id: guild.roles.everyone.id,
+        deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect],
+      },
+      {
+        id: application.userId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.Connect,
+          PermissionFlagsBits.Speak,
+          PermissionFlagsBits.UseVAD,
+        ],
+      },
+    ];
+
+    const botUserId = guild.members.me?.id || bot.user?.id;
+    if (botUserId) {
+      overwrites.push({
+        id: botUserId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.Connect,
+          PermissionFlagsBits.ManageChannels,
+          PermissionFlagsBits.MoveMembers,
+        ],
+      });
+    }
+
+    for (const rId of recruiterRoleIds) {
+      if (guild.roles.cache.has(rId)) {
+        overwrites.push({
+          id: rId,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.Connect,
+            PermissionFlagsBits.Speak,
+            PermissionFlagsBits.MuteMembers,
+            PermissionFlagsBits.DeafenMembers,
+            PermissionFlagsBits.MoveMembers,
+          ],
+        });
+      }
+    }
+
+    // Parent category: same as ticket channel or recruitment category
+    const ticketChannel = application.channelId ? guild.channels.cache.get(application.channelId) : null;
+    const parentId = ticketChannel?.parentId || recConfig?.categoryId || undefined;
+
+    // Create private voice channel
+    const candidateMember = await guild.members.fetch(application.userId).catch(() => null);
+    const candidateName = candidateMember?.displayName || application.userTag || 'Кандидат';
+    const voiceChannel = await guild.channels.create({
+      name: `🔊 Обзвон: ${candidateName.slice(0, 15)}`,
+      type: ChannelType.GuildVoice,
+      parent: parentId,
+      permissionOverwrites: overwrites,
+    });
+
+    // Save interviewVoiceId to application
+    await prisma.recruitmentApplication.update({
+      where: { id: applicationId },
+      data: {
+        interviewVoiceId: voiceChannel.id,
+        status: 'UNDER_REVIEW',
+        recruiterId: interaction.user.id,
+        recruiterTag: interaction.user.tag,
+      },
+    });
+
+    // Notify in ticket channel
+    const alertEmbed = new EmbedBuilder()
+      .setColor(0x3B82F6)
+      .setTitle('🎙️ Кандидат вызван на собеседование / обзвон!')
+      .setDescription(
+        `Рекрутер ${interaction.user} создал закрытый голосовой канал для обзвона.\n\n` +
+        `🔊 **Перейдите в канал:** <#${voiceChannel.id}>\n` +
+        `🔒 *Доступ в канал имеют исключительно кандидат <@${application.userId}> и рекрутеры семьи.*`
+      )
+      .setTimestamp();
+
+    if (ticketChannel && ticketChannel.isTextBased()) {
+      await (ticketChannel as TextChannel).send({
+        content: `<@${application.userId}>, вас вызывают на обзвон!`,
+        embeds: [alertEmbed],
+      }).catch(() => null);
+    }
+
+    // Try sending DM to candidate
+    if (candidateMember) {
+      await candidateMember.send({
+        content: `🎙️ **Здравствуйте!** Рекрутер семьи на сервере **${guild.name}** приглашает вас на обзвон в закрытый канал: <#${voiceChannel.id}>. Пожалуйста, подключитесь!`,
+      }).catch(() => null);
+    }
+
+    // Audit log
+    await AuditLogger.recordEntry({
+      guildId: guild.id,
+      category: 'RECRUIT',
+      action: 'RECRUIT_INTERVIEW_START',
+      title: 'Вызов кандидата на обзвон',
+      description: `Рекрутер <@${interaction.user.id}> создал приватный войс <#${voiceChannel.id}> для кандидата <@${application.userId}>`,
+      executorId: interaction.user.id,
+      executorTag: interaction.user.tag,
+      targetId: application.userId,
+    });
+
+    await interaction.editReply({
+      content: `✅ Голосовой канал для обзвона создан: <#${voiceChannel.id}>! Кандидат оповещен.`,
+    });
+  }
+
+  /**
    * Approve application handler
    */
   public static async handleApprove(interaction: ButtonInteraction, applicationId: string): Promise<void> {
@@ -594,30 +842,62 @@ export class RecruitmentService {
       where: { guildId: guild.id },
     });
 
-    // 1. Give role to applicant
+    // 1. Give multiple roles to applicant
     const targetMember = await guild.members.fetch(application.userId).catch(() => null);
-    if (targetMember && config?.memberRoleId) {
-      await targetMember.roles.add(config.memberRoleId).catch(e => {
-        console.error('Failed to grant family role:', e);
-      });
+    if (targetMember) {
+      let roleIdsToGrant: string[] = [];
+      try {
+        roleIdsToGrant = JSON.parse(config?.memberRoleIdsJson || '[]');
+      } catch {
+        roleIdsToGrant = [];
+      }
+      if (config?.memberRoleId && !roleIdsToGrant.includes(config.memberRoleId)) {
+        roleIdsToGrant.push(config.memberRoleId);
+      }
+
+      for (const rId of roleIdsToGrant) {
+        if (typeof rId === 'string' && guild.roles.cache.has(rId)) {
+          await targetMember.roles.add(rId).catch(e => {
+            console.error(`Failed to grant family role ${rId}:`, e);
+          });
+        }
+      }
     }
 
     // Auto-create Academy channel for 1st rank MP progression
     if (targetMember) {
       let staticId: string | undefined;
+      let candidateName: string | undefined;
       try {
         const answers = JSON.parse(application.answersJson || '{}');
         for (const [key, val] of Object.entries(answers)) {
-          if (/статик|static|id/i.test(key)) {
-            staticId = String(val).trim();
-            break;
+          const k = key.toLowerCase();
+          if (!candidateName && (k.includes('имя') || k.includes('ник') || k.includes('name') || k.includes('rp'))) {
+            candidateName = String(val).trim();
+          }
+          if (!staticId && (k.includes('статик') || k.includes('static') || k.includes('паспорт') || k.includes('id'))) {
+            staticId = String(val).replace(/[^\d]/g, '').trim() || String(val).trim();
           }
         }
       } catch {}
 
+      if (staticId || candidateName) {
+        await ProfileService.setStatic(
+          guild.id,
+          targetMember.id,
+          staticId || targetMember.id.slice(-5),
+          candidateName || targetMember.displayName,
+          targetMember.user.tag,
+          true
+        ).catch(() => null);
+      }
+
       await AcademyService.createAcademyChannel(guild, targetMember, staticId).catch(err => {
         console.warn('[Academy] Could not auto-create academy channel:', err.message);
       });
+
+      // Auto-sync nickname according to roles and bound profile
+      await NicknameService.syncMemberNickname(targetMember, 'Одобрение заявки в семью').catch(() => null);
     }
 
     // 2. Send DM notification
@@ -674,6 +954,10 @@ export class RecruitmentService {
     });
 
     setTimeout(async () => {
+      if (application.interviewVoiceId) {
+        const vCh = guild.channels.cache.get(application.interviewVoiceId);
+        if (vCh) await vCh.delete('Application approved').catch(() => null);
+      }
       if (channel && typeof channel.delete === 'function') {
         await channel.delete('Application approved').catch(() => null);
       }
@@ -794,6 +1078,10 @@ export class RecruitmentService {
     });
 
     setTimeout(async () => {
+      if (application.interviewVoiceId) {
+        const vCh = guild.channels.cache.get(application.interviewVoiceId);
+        if (vCh) await vCh.delete('Application rejected').catch(() => null);
+      }
       if (channel && typeof channel.delete === 'function') {
         await channel.delete('Application rejected').catch(() => null);
       }

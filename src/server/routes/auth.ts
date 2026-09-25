@@ -131,6 +131,7 @@ authRouter.post('/dev-login', async (req: Request, res: Response) => {
     avatar: null,
     guildId: config.discord.guildId || 'default_guild',
     roles: ['admin_role'],
+    isBypass: true,
     permissions: {
       isAdmin: true,
       manageSettings: true,

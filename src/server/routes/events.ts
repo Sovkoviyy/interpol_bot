@@ -11,6 +11,45 @@ import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const eventsRouter = Router();
 
+// Get event settings (priority role and min rank)
+eventsRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const guildConfig = await prisma.guildConfig.findUnique({
+      where: { guildId },
+    });
+    return res.json({
+      eventPriorityRoleId: guildConfig?.eventPriorityRoleId || '',
+      eventPriorityMinRank: guildConfig?.eventPriorityMinRank || 0,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Save event settings
+eventsRouter.post('/config', requireAuth, requirePermission('manageEvents'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const { eventPriorityRoleId, eventPriorityMinRank } = req.body;
+    const updated = await prisma.guildConfig.upsert({
+      where: { guildId },
+      update: {
+        eventPriorityRoleId: eventPriorityRoleId || null,
+        eventPriorityMinRank: parseInt(eventPriorityMinRank, 10) || 0,
+      },
+      create: {
+        guildId,
+        eventPriorityRoleId: eventPriorityRoleId || null,
+        eventPriorityMinRank: parseInt(eventPriorityMinRank, 10) || 0,
+      },
+    });
+    return res.json({ config: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Get remembered default channels and roles
 eventsRouter.get('/defaults', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
@@ -47,13 +86,12 @@ eventsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Respon
   return res.json({ events });
 });
 
-// Create event from web dashboard
+// Create event from web dashboard (only LIMITED allowed: Capt, VZZ, MCL)
 eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
   const {
     title,
     description,
-    type,
     checkInTime,
     eventTime,
     partyCode,
@@ -64,8 +102,8 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
     pingIntervals,
   } = req.body;
 
-  if (!title || !type || !checkInTime || !eventTime || !channelId) {
-    return res.status(400).json({ error: 'Заполните обязательные поля (название, тип, время явки, время начала, канал)' });
+  if (!title || !checkInTime || !eventTime || !channelId) {
+    return res.status(400).json({ error: 'Заполните обязательные поля (название, время явки, время начала, канал)' });
   }
 
   const guild = await getDiscordGuild(guildId);
@@ -79,19 +117,22 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
     return res.status(400).json({ error: 'Канал для анонса не найден' });
   }
 
+  // All events are LIMITED with a participant limit
+  const limit = Math.max(1, parseInt(participantLimit, 10) || 10);
+
   const event = await prisma.eventGathering.create({
     data: {
       guildId,
       title,
       description,
-      type,
+      type: 'LIMITED',
       checkInTime: new Date(checkInTime),
       eventTime: new Date(eventTime),
       partyCode,
       voiceChannelId,
       targetRoleId,
       channelId,
-      participantLimit: type === 'LIMITED' ? (parseInt(participantLimit, 10) || 10) : null,
+      participantLimit: limit,
       status: 'ACTIVE',
       createdById: req.user!.userId,
       createdByTag: req.user!.username,
@@ -101,7 +142,7 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
 
   // Post announcement
   const embed = await EventService.buildEventEmbed(event.id);
-  const components = EventService.buildEventButtons(event.id, type === 'LIMITED');
+  const components = EventService.buildEventButtons(event.id, true);
 
   let pingContent: string | undefined = undefined;
   if (targetRoleId === 'everyone') {
@@ -112,8 +153,6 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
     pingContent = undefined;
   } else if (targetRoleId) {
     pingContent = `<@&${targetRoleId}>`;
-  } else if (type === 'UNLIMITED') {
-    pingContent = '@here';
   }
 
   const msg = await channel.send({
@@ -147,7 +186,6 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
   if (targetRoleId === 'everyone') mentionDisplay = '@everyone';
   else if (targetRoleId === 'here') mentionDisplay = '@here';
   else if (targetRoleId && targetRoleId !== 'none') mentionDisplay = `<@&${targetRoleId}>`;
-  else if (type === 'UNLIMITED') mentionDisplay = '@here (по умолчанию)';
 
   // Send audit log to #ивенты-лог
   const createEmbed = new EmbedBuilder()
@@ -157,7 +195,7 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), async (re
       `Создатель: <@${req.user!.userId}> (${req.user!.username})\n` +
       `Канал сбора: <#${channelId}>\n` +
       `Упоминание: **${mentionDisplay}**\n` +
-      `Тип: **${type === 'LIMITED' ? `С ограничением (${participantLimit || 10} мест)` : 'Без ограничений'}**\n` +
+      `Тип: **С ограничением (${limit} мест)**\n` +
       `Чек-ин: <t:${Math.floor(new Date(checkInTime).getTime() / 1000)}:f>\n` +
       `Старт: <t:${Math.floor(new Date(eventTime).getTime() / 1000)}:f>`
     )

@@ -7,10 +7,11 @@ import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
 import { resolveGuildId, getDiscordGuild } from '../utils/guild';
+import { buildCustomTemplateEmbed } from '../../bot/utils/templateEmbed';
 
 export const botMessagesRouter = Router();
 
-// Get bot messages configuration
+// Get bot messages configuration and available embed templates
 botMessagesRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
 
@@ -36,7 +37,12 @@ botMessagesRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: R
     });
   }
 
-  return res.json({ config: cfg });
+  const templates = await prisma.customEmbedTemplate.findMany({
+    where: { guildId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return res.json({ config: cfg, templates });
 });
 
 // Update bot messages configuration
@@ -48,11 +54,14 @@ botMessagesRouter.post('/', requireAuth, requirePermission('manageSettings'), as
     welcomeTitle,
     welcomeMessage,
     welcomeEmbedColor,
+    welcomeTemplateId,
     leaveEnabled,
     leaveChannelId,
     leaveMessage,
+    leaveTemplateId,
     ticketGreetingTitle,
     ticketGreetingDesc,
+    ticketTemplateId,
     botStatusText,
     botStatusActivity,
   } = req.body;
@@ -65,11 +74,14 @@ botMessagesRouter.post('/', requireAuth, requirePermission('manageSettings'), as
       welcomeTitle: welcomeTitle || 'Добро пожаловать, {user}!',
       welcomeMessage: welcomeMessage || '',
       welcomeEmbedColor: welcomeEmbedColor || '#EC4899',
+      welcomeTemplateId: welcomeTemplateId || null,
       leaveEnabled: !!leaveEnabled,
       leaveChannelId: leaveChannelId || null,
       leaveMessage: leaveMessage || '',
+      leaveTemplateId: leaveTemplateId || null,
       ticketGreetingTitle: ticketGreetingTitle || '',
       ticketGreetingDesc: ticketGreetingDesc || '',
+      ticketTemplateId: ticketTemplateId || null,
       botStatusText: botStatusText || 'Majestic RP',
       botStatusActivity: botStatusActivity || 'PLAYING',
     },
@@ -80,11 +92,14 @@ botMessagesRouter.post('/', requireAuth, requirePermission('manageSettings'), as
       welcomeTitle: welcomeTitle || 'Добро пожаловать, {user}!',
       welcomeMessage: welcomeMessage || '',
       welcomeEmbedColor: welcomeEmbedColor || '#EC4899',
+      welcomeTemplateId: welcomeTemplateId || null,
       leaveEnabled: !!leaveEnabled,
       leaveChannelId: leaveChannelId || null,
       leaveMessage: leaveMessage || '',
+      leaveTemplateId: leaveTemplateId || null,
       ticketGreetingTitle: ticketGreetingTitle || '',
       ticketGreetingDesc: ticketGreetingDesc || '',
+      ticketTemplateId: ticketTemplateId || null,
       botStatusText: botStatusText || 'Majestic RP',
       botStatusActivity: botStatusActivity || 'PLAYING',
     },
@@ -136,6 +151,29 @@ botMessagesRouter.post('/test', requireAuth, requirePermission('manageSettings')
   const userMention = `<@${req.user!.userId}>`;
   const guildName = guild.name;
   const memberCount = String(guild.memberCount);
+
+  // Check if a CustomEmbedTemplate is linked
+  const templateId = type === 'welcome' ? cfg.welcomeTemplateId : cfg.leaveTemplateId;
+  let customTemplate: any = null;
+  if (templateId) {
+    customTemplate = await prisma.customEmbedTemplate.findUnique({ where: { id: templateId } });
+  }
+
+  if (customTemplate) {
+    try {
+      const embed = buildCustomTemplateEmbed(customTemplate, {
+        user: userMention,
+        username: req.user!.username,
+        guild: guildName,
+        memberCount,
+      });
+
+      await channel.send({ embeds: [embed] });
+      return res.json({ success: true, usedTemplate: customTemplate.name });
+    } catch (e: any) {
+      console.warn('Failed building template embed, falling back:', e.message);
+    }
+  }
 
   if (type === 'welcome') {
     const rawColor = cfg.welcomeEmbedColor?.replace('#', '') || 'EC4899';

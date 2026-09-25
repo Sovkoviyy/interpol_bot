@@ -56,9 +56,11 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
 
   return (
     <header className="h-16 bg-[#0B0E14]/80 backdrop-blur-md border-b border-[#1E232F] px-8 flex items-center justify-between sticky top-0 z-30">
-      <div>
-        <h2 className="text-sm font-semibold text-slate-200">
-          Панель управления семьи <span className="text-pink-400 font-bold">#Majestic RP</span>
+      <div className="flex items-center gap-3">
+        <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+          <span className="tracking-wide">Interpol bot</span>
+          <span className="text-slate-600 font-normal">|</span>
+          <span className="text-xs font-medium text-slate-300">панель управления семьи</span>
         </h2>
       </div>
 

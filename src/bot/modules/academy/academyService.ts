@@ -15,6 +15,7 @@ import bot from '../../client';
 import { ProfileService } from '../profiles/profileService';
 import { AuditLogger } from '../logging/auditLogger';
 import { RecruitmentService } from '../recruitment/recruitmentService';
+import { NicknameService } from '../nicknames/nicknameService';
 
 export class AcademyService {
   /**
@@ -72,13 +73,19 @@ export class AcademyService {
     const profile = await ProfileService.getOrCreateProfile(guild.id, member.id, member.user.tag);
 
     const effectiveStatic = staticId || profile.staticId || member.id.slice(-5);
-    const rawName = profile.characterName || member.displayName || member.user.username;
-    const cleanName = rawName
+    const cleanStatic = (effectiveStatic || '').toString().replace(/[^\d]/g, '').trim() || member.id.slice(-5);
+
+    // Extract FIRST NAME from full in-game RP name (e.g. "Ivan Ivanov" -> "ivan")
+    const rawName = (profile.characterName || member.displayName || member.user.username).trim();
+    const parts = rawName.split(/[\s_.-]+/);
+    const firstName = parts[0] || 'игрок';
+    const cleanFirstName = firstName
       .toLowerCase()
-      .replace(/[^a-z0-9а-яё_-]/gi, '')
-      .slice(0, 20) || member.user.username.toLowerCase().slice(0, 20);
-    const prefix = config.channelPrefix || 'academ-';
-    const channelName = `${prefix}${cleanName}`;
+      .replace(/[^a-z0-9а-яё]/gi, '')
+      .slice(0, 15) || 'игрок';
+
+    // Channel name strictly format: имя-статик (e.g. ivan-12345)
+    const channelName = `${cleanFirstName}-${cleanStatic}`;
 
     // Ensure category ACADEMY
     let targetCategoryId = config.categoryId;
@@ -180,7 +187,7 @@ export class AcademyService {
     } catch (createErr: any) {
       console.warn(`[Academy] Failed to create channel with category (${createErr.message}). Retrying fallback...`);
       channel = (await guild.channels.create({
-        name: `${prefix}${member.id.slice(-4)}`,
+        name: `${channelName}`,
         type: ChannelType.GuildText,
         permissionOverwrites: [
           {
@@ -617,6 +624,7 @@ export class AcademyService {
         if (config.academicRoleId) {
           await targetMember.roles.remove(config.academicRoleId).catch(() => null);
         }
+        await NicknameService.syncMemberNickname(targetMember, 'Повышение в Академии').catch(() => null);
       }
 
       // 2. Update profile rank

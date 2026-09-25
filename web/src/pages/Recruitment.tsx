@@ -348,18 +348,39 @@ export const Recruitment: React.FC = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">Роль участника семьи (выдается при одобрении)</label>
-                <select
-                  value={config?.memberRoleId || ''}
-                  onChange={(e) => setConfig({ ...config, memberRoleId: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
-                >
-                  <option value="">Выберите роль...</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>@{r.name}</option>
-                  ))}
-                </select>
+              <div className="md:col-span-2">
+                <label className="block text-slate-400 mb-2 font-medium">
+                  Роли участника семьи (выдаются при одобрении заявки — можно выбрать несколько)
+                </label>
+                <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-2.5 bg-[#0B0E14] border border-[#1E232F] rounded-xl">
+                  {roles.map((r) => {
+                    const currentRoles = config?.memberRoleIds || (config?.memberRoleId ? [config.memberRoleId] : []);
+                    const isSelected = currentRoles.includes(r.id);
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => {
+                          const updated = isSelected 
+                            ? currentRoles.filter((id: string) => id !== r.id) 
+                            : [...currentRoles, r.id];
+                          setConfig({ 
+                            ...config, 
+                            memberRoleIds: updated, 
+                            memberRoleId: updated[0] || null 
+                          });
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                          isSelected
+                            ? 'bg-pink-600/25 text-pink-300 border-pink-500/60 font-semibold shadow-sm'
+                            : 'bg-[#151921] text-slate-400 border-[#1E232F] hover:text-white'
+                        }`}
+                      >
+                        {isSelected ? '✓ ' : '+ '}@{r.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

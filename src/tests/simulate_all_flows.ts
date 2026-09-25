@@ -975,9 +975,9 @@ async function runSimulation() {
   pass('Slash command /logs setup executed successfully');
 
   // =========================================================================
-  // 10. FLOW: REST API ENDPOINTS
+  // 10. FLOW: DASHBOARD BACKEND ROUTES
   // =========================================================================
-  step('10. FLOW: REST API Routes (RBAC with resolveGuildId, Blacklist, App creation)');
+  step('10. FLOW: Dashboard Backend Routes (RBAC with resolveGuildId, Blacklist, App creation)');
   const mockReqWithHeader = {
     headers: { 'x-guild-id': 'custom_guild_456' },
     query: {},
@@ -1002,7 +1002,7 @@ async function runSimulation() {
 
   const app = createServer();
   console.assert(typeof app.listen === 'function', 'Express app initialized');
-  pass('Express REST API app initialized with all 18 routes mounted');
+  pass('Dashboard backend app initialized with all 18 routes mounted');
 
   // =========================================================================
   // CLEANUP TEST DATA

@@ -59,13 +59,20 @@ export const profileCommand = {
 
     const voiceHours = (profile.voiceSeconds / 3600).toFixed(1);
 
+    const chars = profile.characters && profile.characters.length > 0
+      ? profile.characters
+      : (profile.staticId ? [{ staticId: profile.staticId, characterName: profile.characterName, isMain: true }] : []);
+
+    const charDisplay = chars.length > 0
+      ? chars.map(c => `${c.isMain ? '⭐ **Основной:**' : '• Альт:'} \`#${c.staticId}\` ${c.characterName ? `(${c.characterName})` : ''}`).join('\n')
+      : '*Не привязаны*';
+
     const embed = new EmbedBuilder()
       .setColor(0xEC4899)
       .setTitle(`👤 Профиль участника | ${profile.userTag || targetUser.tag}`)
       .setThumbnail(targetUser.displayAvatarURL())
       .addFields(
-        { name: '🆔 Статик Majestic', value: profile.staticId ? `\`${profile.staticId}\`` : '*Не привязан*', inline: true },
-        { name: '🎮 Игровой ник', value: profile.characterName ? `\`${profile.characterName}\`` : '*Не указан*', inline: true },
+        { name: '🆔 Статики Majestic RP', value: charDisplay, inline: false },
         { name: '🎖️ Ранг', value: profile.rank === 1 ? '1 (Академик)' : `${profile.rank} ранг`, inline: true },
         { name: '⚔️ Отыграно МП', value: `\`${profile.mpCount}\``, inline: true },
         { name: '⚖️ Штрафные МП', value: `\`${profile.penaltyMp}\``, inline: true },

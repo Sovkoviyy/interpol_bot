@@ -28,6 +28,7 @@ export const Academy: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reportFilter, setReportFilter] = useState('ALL');
+  const [viewingReportsMember, setViewingReportsMember] = useState<any>(null);
 
   const fetchData = async () => {
     try {
@@ -179,7 +180,7 @@ export const Academy: React.FC = () => {
   const categories = guildChannels.filter((c) => c.type === 4);
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -282,23 +283,35 @@ export const Academy: React.FC = () => {
                       </div>
                     </div>
 
-                    {ch.status === 'ACTIVE' && (
-                      <div className="pt-3 border-t border-[#1E232F] flex items-center justify-between gap-2">
+                    <div className="pt-3 border-t border-[#1E232F] space-y-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setViewingReportsMember(ch)}
+                          className="flex-1 py-1.5 px-2 rounded-xl bg-[#1E232F] hover:bg-slate-700/50 text-slate-200 text-xs font-semibold border border-slate-700/40 transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-pink-400" />
+                          <span>Отчеты бойца ({ch.reports?.length || 0})</span>
+                        </button>
+                        {ch.status === 'ACTIVE' && (
+                          <button
+                            onClick={() => handlePromote(ch.id, false)}
+                            className="py-1.5 px-2.5 rounded-xl bg-[#1E232F] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-xs font-semibold border border-slate-700/40 transition-all"
+                            title="Добавить штрафные МП"
+                          >
+                            Штраф
+                          </button>
+                        )}
+                      </div>
+
+                      {ch.status === 'ACTIVE' && (
                         <button
                           onClick={() => handlePromote(ch.id, true)}
-                          className="flex-1 py-1.5 px-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-semibold shadow-md shadow-pink-600/20 transition-all text-center"
+                          className="w-full py-1.5 px-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-semibold shadow-md shadow-pink-600/20 transition-all text-center"
                         >
                           Повысить на 2 ранг
                         </button>
-                        <button
-                          onClick={() => handlePromote(ch.id, false)}
-                          className="py-1.5 px-2.5 rounded-xl bg-[#1E232F] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-xs font-semibold border border-slate-700/40 transition-all"
-                          title="Добавить штрафные МП"
-                        >
-                          Штраф
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })
@@ -509,6 +522,126 @@ export const Academy: React.FC = () => {
               <Save className="w-4 h-4" />
               <span>Сохранить настройки академии</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: View Member Reports */}
+      {viewingReportsMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-pink-500" />
+                <div>
+                  <h3 className="font-bold text-white text-base">
+                    Отчеты академика: {viewingReportsMember.userTag || viewingReportsMember.userId}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Статик: <span className="text-pink-400 font-mono font-bold">{viewingReportsMember.staticId || '—'}</span> • Канал: #{viewingReportsMember.channelId}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingReportsMember(null)}
+                className="p-1 rounded-lg hover:bg-[#1E232F] text-slate-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              {!viewingReportsMember.reports || viewingReportsMember.reports.length === 0 ? (
+                <div className="py-12 text-center text-slate-500">
+                  У этого академика пока нет сданных отчетов
+                </div>
+              ) : (
+                viewingReportsMember.reports.map((report: any, idx: number) => {
+                  let urls: string[] = [];
+                  try {
+                    urls = JSON.parse(report.screenshotUrls || '[]');
+                  } catch {}
+
+                  return (
+                    <div key={report.id || idx} className="p-4 rounded-xl bg-[#0B0E14] border border-[#1E232F] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-pink-400 text-sm">{report.mpType}</span>
+                          <span className="text-xs text-slate-500">
+                            {new Date(report.createdAt).toLocaleString('ru-RU')}
+                          </span>
+                        </div>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                          report.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400' :
+                          report.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-400' :
+                          'bg-amber-500/10 text-amber-400'
+                        }`}>
+                          {report.status === 'APPROVED' ? '✅ Одобрен' :
+                           report.status === 'REJECTED' ? '❌ Отклонен' :
+                           '⏳ На проверке'}
+                        </span>
+                      </div>
+
+                      {urls.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {urls.map((u, i) => (
+                            <a
+                              key={i}
+                              href={u}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#151921] hover:bg-[#1E232F] text-xs text-pink-400 border border-[#1E232F] transition-colors"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>Скриншот #{i + 1}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
+                      {report.status === 'PENDING' && (
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#1E232F]">
+                          <button
+                            onClick={async () => {
+                              await handleReviewReport(report.id, true);
+                              // Refresh channels and update viewing member reports
+                              const chRes = await api.get('/academy/channels');
+                              setChannels(chRes.data.channels || []);
+                              const updatedMember = (chRes.data.channels || []).find((c: any) => c.id === viewingReportsMember.id);
+                              if (updatedMember) setViewingReportsMember(updatedMember);
+                            }}
+                            className="px-3 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold hover:bg-emerald-600/30 transition-all"
+                          >
+                            Одобрить отчет
+                          </button>
+                          <button
+                            onClick={async () => {
+                              await handleReviewReport(report.id, false);
+                              const chRes = await api.get('/academy/channels');
+                              setChannels(chRes.data.channels || []);
+                              const updatedMember = (chRes.data.channels || []).find((c: any) => c.id === viewingReportsMember.id);
+                              if (updatedMember) setViewingReportsMember(updatedMember);
+                            }}
+                            className="px-3 py-1 rounded-lg bg-rose-600/20 text-rose-300 border border-rose-500/30 text-xs font-semibold hover:bg-rose-600/30 transition-all"
+                          >
+                            Отклонить отчет
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="p-4 border-t border-[#1E232F] bg-[#1A1F2B]/30 flex justify-end">
+              <button
+                onClick={() => setViewingReportsMember(null)}
+                className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#252B3B] text-slate-300 text-xs font-semibold transition-colors"
+              >
+                Закрыть
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -78,7 +78,7 @@ export const Dashboard: React.FC = () => {
         <div className="relative z-10 max-w-2xl">
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-pink-500/10 text-pink-400 border border-pink-500/20 mb-4">
             <Shield className="w-3.5 h-3.5" />
-            Majestic RP • Family OS
+            Панель управления семьи
           </span>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">
             {stats?.guild?.name || 'Семья Interpol'}

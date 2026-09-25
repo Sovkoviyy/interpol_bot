@@ -221,12 +221,71 @@ export class EventService {
       return;
     }
 
-    const confirmedCount = event.participants.filter(p => p.status === 'CONFIRMED').length;
-    const limit = event.participantLimit || 999;
+    const guild = await this.resolveGuild(interaction);
+    const guildConfig = await prisma.guildConfig.findUnique({ where: { guildId: event.guildId } });
+    const priorityRoleId = guildConfig?.eventPriorityRoleId;
+
+    const getScore = async (targetUserId: string): Promise<number> => {
+      let score = 0;
+      if (guild && priorityRoleId) {
+        const mem = guild.members.cache.get(targetUserId) || await guild.members.fetch(targetUserId).catch(() => null);
+        if (mem && mem.roles.cache.has(priorityRoleId)) {
+          score += 1000;
+        }
+      }
+      const p = await prisma.userProfile.findUnique({
+        where: { guildId_userId: { guildId: event.guildId, userId: targetUserId } },
+      });
+      if (p?.rank) {
+        score += p.rank * 10;
+      }
+      return score;
+    };
+
+    const myScore = await getScore(userId);
+    const confirmedParticipants = event.participants.filter(p => p.status === 'CONFIRMED');
+    const limit = event.participantLimit || 10;
 
     let assignedStatus: 'CONFIRMED' | 'RESERVE' = 'CONFIRMED';
-    if (forceReserve || confirmedCount >= limit) {
+    let demotedUserTag: string | null = null;
+
+    if (forceReserve) {
       assignedStatus = 'RESERVE';
+    } else if (confirmedParticipants.length < limit) {
+      assignedStatus = 'CONFIRMED';
+    } else {
+      // Main roster is full. Check if myScore can displace someone with lower score
+      let lowestParticipant: any = null;
+      let lowestScore = 999999;
+
+      for (const cp of confirmedParticipants) {
+        const score = await getScore(cp.userId);
+        if (score < lowestScore) {
+          lowestScore = score;
+          lowestParticipant = cp;
+        }
+      }
+
+      if (lowestParticipant && myScore > lowestScore) {
+        // Demote lowest participant to RESERVE
+        await prisma.eventParticipant.update({
+          where: { id: lowestParticipant.id },
+          data: { status: 'RESERVE' },
+        });
+        demotedUserTag = lowestParticipant.userTag;
+
+        if (guild) {
+          const demotedMember = await guild.members.fetch(lowestParticipant.userId).catch(() => null);
+          if (demotedMember) {
+            demotedMember.send({
+              content: `⚠️ Место в основном составе на мероприятие **${event.title}** занял участник с более высоким приоритетом/рангом. Вы переведены в **резерв**.`,
+            }).catch(() => null);
+          }
+        }
+        assignedStatus = 'CONFIRMED';
+      } else {
+        assignedStatus = 'RESERVE';
+      }
     }
 
     await prisma.eventParticipant.create({
@@ -240,12 +299,11 @@ export class EventService {
 
     await interaction.reply({
       content: assignedStatus === 'CONFIRMED' 
-        ? `✅ Вы успешно записались в **основной состав** на мероприятие **${event.title}**!` 
-        : `🪑 Основной состав заполнен (${confirmedCount}/${limit}). Вы добавлены в **резерв**. Если кто-то откажется, вы автоматически перейдете в основной состав!`,
+        ? `✅ Вы успешно записались в **основной состав** на мероприятие **${event.title}**!${demotedUserTag ? ` (по приоритету ранга/роли вытеснив @${demotedUserTag} в резерв)` : ''}` 
+        : `🪑 Основной состав заполнен (${confirmedParticipants.length}/${limit}). Вы добавлены в **резерв**. При освобождении места приоритетные участники переводятся в основу!`,
       ephemeral: true,
     });
 
-    const guild = await this.resolveGuild(interaction);
     if (guild) {
       await this.refreshAnnouncement(guild, eventId);
 
@@ -257,7 +315,8 @@ export class EventService {
           `Участник <@${userId}> (\`${interaction.user.tag}\`) записался в **${assignedStatus === 'CONFIRMED' ? 'основной состав' : 'резерв'}**.\n` +
           `Мероприятие: **«${event.title}»**\n` +
           `Канал: <#${event.channelId}>\n` +
-          `Состав: ${assignedStatus === 'CONFIRMED' ? confirmedCount + 1 : confirmedCount}/${limit}`
+          (demotedUserTag ? `⚡ По приоритету в резерв перемещен: \`${demotedUserTag}\`\n` : '') +
+          `Состав: ${assignedStatus === 'CONFIRMED' ? Math.min(limit, confirmedParticipants.length + 1) : confirmedParticipants.length}/${limit}`
         )
         .setTimestamp();
       await AuditLogger.sendLog(guild, 'EVENTS', joinEmbed);
@@ -265,7 +324,7 @@ export class EventService {
   }
 
   /**
-   * Handle member leaving an event (promotes next person from reserve if available)
+   * Handle member leaving an event (promotes highest priority person from reserve)
    */
   public static async handleLeave(interaction: ButtonInteraction, eventId: string): Promise<void> {
     const event = await prisma.eventGathering.findUnique({
@@ -298,24 +357,48 @@ export class EventService {
     let promotedUserTag: string | null = null;
     let promotedUserId: string | null = null;
 
-    // If was confirmed, promote first reserve
+    // If was confirmed, promote highest priority reserve member
     if (wasConfirmed) {
-      const firstReserve = event.participants.find(p => p.status === 'RESERVE' && p.userId !== userId);
-      if (firstReserve) {
+      const reserveParticipants = event.participants.filter(p => p.status === 'RESERVE' && p.userId !== userId);
+      if (reserveParticipants.length > 0) {
+        const guild = await this.resolveGuild(interaction);
+        const guildConfig = await prisma.guildConfig.findUnique({ where: { guildId: event.guildId } });
+        const priorityRoleId = guildConfig?.eventPriorityRoleId;
+
+        let bestReserve = reserveParticipants[0];
+        let bestScore = -1;
+
+        for (const rp of reserveParticipants) {
+          let score = 0;
+          if (guild && priorityRoleId) {
+            const mem = guild.members.cache.get(rp.userId) || await guild.members.fetch(rp.userId).catch(() => null);
+            if (mem && mem.roles.cache.has(priorityRoleId)) {
+              score += 1000;
+            }
+          }
+          const p = await prisma.userProfile.findUnique({
+            where: { guildId_userId: { guildId: event.guildId, userId: rp.userId } },
+          });
+          if (p?.rank) score += p.rank * 10;
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestReserve = rp;
+          }
+        }
+
         await prisma.eventParticipant.update({
-          where: { id: firstReserve.id },
+          where: { id: bestReserve.id },
           data: { status: 'CONFIRMED' },
         });
-        promotedUserId = firstReserve.userId;
-        promotedUserTag = firstReserve.userTag;
+        promotedUserId = bestReserve.userId;
+        promotedUserTag = bestReserve.userTag;
 
-        const guild = await this.resolveGuild(interaction);
-        // Try to DM the promoted user
         if (guild) {
-          const targetMember = await guild.members.fetch(firstReserve.userId).catch(() => null);
+          const targetMember = await guild.members.fetch(bestReserve.userId).catch(() => null);
           if (targetMember) {
             targetMember.send({
-              content: `🔔 Место освободилось! Вы были автоматически переведены из **резерва в основной состав** на мероприятие **${event.title}**!`,
+              content: `🔔 Место освободилось! Вы переведены из **резерва в основной состав** на мероприятие **${event.title}**!`,
             }).catch(() => null);
           }
         }

@@ -12,6 +12,8 @@ import prisma from '../../../../database/client';
 import { AuditLogger } from '../auditLogger';
 import { RolePersistenceService } from '../../roles/rolePersistenceService';
 import { AntiNukeService } from '../../antiNuke/antiNukeService';
+import { buildCustomTemplateEmbed } from '../../../utils/templateEmbed';
+import { NicknameService } from '../../nicknames/nicknameService';
 
 export function registerMemberLogs() {
   // Member Join
@@ -36,26 +38,43 @@ export function registerMemberLogs() {
         const welcomeChannel = (member.guild.channels.cache.get(msgConfig.welcomeChannelId) ||
           await member.guild.channels.fetch(msgConfig.welcomeChannelId).catch(() => null)) as TextChannel | null;
         if (welcomeChannel && welcomeChannel.isTextBased()) {
-          const rawColor = msgConfig.welcomeEmbedColor?.replace('#', '') || 'EC4899';
-          const colorInt = parseInt(rawColor, 16) || 0xEC4899;
-          const formattedTitle = (msgConfig.welcomeTitle || 'Добро пожаловать!')
-            .replace(/{user}/g, member.user.username)
-            .replace(/{guild}/g, member.guild.name)
-            .replace(/{memberCount}/g, String(member.guild.memberCount));
-          const formattedDesc = (msgConfig.welcomeMessage || '')
-            .replace(/{user}/g, `<@${member.id}>`)
-            .replace(/{guild}/g, member.guild.name)
-            .replace(/{memberCount}/g, String(member.guild.memberCount));
+          let customTemplate: any = null;
+          if (msgConfig.welcomeTemplateId) {
+            customTemplate = await prisma.customEmbedTemplate.findUnique({
+              where: { id: msgConfig.welcomeTemplateId },
+            }).catch(() => null);
+          }
 
-          const welcomeEmbed = new EmbedBuilder()
-            .setColor(colorInt)
-            .setTitle(formattedTitle)
-            .setDescription(formattedDesc)
-            .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
-            .setFooter({ text: `Участник #${member.guild.memberCount}` })
-            .setTimestamp();
+          if (customTemplate) {
+            const embed = buildCustomTemplateEmbed(customTemplate, {
+              user: `<@${member.id}>`,
+              username: member.user.username,
+              guild: member.guild.name,
+              memberCount: String(member.guild.memberCount),
+            });
+            await welcomeChannel.send({ embeds: [embed] }).catch(() => null);
+          } else {
+            const rawColor = msgConfig.welcomeEmbedColor?.replace('#', '') || 'EC4899';
+            const colorInt = parseInt(rawColor, 16) || 0xEC4899;
+            const formattedTitle = (msgConfig.welcomeTitle || 'Добро пожаловать!')
+              .replace(/{user}/g, member.user.username)
+              .replace(/{guild}/g, member.guild.name)
+              .replace(/{memberCount}/g, String(member.guild.memberCount));
+            const formattedDesc = (msgConfig.welcomeMessage || '')
+              .replace(/{user}/g, `<@${member.id}>`)
+              .replace(/{guild}/g, member.guild.name)
+              .replace(/{memberCount}/g, String(member.guild.memberCount));
 
-          await welcomeChannel.send({ embeds: [welcomeEmbed] }).catch(() => null);
+            const welcomeEmbed = new EmbedBuilder()
+              .setColor(colorInt)
+              .setTitle(formattedTitle)
+              .setDescription(formattedDesc)
+              .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+              .setFooter({ text: `Участник #${member.guild.memberCount}` })
+              .setTimestamp();
+
+            await welcomeChannel.send({ embeds: [welcomeEmbed] }).catch(() => null);
+          }
         }
       }
     } catch (err) {
@@ -101,17 +120,34 @@ export function registerMemberLogs() {
           await member.guild.channels.fetch(msgConfig.leaveChannelId).catch(() => null)) as TextChannel | null;
         if (leaveChannel && leaveChannel.isTextBased()) {
           const userTag = member.user?.tag || member.id;
-          const formattedDesc = (msgConfig.leaveMessage || '{user} покинул наш сервер.')
-            .replace(/{user}/g, `**${userTag}**`)
-            .replace(/{guild}/g, member.guild.name)
-            .replace(/{memberCount}/g, String(member.guild.memberCount));
+          let customTemplate: any = null;
+          if (msgConfig.leaveTemplateId) {
+            customTemplate = await prisma.customEmbedTemplate.findUnique({
+              where: { id: msgConfig.leaveTemplateId },
+            }).catch(() => null);
+          }
 
-          const leaveEmbed = new EmbedBuilder()
-            .setColor(0xED4245)
-            .setDescription(`🚪 ${formattedDesc}`)
-            .setTimestamp();
+          if (customTemplate) {
+            const embed = buildCustomTemplateEmbed(customTemplate, {
+              user: `**${userTag}**`,
+              username: member.user?.username || userTag,
+              guild: member.guild.name,
+              memberCount: String(member.guild.memberCount),
+            });
+            await leaveChannel.send({ embeds: [embed] }).catch(() => null);
+          } else {
+            const formattedDesc = (msgConfig.leaveMessage || '{user} покинул наш сервер.')
+              .replace(/{user}/g, `**${userTag}**`)
+              .replace(/{guild}/g, member.guild.name)
+              .replace(/{memberCount}/g, String(member.guild.memberCount));
 
-          await leaveChannel.send({ embeds: [leaveEmbed] }).catch(() => null);
+            const leaveEmbed = new EmbedBuilder()
+              .setColor(0xED4245)
+              .setDescription(`🚪 ${formattedDesc}`)
+              .setTimestamp();
+
+            await leaveChannel.send({ embeds: [leaveEmbed] }).catch(() => null);
+          }
         }
       }
     } catch (err) {
@@ -220,6 +256,9 @@ export function registerMemberLogs() {
         .setTimestamp();
 
       await AuditLogger.sendLog(newMember.guild, 'ROLES', embed);
+
+      // Auto-update nickname based on configured role bindings
+      await NicknameService.syncMemberNickname(newMember, 'Обновление ролей').catch(() => null);
     }
 
     // 3. Timeout (communication disabled)

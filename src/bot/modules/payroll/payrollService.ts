@@ -171,6 +171,13 @@ export class PayrollService {
     }
 
     // Calculate payouts
+    const recruiterIds = Array.from(recruitersMap.keys());
+    const profiles = await prisma.userProfile.findMany({
+      where: { guildId, userId: { in: recruiterIds } },
+      include: { characters: true },
+    });
+    const profileMap = new Map(profiles.map(p => [p.userId, p]));
+
     const results = Array.from(recruitersMap.values()).map((rec) => {
       const payout =
         rec.acceptedCount * config.payPerCandidateAccepted +
@@ -179,8 +186,18 @@ export class PayrollService {
         rec.rejectedReportsCount * config.payPerRejectedReport +
         rec.promotionsCount * config.payPerPromotion;
 
+      const profile = profileMap.get(rec.recruiterId);
+      const mainChar = profile?.characters?.find((c: any) => c.isMain) || profile?.characters?.[0];
+      const staticId = mainChar?.staticId || profile?.staticId || '';
+      const characterName = mainChar?.characterName || profile?.characterName || '';
+
       rec.totalPayout = payout;
-      return rec;
+      return {
+        ...rec,
+        staticId,
+        characterName,
+        exportRow: `${staticId || 'БЕЗ_СТАТИКА'};${payout};Зарплата рекрутера`,
+      };
     });
 
     const grandTotal = results.reduce((acc, r) => acc + r.totalPayout, 0);
@@ -201,3 +218,4 @@ export class PayrollService {
     };
   }
 }
+

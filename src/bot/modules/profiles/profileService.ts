@@ -1,6 +1,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
 import prisma from '../../../database/client';
 import bot from '../../client';
+import { NicknameService } from '../nicknames/nicknameService';
 
 export class ProfileService {
   /**
@@ -9,6 +10,7 @@ export class ProfileService {
   static async getOrCreateProfile(guildId: string, userId: string, userTag?: string) {
     let profile = await prisma.userProfile.findUnique({
       where: { guildId_userId: { guildId, userId } },
+      include: { characters: { orderBy: { createdAt: 'asc' } } },
     });
 
     if (!profile) {
@@ -19,11 +21,13 @@ export class ProfileService {
           userTag: userTag || 'User',
           rank: 1,
         },
+        include: { characters: true },
       });
     } else if (userTag && profile.userTag !== userTag) {
       profile = await prisma.userProfile.update({
         where: { id: profile.id },
         data: { userTag },
+        include: { characters: { orderBy: { createdAt: 'asc' } } },
       });
     }
 
@@ -31,17 +35,180 @@ export class ProfileService {
   }
 
   /**
-   * Bind Majestic Static ID and in-game nickname
+   * Bind Majestic Static ID and in-game nickname (supports up to 3 characters, automatically handles main)
    */
-  static async setStatic(guildId: string, userId: string, staticId: string, characterName?: string, userTag?: string) {
+  static async setStatic(guildId: string, userId: string, staticId: string, characterName?: string, userTag?: string, setAsMain = true) {
     const profile = await this.getOrCreateProfile(guildId, userId, userTag);
-    return await prisma.userProfile.update({
+    const cleanStatic = staticId.trim();
+    const cleanNick = characterName?.trim() || null;
+
+    // Check existing characters
+    const existingChars = await prisma.userCharacter.findMany({
+      where: { profileId: profile.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    let matchedChar = existingChars.find(c => c.staticId === cleanStatic);
+
+    if (matchedChar) {
+      // Update existing character
+      await prisma.userCharacter.update({
+        where: { id: matchedChar.id },
+        data: {
+          characterName: cleanNick || matchedChar.characterName,
+          isMain: setAsMain ? true : matchedChar.isMain,
+        },
+      });
+    } else {
+      // If we already have 3 characters and adding a new one, update the 3rd or non-main
+      if (existingChars.length >= 3) {
+        const charToReplace = existingChars.find(c => !c.isMain) || existingChars[existingChars.length - 1];
+        await prisma.userCharacter.update({
+          where: { id: charToReplace.id },
+          data: {
+            staticId: cleanStatic,
+            characterName: cleanNick,
+            isMain: setAsMain,
+          },
+        });
+      } else {
+        // Create new character
+        const shouldBeMain = setAsMain || existingChars.length === 0;
+        await prisma.userCharacter.create({
+          data: {
+            profileId: profile.id,
+            staticId: cleanStatic,
+            characterName: cleanNick,
+            isMain: shouldBeMain,
+          },
+        });
+      }
+    }
+
+    // If this character is designated as main, ensure others are isMain = false
+    if (setAsMain) {
+      await prisma.userCharacter.updateMany({
+        where: {
+          profileId: profile.id,
+          staticId: { not: cleanStatic },
+        },
+        data: { isMain: false },
+      });
+    }
+
+    // Refresh and sync to UserProfile
+    const updatedChars = await prisma.userCharacter.findMany({
+      where: { profileId: profile.id },
+    });
+    const mainChar = updatedChars.find(c => c.isMain) || updatedChars[0];
+
+    const updatedProfile = await prisma.userProfile.update({
       where: { id: profile.id },
       data: {
-        staticId: staticId.trim(),
-        characterName: characterName?.trim() || profile.characterName,
+        staticId: mainChar?.staticId || cleanStatic,
+        characterName: mainChar?.characterName || cleanNick || profile.characterName,
       },
+      include: { characters: { orderBy: { createdAt: 'asc' } } },
     });
+
+    return updatedProfile;
+  }
+
+  /**
+   * Set which character is main
+   */
+  static async setMainCharacter(guildId: string, userId: string, staticOrCharId: string) {
+    const profile = await this.getOrCreateProfile(guildId, userId);
+    const chars = await prisma.userCharacter.findMany({
+      where: { profileId: profile.id },
+    });
+
+    const targetChar = chars.find(c => c.id === staticOrCharId || c.staticId === staticOrCharId);
+    if (!targetChar) throw new Error('Персонаж со статиком не найден в профиле');
+
+    await prisma.userCharacter.updateMany({
+      where: { profileId: profile.id },
+      data: { isMain: false },
+    });
+
+    await prisma.userCharacter.update({
+      where: { id: targetChar.id },
+      data: { isMain: true },
+    });
+
+    const updatedProfile = await prisma.userProfile.update({
+      where: { id: profile.id },
+      data: {
+        staticId: targetChar.staticId,
+        characterName: targetChar.characterName || profile.characterName,
+      },
+      include: { characters: { orderBy: { createdAt: 'asc' } } },
+    });
+
+    // Auto-sync nickname in Discord
+    try {
+      const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+      if (guild) {
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (member) {
+          await NicknameService.syncMemberNickname(member, 'Смена основного персонажа').catch(() => null);
+        }
+      }
+    } catch {}
+
+    return updatedProfile;
+  }
+
+  /**
+   * Replace or sync all characters (up to 3) for a member
+   */
+  static async syncCharacters(guildId: string, userId: string, charactersList: { staticId: string; characterName?: string; isMain?: boolean }[]) {
+    const profile = await this.getOrCreateProfile(guildId, userId);
+    
+    // Delete existing characters and recreate clean
+    await prisma.userCharacter.deleteMany({
+      where: { profileId: profile.id },
+    });
+
+    const sliceList = charactersList.slice(0, 3).filter(c => c.staticId && c.staticId.trim() !== '');
+    if (sliceList.length > 0 && !sliceList.some(c => c.isMain)) {
+      sliceList[0].isMain = true;
+    }
+
+    for (const c of sliceList) {
+      await prisma.userCharacter.create({
+        data: {
+          profileId: profile.id,
+          staticId: c.staticId.trim(),
+          characterName: c.characterName?.trim() || null,
+          isMain: Boolean(c.isMain),
+        },
+      });
+    }
+
+    const mainChar = sliceList.find(c => c.isMain) || sliceList[0];
+
+    const updatedProfile = await prisma.userProfile.update({
+      where: { id: profile.id },
+      data: {
+        staticId: mainChar ? mainChar.staticId.trim() : null,
+        characterName: mainChar ? (mainChar.characterName?.trim() || null) : null,
+      },
+      include: { characters: { orderBy: { createdAt: 'asc' } } },
+    });
+
+    // Auto-sync nickname in Discord
+    try {
+      const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+      if (guild) {
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (member) {
+          await NicknameService.syncMemberNickname(member, 'Обновление данных профиля').catch(() => null);
+        }
+      }
+    } catch {}
+
+    return updatedProfile;
   }
 
   /**
@@ -55,6 +222,7 @@ export class ProfileService {
         penaltyMp: { increment: count },
         notes: reason ? `${profile.notes ? profile.notes + '\n' : ''}[Штраф +${count} МП]: ${reason}` : profile.notes,
       },
+      include: { characters: true },
     });
 
     // Also update any active AcademyChannel for this user
@@ -70,6 +238,53 @@ export class ProfileService {
       const activeChannels = await prisma.academyChannel.findMany({
         where: { guildId, userId, status: 'ACTIVE' },
       });
+      const g = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+      if (g) {
+        for (const ac of activeChannels) {
+          const ch = (g.channels.cache.get(ac.channelId) || await g.channels.fetch(ac.channelId).catch(() => null)) as any;
+          if (ch && ch.isTextBased()) {
+            await AcademyService.refreshStatusMessage(ch, ac.id);
+          }
+        }
+      }
+    } catch {}
+
+    return updated;
+  }
+
+  /**
+   * Remove penalty MPs (down to 0 minimum)
+   */
+  static async removePenaltyMp(guildId: string, userId: string, count: number, reason?: string) {
+    const profile = await this.getOrCreateProfile(guildId, userId);
+    const currentPenalty = profile.penaltyMp || 0;
+    const newPenalty = Math.max(0, currentPenalty - count);
+    const removedCount = currentPenalty - newPenalty;
+
+    const updated = await prisma.userProfile.update({
+      where: { id: profile.id },
+      data: {
+        penaltyMp: newPenalty,
+        notes: reason ? `${profile.notes ? profile.notes + '\n' : ''}[Снят штраф -${removedCount} МП]: ${reason}` : profile.notes,
+      },
+      include: { characters: true },
+    });
+
+    // Also update active AcademyChannels
+    const activeChannels = await prisma.academyChannel.findMany({
+      where: { guildId, userId, status: 'ACTIVE' },
+    });
+
+    for (const ac of activeChannels) {
+      const updatedAcPenalty = Math.max(0, (ac.penaltyMp || 0) - removedCount);
+      await prisma.academyChannel.update({
+        where: { id: ac.id },
+        data: { penaltyMp: updatedAcPenalty },
+      });
+    }
+
+    try {
+      const { AcademyService } = await import('../academy/academyService');
       const g = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
       if (g) {
         for (const ac of activeChannels) {
@@ -145,9 +360,14 @@ export class ProfileService {
           { userTag: { contains: q } },
           { characterName: { contains: q } },
           { userId: { contains: q } },
+          { characters: { some: { staticId: { contains: q } } } },
+          { characters: { some: { characterName: { contains: q } } } },
         ],
       },
-      take: 20,
+      include: {
+        characters: { orderBy: { createdAt: 'asc' } },
+      },
+      take: 50,
     });
   }
 

@@ -83,6 +83,14 @@ async function getFullStatsData(guildId: string) {
   // 4. Role Persistence & Audit stats
   const savedRolesCount = await prisma.savedMemberRoles.count({ where: { guildId } });
 
+  // 5. Members Activity Leaderboard
+  const membersLeaderboard = await prisma.userProfile.findMany({
+    where: { guildId },
+    orderBy: { mpCount: 'desc' },
+    include: { characters: { orderBy: { createdAt: 'asc' } } },
+    take: 50,
+  });
+
   return {
     guild: {
       id: guildId,
@@ -112,6 +120,7 @@ async function getFullStatsData(guildId: string) {
       finished: finishedEvents,
       totalTurnout,
     },
+    members: membersLeaderboard,
     system: {
       savedRolesProfiles: savedRolesCount,
       timestamp: new Date().toISOString(),

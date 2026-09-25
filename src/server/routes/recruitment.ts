@@ -51,11 +51,22 @@ recruitmentRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, 
     recruiterRoleIds = [];
   }
 
+  let memberRoleIds: string[] = [];
+  try {
+    memberRoleIds = JSON.parse(recConfig.memberRoleIdsJson || '[]');
+  } catch {
+    memberRoleIds = [];
+  }
+  if (recConfig.memberRoleId && !memberRoleIds.includes(recConfig.memberRoleId)) {
+    memberRoleIds.push(recConfig.memberRoleId);
+  }
+
   return res.json({
     config: {
       ...recConfig,
       questions,
       recruiterRoleIds,
+      memberRoleIds,
     },
   });
 });
@@ -68,11 +79,17 @@ recruitmentRouter.post('/config', requireAuth, requirePermission('manageRecruiti
     categoryId,
     logChannelId,
     memberRoleId,
+    memberRoleIds,
     recruiterRoleIds,
     questions,
     welcomeMessage,
     rejectionMessage,
   } = req.body;
+
+  const roleIdsArray = Array.isArray(memberRoleIds) 
+    ? memberRoleIds 
+    : (memberRoleId ? [memberRoleId] : []);
+  const primaryRoleId = roleIdsArray[0] || memberRoleId || null;
 
   const updated = await prisma.recruitmentConfig.upsert({
     where: { guildId },
@@ -80,7 +97,8 @@ recruitmentRouter.post('/config', requireAuth, requirePermission('manageRecruiti
       channelId,
       categoryId,
       logChannelId,
-      memberRoleId,
+      memberRoleId: primaryRoleId,
+      memberRoleIdsJson: JSON.stringify(roleIdsArray),
       recruiterRoleIds: JSON.stringify(recruiterRoleIds || []),
       questionsJson: JSON.stringify(questions || []),
       welcomeMessage,
@@ -91,7 +109,8 @@ recruitmentRouter.post('/config', requireAuth, requirePermission('manageRecruiti
       channelId,
       categoryId,
       logChannelId,
-      memberRoleId,
+      memberRoleId: primaryRoleId,
+      memberRoleIdsJson: JSON.stringify(roleIdsArray),
       recruiterRoleIds: JSON.stringify(recruiterRoleIds || []),
       questionsJson: JSON.stringify(questions || []),
       welcomeMessage,

@@ -22,7 +22,8 @@ model GuildConfig {
   defaultMentionRoleId  String?
   staticBindingChannelId String?
   leaveRequestChannelId  String?
-  statsApiKey           String?  // API key for external stats integrations
+  eventPriorityRoleId   String?  // Discord role that gets priority for limited events (Капт, ВЗЗ, МЦЛ)
+  eventPriorityMinRank  Int?     @default(1)
   updatedAt          DateTime @updatedAt
   createdAt          DateTime @default(now())
 }
@@ -52,6 +53,7 @@ model RolePermission {
   manageAcademy      Boolean  @default(false)
   manageVoiceTracker Boolean  @default(false)
   antiNukeAlerts     Boolean  @default(false)
+  permissionsJson    String   @default("{}") // Modular & granular permissions JSON
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -63,8 +65,9 @@ model RecruitmentConfig {
   channelId          String?  // Channel where "Apply" button is posted
   messageId          String?  // ID of the bot announcement message with the button
   categoryId         String?  // Category where private ticket channels are created
-  logChannelId       String?  // Channel where transcripts are stored
-  memberRoleId       String?  // Role granted upon approval
+  logChannelId       String?  // Channel where transcripts are stored (#заявки-лог)
+  memberRoleId       String?  // Legacy single role granted upon approval
+  memberRoleIdsJson  String   @default("[]") // Multiple roles granted upon approval
   recruiterRoleIds   String   @default("[]") // JSON array of role IDs allowed to review
   // Questions configuration stored as JSON array:
   // [{ id: 'q1', label: 'Имя и Фамилия', placeholder: 'John Doe', required: true, style: 'SHORT' }, ...]
@@ -87,6 +90,7 @@ model RecruitmentApplication {
   rejectionReason  String?
   answersJson      String   @default("{}") // Key-value answers
   transcriptUrl    String?  // Log link or message ID
+  interviewVoiceId String?  // Private interview voice channel ID
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   closedAt         DateTime?
@@ -178,6 +182,13 @@ model BotMessagesConfig {
   ticketGreetingTitle String   @default("Заявка в семью INTERPOL")
   ticketGreetingDesc  String   @default("Приветствуем, {user}!\nВаша анкета получена. Ожидайте рассмотрения рекрутерами семьи.\nНе забудьте подготовить скриншоты статистики.")
 
+  // Linked Custom Embed Templates from Embed Generator
+  welcomeTemplateId   String?
+  leaveTemplateId     String?
+  ticketTemplateId    String?
+  academyTemplateId   String?
+  customMessagesJson  String   @default("{}")
+
   botStatusText       String   @default("Majestic RP • /event")
   botStatusActivity   String   @default("PLAYING")
 
@@ -232,9 +243,25 @@ model UserProfile {
   mpReports       MpReport[]
   academyChannels AcademyChannel[]
   leaveRequests   LeaveRequest[]
+  characters      UserCharacter[]
 
   @@unique([guildId, userId])
   @@index([staticId])
+}
+
+model UserCharacter {
+  id            String      @id @default(cuid())
+  profileId     String
+  staticId      String      // Majestic RP Static ID (up to 3 characters per user)
+  characterName String?     // Character In-game nickname
+  isMain        Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  profile       UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([staticId])
+  @@index([profileId])
 }
 
 // ==========================================
@@ -271,7 +298,7 @@ model AcademyChannel {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  userProfile     UserProfile? @relation(fields: [guildId, userId], references: [guildId, userId])
+  userProfile     UserProfile? @relation(fields: [guildId, userId], references: [guildId, userId], onDelete: Cascade)
   reports         MpReport[]
 }
 
@@ -293,8 +320,8 @@ model MpReport {
   createdAt        DateTime        @default(now())
   reviewedAt       DateTime?
 
-  userProfile      UserProfile?    @relation(fields: [guildId, userId], references: [guildId, userId])
-  academyChannel   AcademyChannel? @relation(fields: [academyChannelId], references: [id])
+  userProfile      UserProfile?    @relation(fields: [guildId, userId], references: [guildId, userId], onDelete: Cascade)
+  academyChannel   AcademyChannel? @relation(fields: [academyChannelId], references: [id], onDelete: Cascade)
 }
 
 // ==========================================
@@ -354,6 +381,7 @@ model LeaveRequest {
   guildId         String
   userId          String
   userTag         String?
+  type            String       @default("VACATION") // VACATION (отпуск 1-14 дней), TIMEOFF (отгул 5 минут - 24 часа)
   startDate       DateTime
   endDate         DateTime
   reason          String
@@ -364,7 +392,9 @@ model LeaveRequest {
   createdAt       DateTime     @default(now())
   reviewedAt      DateTime?
 
-  userProfile     UserProfile? @relation(fields: [guildId, userId], references: [guildId, userId])
+  userProfile     UserProfile? @relation(fields: [guildId, userId], references: [guildId, userId], onDelete: Cascade)
+
+  @@index([guildId, status])
 }
 
 // ==========================================
@@ -450,5 +480,59 @@ model ServerBackupSnapshot {
   rolesCount    Int    @default(0)
   createdAt   DateTime @default(now())
 }
+
+// ==========================================
+// V2 EXTENSIONS: COMPREHENSIVE AUDIT LOGS
+// ==========================================
+
+model AuditLogEntry {
+  id           String   @id @default(cuid())
+  guildId      String
+  category     String   // MESSAGES, MEMBERS, ROLES, CHANNELS, VOICE, INVITES, BOT, EVENTS, ACADEMY, RECRUIT, LEAVES, PROFILES
+  action       String   // e.g. "MESSAGE_DELETE", "MEMBER_JOIN", "LEAVE_APPROVE", "PENALTY_ADD", etc.
+  title        String
+  description  String
+  executorId   String?
+  executorTag  String?
+  targetId     String?
+  targetTag    String?
+  metadataJson String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([guildId, category])
+  @@index([guildId, createdAt])
+  @@index([executorId])
+  @@index([targetId])
+}
+
+// ==========================================
+// V2 EXTENSIONS: ROLE NICKNAME BINDINGS & AUTO-NICK
+// ==========================================
+
+model RoleNicknameBinding {
+  id          String   @id @default(cuid())
+  guildId     String
+  roleId      String   // Discord Role ID
+  roleName    String?  // Cache of role name
+  prefix      String   // e.g. "1", "2", "3", "[Академик]"
+  format      String   @default("{prefix} | {name} | {static}") // Nickname template
+  priority    Int      @default(0) // Higher priority takes precedence if user has multiple roles
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([guildId, roleId])
+  @@index([guildId, priority])
+}
+
+model NicknameConfig {
+  guildId        String   @id
+  enabled        Boolean  @default(true) // Auto-change enabled
+  defaultFormat  String   @default("{prefix} | {name} | {static}")
+  defaultPrefix  String   @default("1")
+  fallbackFormat String   @default("{name} | {static}")
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+}
+
 
 

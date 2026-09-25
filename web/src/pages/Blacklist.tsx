@@ -41,7 +41,7 @@ export const Blacklist: React.FC = () => {
       fields: [
         {
           name: 'staticId',
-          label: 'Majestic Static ID',
+          label: 'Static ID',
           placeholder: 'Например: 142055',
           required: true,
         },
@@ -118,7 +118,7 @@ export const Blacklist: React.FC = () => {
   const withDiscordCount = blacklist.filter((b) => !!b.discordId).length;
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

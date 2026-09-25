@@ -47,7 +47,7 @@ export const EmbedBuilder: React.FC = () => {
   const [authorUrl, setAuthorUrl] = useState('');
   const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [footerText, setFooterText] = useState('INTERPOL BOT • Majestic RP');
+  const [footerText, setFooterText] = useState('INTERPOL BOT');
   const [footerIconUrl, setFooterIconUrl] = useState('');
   const [includeTimestamp, setIncludeTimestamp] = useState(true);
   const [fields, setFields] = useState<EmbedField[]>([

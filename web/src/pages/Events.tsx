@@ -25,9 +25,16 @@ export const Events: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  const [mainTab, setMainTab] = useState<'events' | 'prioritySettings'>('events');
+  const [priorityConfig, setPriorityConfig] = useState({
+    eventPriorityRoleId: '',
+    eventPriorityMinRank: 0,
+  });
+  const [savingPriority, setSavingPriority] = useState(false);
+
   // New Event Form State
   const [form, setForm] = useState({
-    title: '',
+    title: 'Капт',
     description: '',
     type: 'LIMITED',
     checkInTime: '',
@@ -45,15 +52,22 @@ export const Events: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [eventsRes, rolesRes, channelsRes, defaultsRes] = await Promise.all([
+      const [eventsRes, rolesRes, channelsRes, defaultsRes, cfgRes] = await Promise.all([
         api.get(`/events?status=${statusFilter}`),
         api.get('/guild/roles'),
         api.get('/guild/channels'),
         api.get('/events/defaults').catch(() => ({ data: {} })),
+        api.get('/events/config').catch(() => ({ data: { eventPriorityRoleId: '', eventPriorityMinRank: 0 } })),
       ]);
       setEvents(eventsRes.data.events);
       setRoles(rolesRes.data.roles);
       setChannels(channelsRes.data.channels);
+      if (cfgRes.data) {
+        setPriorityConfig({
+          eventPriorityRoleId: cfgRes.data.eventPriorityRoleId || '',
+          eventPriorityMinRank: cfgRes.data.eventPriorityMinRank || 0,
+        });
+      }
       if (defaultsRes.data) {
         setDefaultSettings(defaultsRes.data);
         setForm(prev => ({
@@ -67,6 +81,26 @@ export const Events: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSavePriorityConfig = async () => {
+    try {
+      setSavingPriority(true);
+      await api.post('/events/config', priorityConfig);
+      modal.alert({
+        title: 'Успешно',
+        message: 'Настройки приоритета сборов сохранены!',
+        type: 'success',
+      });
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось сохранить настройки',
+        type: 'error',
+      });
+    } finally {
+      setSavingPriority(false);
     }
   };
 
@@ -191,44 +225,135 @@ export const Events: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
             <CalendarDays className="w-6 h-6 text-pink-500" />
-            Сборы на мероприятия
+            Сборы на мероприятия (Капты, ВЗЗ, МЦЛ)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Дропы, цеха, ВЗМ, МЦЛ, капты с умными напоминаниями и управлением составом
+            Только лимитированные сборы с умным распределением состава по приоритету рангов и ролей
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Main Mode Switcher */}
           <div className="flex bg-[#0B0E14] p-1 rounded-xl border border-[#1E232F]">
-            {['ACTIVE', 'FINISHED', 'ALL'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  statusFilter === st
-                    ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {st === 'ACTIVE' && '🟢 Активные'}
-                {st === 'FINISHED' && '🏁 Завершенные'}
-                {st === 'ALL' && 'Все'}
-              </button>
-            ))}
+            <button
+              onClick={() => setMainTab('events')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                mainTab === 'events'
+                  ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Сборы ({events.length})
+            </button>
+            <button
+              onClick={() => setMainTab('prioritySettings')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                mainTab === 'prioritySettings'
+                  ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              ⚙️ Настройки приоритета
+            </button>
           </div>
 
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-semibold shadow-lg shadow-pink-600/25 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Объявить сбор
-          </button>
+          {mainTab === 'events' && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-semibold shadow-lg shadow-pink-600/25 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Объявить сбор
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Events Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {mainTab === 'prioritySettings' ? (
+        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 space-y-5 max-w-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Приоритет попадания в основной состав</h3>
+              <p className="text-xs text-slate-400">
+                Настройте Discord роль и ранг, которые дают право приоритетного прохода в основу
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-2 text-xs">
+            <div>
+              <label className="block text-slate-300 mb-1.5 font-semibold">Приоритетная роль Discord</label>
+              <select
+                value={priorityConfig.eventPriorityRoleId}
+                onChange={(e) => setPriorityConfig({ ...priorityConfig, eventPriorityRoleId: e.target.value })}
+                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-pink-500"
+              >
+                <option value="">Не установлена (только по рангу)</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    @{r.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Участники с этой ролью всегда попадают в основной состав при записи на сбор, вытесняя в резерв участников без роли.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-slate-300 mb-1.5 font-semibold">Минимальный приоритетный ранг (IC)</label>
+              <input
+                type="number"
+                min={0}
+                max={20}
+                value={priorityConfig.eventPriorityMinRank}
+                onChange={(e) => setPriorityConfig({ ...priorityConfig, eventPriorityMinRank: parseInt(e.target.value, 10) || 0 })}
+                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-pink-500"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Участники с более высоким рангом в профиле имеют преимущество перед меньшими рангами при заполнении мест.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={handleSavePriorityConfig}
+                disabled={savingPriority}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-md shadow-pink-600/25 transition-all disabled:opacity-50"
+              >
+                {savingPriority ? 'Сохранение...' : 'Сохранить настройки приоритета'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Status Filters Bar */}
+          <div className="flex items-center gap-2">
+            <div className="flex bg-[#0B0E14] p-1 rounded-xl border border-[#1E232F]">
+              {['ACTIVE', 'FINISHED', 'ALL'].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    statusFilter === st
+                      ? 'bg-gradient-to-r from-pink-600 to-rose-500 text-white shadow-md shadow-pink-600/25'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {st === 'ACTIVE' && '🟢 Активные сборы'}
+                  {st === 'FINISHED' && '🏁 Завершенные'}
+                  {st === 'ALL' && 'Все'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Events Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {loading ? (
           <div className="col-span-full py-12 text-center text-slate-500">Загрузка мероприятий...</div>
         ) : events.length === 0 ? (
@@ -406,6 +531,8 @@ export const Events: React.FC = () => {
           })
         )}
       </div>
+    </>
+  )}
 
       {/* Create Event Modal */}
       {modalOpen && (
@@ -426,43 +553,53 @@ export const Events: React.FC = () => {
 
             <form onSubmit={handleCreateEvent} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Название / Тип МП *</label>
+                <label className="block text-slate-400 mb-1.5 font-medium">Выберите мероприятие (только лимитированные) *</label>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {[
+                    { title: 'Капт', limit: 10, icon: '⚔️' },
+                    { title: 'ВЗЗ', limit: 15, icon: '🛡️' },
+                    { title: 'МЦЛ', limit: 15, icon: '🏆' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.title}
+                      type="button"
+                      onClick={() => setForm({ ...form, title: preset.title, participantLimit: preset.limit })}
+                      className={`p-2.5 rounded-xl border text-center font-semibold text-xs transition-all ${
+                        form.title.startsWith(preset.title)
+                          ? 'bg-pink-600/20 border-pink-500 text-pink-300 shadow-md shadow-pink-600/10'
+                          : 'bg-[#0B0E14] border-[#1E232F] text-slate-400 hover:text-white hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="text-base block mb-0.5">{preset.icon}</span>
+                      <span>{preset.title}</span>
+                      <span className="block text-[10px] text-slate-500 font-normal">до {preset.limit} чел.</span>
+                    </button>
+                  ))}
+                </div>
+
                 <input
                   type="text"
                   required
-                  placeholder="например: Дроп 20:00, Цех, ВЗМ, МЦЛ, Капт"
+                  placeholder="Название сбора (например: Капт vs The Families)"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Тип сбора *</label>
-                  <select
-                    value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <option value="LIMITED">С ограничением мест (ВЗМ, Капт)</option>
-                    <option value="UNLIMITED">Без ограничений (Массовый)</option>
-                  </select>
-                </div>
-
-                {form.type === 'LIMITED' && (
-                  <div>
-                    <label className="block text-slate-400 mb-1 font-medium">Лимит мест *</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={form.participantLimit}
-                      onChange={(e) => setForm({ ...form, participantLimit: parseInt(e.target.value, 10) || 10 })}
-                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                    />
-                  </div>
-                )}
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Лимит мест в основном составе *</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={form.participantLimit}
+                  onChange={(e) => setForm({ ...form, participantLimit: parseInt(e.target.value, 10) || 10 })}
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                />
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  Все участники сверх лимита попадают в резерв. Приоритетная роль или высокий ранг вытесняют в резерв участников без приоритета.
+                </span>
               </div>
 
               {/* Quick Date Presets */}

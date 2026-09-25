@@ -21,6 +21,8 @@ import blacklistRouter from './routes/blacklist';
 import antiNukeRouter from './routes/antiNuke';
 import botManagementRouter from './routes/botManagement';
 import serverSetupRouter from './routes/serverSetup';
+import testModeRouter from './routes/testMode';
+import nicknamesRouter from './routes/nicknames';
 
 export function createServer() {
   const app = express();
@@ -34,7 +36,7 @@ export function createServer() {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
-  // API Routes
+  // Dashboard Backend Routes
   app.use('/api/auth', authRouter);
   app.use('/api/guild', guildRouter);
   app.use('/api/recruitment', recruitmentRouter);
@@ -53,6 +55,8 @@ export function createServer() {
   app.use('/api/anti-nuke', antiNukeRouter);
   app.use('/api/bot', botManagementRouter);
   app.use('/api/setup', serverSetupRouter);
+  app.use('/api/test-mode', testModeRouter);
+  app.use('/api/nicknames', nicknamesRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {
@@ -77,7 +81,7 @@ export function createServer() {
 export function startServer() {
   const app = createServer();
   const server = app.listen(config.server.port, () => {
-    console.log(`🌐 [Web Server] Express API & Dashboard running at http://localhost:${config.server.port}`);
+    console.log(`🌐 [Web Server] Web Dashboard running at http://localhost:${config.server.port}`);
   });
   return server;
 }

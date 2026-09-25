@@ -197,8 +197,107 @@ export class AuditLogger {
           console.error(`[AuditLogger] Failed to send embed to #${channel.name}:`, err);
         });
       }
+
+      // Automatically persist to DB for website audit logs
+      const title = embed.data.title || `${categoryType} Log`;
+      const description = embed.data.description || '';
+      await this.recordEntry({
+        guildId: guild.id,
+        category: categoryType,
+        action: categoryType,
+        title,
+        description,
+      }).catch(() => null);
     } catch (error) {
       console.error(`[AuditLogger Error] Failed to send log for ${categoryType}:`, error);
+    }
+  }
+
+  /**
+   * Directly record a comprehensive audit log entry into the database
+   * and post an embed to the dedicated bot logs channel (#бот-лог) in Discord
+   */
+  public static async recordEntry(params: {
+    guildId: string;
+    category: string;
+    action: string;
+    title: string;
+    description: string;
+    executorId?: string | null;
+    executorTag?: string | null;
+    targetId?: string | null;
+    targetTag?: string | null;
+    metadata?: any;
+  }): Promise<void> {
+    try {
+      if (!params.guildId) return;
+      await prisma.auditLogEntry.create({
+        data: {
+          guildId: params.guildId,
+          category: params.category,
+          action: params.action,
+          title: params.title,
+          description: params.description,
+          executorId: params.executorId || null,
+          executorTag: params.executorTag || null,
+          targetId: params.targetId || null,
+          targetTag: params.targetTag || null,
+          metadataJson: JSON.stringify(params.metadata || {}),
+        },
+      });
+
+      // Forward bot action embed to dedicated #бот-лог channel in Discord
+      const { default: botClient } = await import('../../client');
+      const guild = botClient.guilds.cache.get(params.guildId) || await botClient.guilds.fetch(params.guildId).catch(() => null);
+      if (guild) {
+        const logConfig = await prisma.loggingConfig.findUnique({
+          where: { guildId: params.guildId },
+        }).catch(() => null);
+
+        let targetChannel: TextChannel | null = null;
+        if (logConfig?.botLogsChannelId) {
+          targetChannel = (guild.channels.cache.get(logConfig.botLogsChannelId) ||
+            await guild.channels.fetch(logConfig.botLogsChannelId).catch(() => null)) as TextChannel | null;
+        }
+
+        if (!targetChannel || !targetChannel.isTextBased()) {
+          targetChannel = (guild.channels.cache.find(
+            c => c.type === ChannelType.GuildText && (c.name === 'бот-лог' || c.name === 'действия-бота' || c.name === 'логи-бота')
+          ) || null) as TextChannel | null;
+        }
+
+        if (targetChannel && targetChannel.isTextBased()) {
+          const embed = new EmbedBuilder()
+            .setColor(0xEC4899)
+            .setTitle(`🤖 ${params.title}`)
+            .setDescription(params.description || 'Действие выполнено ботом')
+            .addFields(
+              { name: 'Действие', value: `\`${params.action}\``, inline: true },
+              { name: 'Раздел', value: params.category, inline: true }
+            )
+            .setTimestamp();
+
+          if (params.executorTag || params.executorId) {
+            embed.addFields({
+              name: 'Исполнитель',
+              value: params.executorTag ? `${params.executorTag} (${params.executorId || ''})` : `<@${params.executorId}>`,
+              inline: true,
+            });
+          }
+
+          if (params.targetTag || params.targetId) {
+            embed.addFields({
+              name: 'Цель',
+              value: params.targetTag ? `${params.targetTag} (${params.targetId || ''})` : `<@${params.targetId}>`,
+              inline: true,
+            });
+          }
+
+          await targetChannel.send({ embeds: [embed] }).catch(() => null);
+        }
+      }
+    } catch (err) {
+      console.error('[AuditLogger] recordEntry error:', err);
     }
   }
 

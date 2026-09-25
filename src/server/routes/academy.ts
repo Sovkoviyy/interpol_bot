@@ -49,7 +49,6 @@ router.get('/channels', async (req: AuthenticatedRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
       include: {
         reports: {
-          take: 5,
           orderBy: { createdAt: 'desc' },
         },
       },

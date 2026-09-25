@@ -21,6 +21,8 @@ import { Blacklist } from './pages/Blacklist';
 import { Leaves } from './pages/Leaves';
 import { Profiles } from './pages/Profiles';
 import { ServerSetup } from './pages/ServerSetup';
+import { TestMode } from './pages/TestMode';
+import { Nicknames } from './pages/Nicknames';
 import { ModalProvider } from './context/ModalContext';
 
 export const App: React.FC = () => {
@@ -76,30 +78,34 @@ export const App: React.FC = () => {
                 <Navigate to="/login" replace />
               ) : (
                 <div className="flex h-screen w-screen overflow-hidden bg-[#060709] text-slate-100">
-                  <Sidebar userPermissions={user?.permissions} />
+                  <Sidebar userPermissions={user?.permissions} isBypass={user?.isBypass} />
                   <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
                     <Navbar user={user} onLogout={() => setUser(null)} />
-                    <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-                      <Routes>
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/setup" element={<ServerSetup />} />
-                        <Route path="/profiles" element={<Profiles />} />
-                        <Route path="/academy" element={<Academy />} />
-                        <Route path="/voice-tracker" element={<VoiceTracker />} />
-                        <Route path="/recruitment" element={<Recruitment />} />
-                        <Route path="/events" element={<Events />} />
-                        <Route path="/leaves" element={<Leaves />} />
-                        <Route path="/payroll" element={<RecruiterPayroll />} />
-                        <Route path="/anti-nuke" element={<AntiNuke />} />
-                        <Route path="/blacklist" element={<Blacklist />} />
-                        <Route path="/members" element={<Members />} />
-                        <Route path="/messages" element={<BotMessages />} />
-                        <Route path="/embeds" element={<EmbedBuilder />} />
-                        <Route path="/logs" element={<Logs />} />
-                        <Route path="/roles" element={<Roles />} />
-                        <Route path="/stats" element={<Stats />} />
-                        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                      </Routes>
+                    <main className="flex-1 px-4 py-6 md:px-8 md:py-8 overflow-y-auto custom-scrollbar">
+                      <div className="w-full max-w-7xl mx-auto">
+                        <Routes>
+                          <Route path="/dashboard" element={<Dashboard />} />
+                          <Route path="/setup" element={<ServerSetup />} />
+                          <Route path="/profiles" element={<Profiles />} />
+                          <Route path="/nicknames" element={<Nicknames />} />
+                          <Route path="/academy" element={<Academy />} />
+                          <Route path="/voice-tracker" element={<VoiceTracker />} />
+                          <Route path="/recruitment" element={<Recruitment />} />
+                          <Route path="/events" element={<Events />} />
+                          <Route path="/leaves" element={<Leaves />} />
+                          <Route path="/payroll" element={<RecruiterPayroll />} />
+                          <Route path="/anti-nuke" element={<AntiNuke />} />
+                          <Route path="/blacklist" element={<Blacklist />} />
+                          <Route path="/members" element={<Members />} />
+                          <Route path="/messages" element={<BotMessages />} />
+                          <Route path="/embeds" element={<EmbedBuilder />} />
+                          <Route path="/logs" element={<Logs />} />
+                          <Route path="/roles" element={<Roles />} />
+                          <Route path="/stats" element={<Stats />} />
+                          <Route path="/test-mode" element={<TestMode />} />
+                          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                        </Routes>
+                      </div>
                     </main>
                   </div>
                 </div>

@@ -20,7 +20,7 @@ async function main() {
     console.warn('⚠️ [SECURITY WARNING] Default JWT_SECRET is active in production mode! Set JWT_SECRET in .env for security.');
   }
 
-  // 1. Start Express Web Server & API
+  // 1. Start Web Dashboard Server
   startServer();
 
   // 2. Start Discord Bot

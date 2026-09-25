@@ -13,6 +13,34 @@ const router = Router();
 router.use(requireAuth);
 
 /**
+ * GET /api/leave/active
+ * Get currently active leaves/time-offs with remaining time
+ */
+router.get('/active', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const active = await LeaveService.getActiveLeaves(guildId);
+    res.json({ active });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/leave/logs
+ * Get leave history & audit logs
+ */
+router.get('/logs', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const logs = await LeaveService.getLeaveLogs(guildId);
+    res.json({ logs });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/leave
  */
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
@@ -28,14 +56,14 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
 /**
  * POST /api/leave
- * Request a leave
+ * Request a leave or time-off
  */
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const userId = req.user?.userId || (req.user as any)?.id || 'unknown';
     const userTag = req.user?.username || 'Member';
-    const { startDate, endDate, reason } = req.body;
+    const { startDate, endDate, reason, type } = req.body;
 
     if (!startDate || !endDate || !reason) {
       return res.status(400).json({ error: 'Заполните все поля заявки' });
@@ -47,7 +75,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       userTag,
       new Date(startDate),
       new Date(endDate),
-      reason
+      reason,
+      (type === 'TIMEOFF' ? 'TIMEOFF' : 'VACATION')
     );
 
     res.json({ leave });

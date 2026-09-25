@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   MessageSquare, 
   Send, 
@@ -10,33 +11,74 @@ import {
   Ticket, 
   Info,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Layers,
+  ExternalLink
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+
+interface DiscordChannel {
+  id: string;
+  name: string;
+  type: number;
+}
+
+interface CustomTemplate {
+  id: string;
+  name: string;
+  title?: string | null;
+  description?: string | null;
+  color?: string;
+}
+
+interface BotMessagesForm {
+  welcomeEnabled: boolean;
+  welcomeChannelId: string;
+  welcomeTitle: string;
+  welcomeMessage: string;
+  welcomeEmbedColor: string;
+  welcomeTemplateId: string;
+
+  leaveEnabled: boolean;
+  leaveChannelId: string;
+  leaveMessage: string;
+  leaveTemplateId: string;
+
+  ticketGreetingTitle: string;
+  ticketGreetingDesc: string;
+  ticketTemplateId: string;
+
+  botStatusText: string;
+  botStatusActivity: string;
+}
 
 export const BotMessages: React.FC = () => {
   const modal = useModal();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [channels, setChannels] = useState<any[]>([]);
+  const [channels, setChannels] = useState<DiscordChannel[]>([]);
+  const [templates, setTemplates] = useState<CustomTemplate[]>([]);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<BotMessagesForm>({
     welcomeEnabled: false,
     welcomeChannelId: '',
     welcomeTitle: 'Добро пожаловать в семью, {user}!',
     welcomeMessage: 'Рады приветствовать тебя на нашем сервере {guild}! Ознакомься с правилами и подай заявку в семью.',
     welcomeEmbedColor: '#EC4899',
+    welcomeTemplateId: '',
 
     leaveEnabled: false,
     leaveChannelId: '',
     leaveMessage: '{user} покинул наш сервер.',
+    leaveTemplateId: '',
 
     ticketGreetingTitle: 'Заявка в семью INTERPOL',
     ticketGreetingDesc: 'Приветствуем, {user}!\nВаша анкета получена. Ожидайте рассмотрения рекрутерами семьи.\nНе забудьте подготовить скриншоты статистики.',
+    ticketTemplateId: '',
 
-    botStatusText: 'Majestic RP • /event',
+    botStatusText: 'Interpol • /event',
     botStatusActivity: 'PLAYING',
   });
 
@@ -48,8 +90,15 @@ export const BotMessages: React.FC = () => {
         api.get('/guild/channels'),
       ]);
       if (cfgRes.data?.config) {
-        setForm(cfgRes.data.config);
+        setForm((prev: BotMessagesForm) => ({
+          ...prev,
+          ...cfgRes.data.config,
+          welcomeTemplateId: cfgRes.data.config.welcomeTemplateId || '',
+          leaveTemplateId: cfgRes.data.config.leaveTemplateId || '',
+          ticketTemplateId: cfgRes.data.config.ticketTemplateId || '',
+        }));
       }
+      setTemplates(cfgRes.data?.templates || []);
       setChannels(chRes.data?.channels || []);
     } catch (err: any) {
       modal.alert({
@@ -138,7 +187,7 @@ export const BotMessages: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -206,53 +255,102 @@ export const BotMessages: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Цвет полоски Embed
+                  Шаблон из Конструктора Embed
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={form.welcomeEmbedColor || '#EC4899'}
-                    onChange={(e) => setForm({ ...form, welcomeEmbedColor: e.target.value })}
-                    className="w-10 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                <select
+                  value={form.welcomeTemplateId || ''}
+                  onChange={(e) => setForm({ ...form, welcomeTemplateId: e.target.value })}
+                  className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
+                >
+                  <option value="">Не использовать (стандартный текст)</option>
+                  {templates.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>
+                      {tpl.name} {tpl.title ? `— ${tpl.title}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {form.welcomeTemplateId ? (
+              <div className="p-3.5 bg-pink-500/10 border border-pink-500/20 rounded-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-2.5 h-9 rounded-full flex-shrink-0" 
+                    style={{ backgroundColor: templates.find(t => t.id === form.welcomeTemplateId)?.color || '#EC4899' }} 
                   />
-                  <input
-                    type="text"
-                    value={form.welcomeEmbedColor || '#EC4899'}
-                    onChange={(e) => setForm({ ...form, welcomeEmbedColor: e.target.value })}
-                    className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 font-mono"
-                  />
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                      Активный Embed: <span className="text-pink-300">{templates.find(t => t.id === form.welcomeTemplateId)?.name}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                      {templates.find(t => t.id === form.welcomeTemplateId)?.title || 'Без заголовка'} • Переменные {'{user}'}, {'{guild}'}, {'{memberCount}'} поддерживаются автоматически
+                    </p>
+                  </div>
                 </div>
+                <Link
+                  to="/embeds"
+                  className="flex items-center gap-1 text-xs text-pink-400 hover:text-pink-300 font-semibold px-3 py-1.5 bg-[#0B0E14] border border-pink-500/30 rounded-lg transition-all flex-shrink-0"
+                >
+                  <span>Генератор Embed</span>
+                  <ExternalLink className="w-3 h-3" />
+                </Link>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Заголовок Embed карточки
+                    </label>
+                    <input
+                      type="text"
+                      value={form.welcomeTitle}
+                      onChange={(e) => setForm({ ...form, welcomeTitle: e.target.value })}
+                      className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
+                      placeholder="Добро пожаловать в семью, {user}!"
+                    />
+                  </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Заголовок Embed карточки
-              </label>
-              <input
-                type="text"
-                value={form.welcomeTitle}
-                onChange={(e) => setForm({ ...form, welcomeTitle: e.target.value })}
-                className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
-                placeholder="Добро пожаловать в семью, {user}!"
-              />
-            </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Цвет полоски
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={form.welcomeEmbedColor || '#EC4899'}
+                        onChange={(e) => setForm({ ...form, welcomeEmbedColor: e.target.value })}
+                        className="w-10 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                      />
+                      <input
+                        type="text"
+                        value={form.welcomeEmbedColor || '#EC4899'}
+                        onChange={(e) => setForm({ ...form, welcomeEmbedColor: e.target.value })}
+                        className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Текст сообщения
-              </label>
-              <textarea
-                rows={3}
-                value={form.welcomeMessage}
-                onChange={(e) => setForm({ ...form, welcomeMessage: e.target.value })}
-                className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50 leading-relaxed"
-              />
-              <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400">
-                <Info className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
-                <span>Доступные теги: <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{user}"}</code> — участник, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{guild}"}</code> — название сервера, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{memberCount}"}</code> — число участников.</span>
-              </div>
-            </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Текст сообщения
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={form.welcomeMessage}
+                    onChange={(e) => setForm({ ...form, welcomeMessage: e.target.value })}
+                    className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50 leading-relaxed"
+                  />
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400">
+                    <Info className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
+                    <span>Доступные теги: <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{user}"}</code> — участник, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{guild}"}</code> — название сервера, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{memberCount}"}</code> — число участников.</span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="pt-2 flex justify-end">
               <button
@@ -293,37 +391,84 @@ export const BotMessages: React.FC = () => {
           </div>
 
           <div className={`space-y-4 ${!form.leaveEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Канал для сообщений о выходе *
-              </label>
-              <select
-                value={form.leaveChannelId || ''}
-                onChange={(e) => setForm({ ...form, leaveChannelId: e.target.value })}
-                className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
-              >
-                <option value="">Выберите канал...</option>
-                {textChannels.map((c) => (
-                  <option key={c.id} value={c.id}>#{c.name}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Канал для сообщений о выходе *
+                </label>
+                <select
+                  value={form.leaveChannelId || ''}
+                  onChange={(e) => setForm({ ...form, leaveChannelId: e.target.value })}
+                  className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
+                >
+                  <option value="">Выберите канал...</option>
+                  {textChannels.map((c) => (
+                    <option key={c.id} value={c.id}>#{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Шаблон из Конструктора Embed
+                </label>
+                <select
+                  value={form.leaveTemplateId || ''}
+                  onChange={(e) => setForm({ ...form, leaveTemplateId: e.target.value })}
+                  className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
+                >
+                  <option value="">Не использовать (стандартный текст)</option>
+                  {templates.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>
+                      {tpl.name} {tpl.title ? `— ${tpl.title}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Текст прощания
-              </label>
-              <input
-                type="text"
-                value={form.leaveMessage}
-                onChange={(e) => setForm({ ...form, leaveMessage: e.target.value })}
-                className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
-                placeholder="{user} покинул наш сервер."
-              />
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                Поддерживает теги: <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{user}"}</code>, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{guild}"}</code>, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{memberCount}"}</code>.
-              </span>
-            </div>
+            {form.leaveTemplateId ? (
+              <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-2.5 h-9 rounded-full flex-shrink-0" 
+                    style={{ backgroundColor: templates.find(t => t.id === form.leaveTemplateId)?.color || '#F43F5E' }} 
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+                      Активный Embed: <span className="text-rose-300">{templates.find(t => t.id === form.leaveTemplateId)?.name}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                      {templates.find(t => t.id === form.leaveTemplateId)?.title || 'Без заголовка'} • Оформление из Конструктора
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/embeds"
+                  className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-semibold px-3 py-1.5 bg-[#0B0E14] border border-rose-500/30 rounded-lg transition-all flex-shrink-0"
+                >
+                  <span>Генератор Embed</span>
+                  <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Текст прощания
+                </label>
+                <input
+                  type="text"
+                  value={form.leaveMessage}
+                  onChange={(e) => setForm({ ...form, leaveMessage: e.target.value })}
+                  className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
+                  placeholder="{user} покинул наш сервер."
+                />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Поддерживает теги: <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{user}"}</code>, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{guild}"}</code>, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{memberCount}"}</code>.
+                </span>
+              </div>
+            )}
 
             <div className="pt-2 flex justify-end">
               <button
@@ -354,30 +499,77 @@ export const BotMessages: React.FC = () => {
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Заголовок памятки
+                Шаблон из Конструктора Embed
               </label>
-              <input
-                type="text"
-                value={form.ticketGreetingTitle}
-                onChange={(e) => setForm({ ...form, ticketGreetingTitle: e.target.value })}
+              <select
+                value={form.ticketTemplateId || ''}
+                onChange={(e) => setForm({ ...form, ticketTemplateId: e.target.value })}
                 className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
-              />
+              >
+                <option value="">Не использовать (стандартный текст)</option>
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name} {tpl.title ? `— ${tpl.title}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Текст инструкции для кандидата
-              </label>
-              <textarea
-                rows={4}
-                value={form.ticketGreetingDesc}
-                onChange={(e) => setForm({ ...form, ticketGreetingDesc: e.target.value })}
-                className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50 leading-relaxed font-sans"
-              />
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                Поддерживает теги: <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{user}"}</code>, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{guild}"}</code>.
-              </span>
-            </div>
+            {form.ticketTemplateId ? (
+              <div className="p-3.5 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-2.5 h-9 rounded-full flex-shrink-0" 
+                    style={{ backgroundColor: templates.find(t => t.id === form.ticketTemplateId)?.color || '#A855F7' }} 
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      Активный Embed: <span className="text-purple-300">{templates.find(t => t.id === form.ticketTemplateId)?.name}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                      {templates.find(t => t.id === form.ticketTemplateId)?.title || 'Без заголовка'} • Оформление из Конструктора
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/embeds"
+                  className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 font-semibold px-3 py-1.5 bg-[#0B0E14] border border-purple-500/30 rounded-lg transition-all flex-shrink-0"
+                >
+                  <span>Генератор Embed</span>
+                  <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Заголовок памятки
+                  </label>
+                  <input
+                    type="text"
+                    value={form.ticketGreetingTitle}
+                    onChange={(e) => setForm({ ...form, ticketGreetingTitle: e.target.value })}
+                    className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Текст инструкции для кандидата
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={form.ticketGreetingDesc}
+                    onChange={(e) => setForm({ ...form, ticketGreetingDesc: e.target.value })}
+                    className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50 leading-relaxed font-sans"
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    Поддерживает теги: <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{user}"}</code>, <code className="text-pink-400 bg-pink-500/10 px-1 rounded">{"{guild}"}</code>.
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -419,7 +611,7 @@ export const BotMessages: React.FC = () => {
                 value={form.botStatusText}
                 onChange={(e) => setForm({ ...form, botStatusText: e.target.value })}
                 className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
-                placeholder="Majestic RP • /event"
+                placeholder="Interpol • /event"
               />
             </div>
           </div>

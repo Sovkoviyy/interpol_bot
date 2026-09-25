@@ -39,6 +39,7 @@ export interface UserSessionData {
   avatar: string | null;
   guildId: string;
   roles: string[];
+  isBypass?: boolean;
   permissions: {
     isAdmin: boolean;
     manageSettings: boolean;

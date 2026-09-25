@@ -276,6 +276,12 @@ export function registerInteractionHandler() {
           return;
         }
 
+        if (customId.startsWith('recruit_interview_')) {
+          const applicationId = customId.replace('recruit_interview_', '');
+          await RecruitmentService.handleInterview(interaction, applicationId);
+          return;
+        }
+
         if (customId.startsWith('recruit_reject_')) {
           const applicationId = customId.replace('recruit_reject_', '');
           await RecruitmentService.promptRejectModal(interaction, applicationId);
@@ -338,10 +344,10 @@ export function registerInteractionHandler() {
           return;
         }
 
-        if (customId === 'panel_request_leave') {
+        if (customId === 'panel_request_leave' || customId === 'panel_request_vacation') {
           const modal = new ModalBuilder()
             .setCustomId('modal_request_leave')
-            .setTitle('Заявка на отпуск / АФК (макс 14 дн)');
+            .setTitle('Заявка на отпуск (от 1 до 14 дней)');
 
           const startInput = new TextInputBuilder()
             .setCustomId('leave_start_date')
@@ -367,6 +373,34 @@ export function registerInteractionHandler() {
           modal.addComponents(
             new ActionRowBuilder<TextInputBuilder>().addComponents(startInput),
             new ActionRowBuilder<TextInputBuilder>().addComponents(endInput),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput)
+          );
+
+          await interaction.showModal(modal);
+          return;
+        }
+
+        if (customId === 'panel_request_timeoff') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_request_timeoff')
+            .setTitle('Заявка на отгул (5 мин - 24 ч)');
+
+          const durationInput = new TextInputBuilder()
+            .setCustomId('timeoff_duration')
+            .setLabel('Длительность (например: 2 часа, 30 мин, 8ч)')
+            .setPlaceholder('например: 2ч или 45м или 4 часа')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const reasonInput = new TextInputBuilder()
+            .setCustomId('timeoff_reason')
+            .setLabel('Причина отгула')
+            .setPlaceholder('например: Личные дела / ремонт ПК / учеба')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true);
+
+          modal.addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(durationInput),
             new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput)
           );
 
@@ -562,7 +596,8 @@ export function registerInteractionHandler() {
               interaction.user.tag,
               startDate,
               endDate,
-              reason
+              reason,
+              'VACATION'
             );
 
             if (guild) {
@@ -577,6 +612,7 @@ export function registerInteractionHandler() {
                     .setTitle('🏖️ Новая заявка на отпуск')
                     .setDescription(
                       `**Участник:** ${member || interaction.user} (\`${interaction.user.tag}\`)\n` +
+                      `**Тип:** \`🏖️ Отпуск\`\n` +
                       `**Период:** с **${startDate.toLocaleDateString('ru-RU')}** по **${endDate.toLocaleDateString('ru-RU')}** (\`${days} дн.\`)\n` +
                       `**Причина:** ${reason}\n` +
                       `**ID заявки:** \`${leave.id}\``
@@ -601,6 +637,102 @@ export function registerInteractionHandler() {
 
             await interaction.editReply({
               content: `✅ Заявка на отпуск с **${startDate.toLocaleDateString('ru-RU')}** по **${endDate.toLocaleDateString('ru-RU')}** успешно отправлена руководству на рассмотрение!`
+            });
+          } catch (err: any) {
+            await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
+          }
+          return;
+        }
+
+        if (customId === 'modal_request_timeoff') {
+          await interaction.deferReply({ ephemeral: true });
+          const rawDuration = interaction.fields.getTextInputValue('timeoff_duration').trim().toLowerCase();
+          const reason = interaction.fields.getTextInputValue('timeoff_reason');
+
+          let durationMinutes = 0;
+          const hoursMatch = rawDuration.match(/(\d+)\s*(ч|час|часа|часов|h|hour|hours)/);
+          const minsMatch = rawDuration.match(/(\d+)\s*(м|мин|минут|минуты|m|min|mins)/);
+
+          if (hoursMatch) {
+            durationMinutes += parseInt(hoursMatch[1], 10) * 60;
+          }
+          if (minsMatch) {
+            durationMinutes += parseInt(minsMatch[1], 10);
+          }
+          if (!hoursMatch && !minsMatch) {
+            const num = parseInt(rawDuration, 10);
+            if (!isNaN(num)) {
+              durationMinutes = num <= 24 ? num * 60 : num;
+            }
+          }
+
+          if (durationMinutes < 5 || durationMinutes > 1440) {
+            await interaction.editReply({
+              content: '❌ Некорректная длительность отгула. Отгул может составлять от 5 минут до 24 часов (например: `2 часа` или `45м`).'
+            });
+            return;
+          }
+
+          const startDate = new Date();
+          const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
+
+          const targetGuildId = interaction.guildId || (guild ? guild.id : '');
+          if (!targetGuildId) {
+            await interaction.editReply({ content: '❌ Сервер Discord не определен.' });
+            return;
+          }
+
+          try {
+            const leave = await LeaveService.requestLeave(
+              targetGuildId,
+              interaction.user.id,
+              interaction.user.tag,
+              startDate,
+              endDate,
+              reason,
+              'TIMEOFF'
+            );
+
+            if (guild) {
+              const guildConfig = await prisma.guildConfig.findUnique({ where: { guildId: targetGuildId } });
+              if (guildConfig?.leaveRequestChannelId) {
+                const leaveChannel = (guild.channels.cache.get(guildConfig.leaveRequestChannelId) ||
+                  await guild.channels.fetch(guildConfig.leaveRequestChannelId).catch(() => null)) as TextChannel | null;
+                if (leaveChannel && leaveChannel.isTextBased()) {
+                  const hours = Math.floor(durationMinutes / 60);
+                  const remM = durationMinutes % 60;
+                  const durText = hours > 0 ? `${hours} ч. ${remM > 0 ? `${remM} мин.` : ''}` : `${remM} мин.`;
+
+                  const leaveEmbed = new EmbedBuilder()
+                    .setColor(0x3B82F6)
+                    .setTitle('⏱️ Новая заявка на отгул')
+                    .setDescription(
+                      `**Участник:** ${member || interaction.user} (\`${interaction.user.tag}\`)\n` +
+                      `**Тип:** \`⏱️ Отгул\`\n` +
+                      `**Длительность:** \`${durText}\` (до ${endDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})\n` +
+                      `**Причина:** ${reason}\n` +
+                      `**ID заявки:** \`${leave.id}\``
+                    )
+                    .setTimestamp();
+
+                  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                    new ButtonBuilder()
+                      .setCustomId(`leave_approve_${leave.id}`)
+                      .setLabel('✅ Одобрить')
+                      .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                      .setCustomId(`leave_reject_${leave.id}`)
+                      .setLabel('❌ Отклонить')
+                      .setStyle(ButtonStyle.Danger)
+                  );
+
+                  await leaveChannel.send({ embeds: [leaveEmbed], components: [actionRow] }).catch(() => null);
+                }
+              }
+            }
+
+            await interaction.editReply({
+              content: `✅ Заявка на отгул на **${rawDuration}** успешно отправлена руководству на рассмотрение!`
             });
           } catch (err: any) {
             await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });

@@ -8,13 +8,15 @@ import {
   Calendar, 
   Mic, 
   ShieldAlert, 
-  Bot
+  Bot,
+  Flame
 } from 'lucide-react';
 import api from '../api/client';
 
 export const Stats: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [memberSort, setMemberSort] = useState<'mp' | 'voice'>('mp');
 
   const fetchStats = async () => {
     try {
@@ -44,9 +46,17 @@ export const Stats: React.FC = () => {
   const g = stats?.guild || {};
   const ev = stats?.events || {};
   const sys = stats?.system || {};
+  const members = stats?.members || [];
+
+  const sortedMembers = [...members].sort((a: any, b: any) => {
+    if (memberSort === 'voice') {
+      return (b.voiceSeconds || 0) - (a.voiceSeconds || 0);
+    }
+    return (b.mpCount || 0) - (a.mpCount || 0);
+  });
 
   return (
-    <div className="space-y-8 max-w-5xl">
+    <div className="space-y-8 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -55,7 +65,7 @@ export const Stats: React.FC = () => {
             Статистика семьи и сервера
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Детальная аналитика набора, активности мероприятий, состава и внешний доступ по API
+            Детальная аналитика набора, активности мероприятий и состава семьи
           </p>
         </div>
 
@@ -182,6 +192,106 @@ export const Stats: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right font-bold text-indigo-300">
                         {rate}%
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Members Activity Leaderboard with MP and Voice sorting */}
+      <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Flame className="w-5 h-5 text-pink-500" />
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+              Рейтинг активности участников семьи
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400">Сортировать по:</span>
+            <button
+              onClick={() => setMemberSort('mp')}
+              className={`px-3 py-1.5 rounded-xl font-medium transition-all ${
+                memberSort === 'mp'
+                  ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40 font-semibold'
+                  : 'bg-[#0B0E14] text-slate-400 border border-[#1E232F] hover:text-white'
+              }`}
+            >
+              Количеству МП
+            </button>
+            <button
+              onClick={() => setMemberSort('voice')}
+              className={`px-3 py-1.5 rounded-xl font-medium transition-all ${
+                memberSort === 'voice'
+                  ? 'bg-pink-600/20 text-pink-400 border border-pink-500/40 font-semibold'
+                  : 'bg-[#0B0E14] text-slate-400 border border-[#1E232F] hover:text-white'
+              }`}
+            >
+              Времени в войсе
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#1E232F]/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-[#1E232F]">
+              <tr>
+                <th className="px-6 py-3.5">#</th>
+                <th className="px-6 py-3.5">Участник</th>
+                <th className="px-6 py-3.5">Основной статик</th>
+                <th className="px-6 py-3.5 text-center">Отыграно МП</th>
+                <th className="px-6 py-3.5 text-center">Штрафные МП</th>
+                <th className="px-6 py-3.5 text-right">Время в войсе</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#1E232F]">
+              {sortedMembers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                    Данные об активности участников пока отсутствуют
+                  </td>
+                </tr>
+              ) : (
+                sortedMembers.map((m: any, idx: number) => {
+                  const voiceHours = Math.floor((m.voiceSeconds || 0) / 3600);
+                  const voiceMinutes = Math.floor(((m.voiceSeconds || 0) % 3600) / 60);
+                  const voiceStr = voiceHours > 0 ? `${voiceHours}ч ${voiceMinutes}м` : `${voiceMinutes} мин`;
+
+                  return (
+                    <tr key={m.id || idx} className="hover:bg-[#1A1F2B]/60 transition-colors">
+                      <td className="px-6 py-4 font-bold text-slate-400">
+                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-white">{m.characterName || m.userTag || 'Боец'}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">ID: {m.userId}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {m.staticId ? (
+                          <span className="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                            #{m.staticId}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 italic">Не привязан</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-center font-bold text-pink-400 font-mono">
+                        {m.mpCount || 0}
+                      </td>
+                      <td className="px-6 py-4 text-center font-mono">
+                        {(m.penaltyMp || 0) > 0 ? (
+                          <span className="text-amber-400 font-bold">+{m.penaltyMp}</span>
+                        ) : (
+                          <span className="text-slate-500">0</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right font-mono text-slate-300">
+                        {voiceStr}
                       </td>
                     </tr>
                   );

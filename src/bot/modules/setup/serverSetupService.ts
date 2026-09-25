@@ -184,7 +184,7 @@ export class ServerSetupService {
     const staticChannel = await getOrCreateTextChannel('привязка-статика', infoCat.id);
     const leaveChannel = await getOrCreateTextChannel('отпуска-неактив', infoCat.id);
 
-    // 2. Category: НАБОР В СЕМЬЮ
+    // 2. Category: НАБОР В СЕМЬЮ (публичный канал подачи и лог)
     const recruitCat = await getOrCreateCategory('📥 НАБОР В СЕМЬЮ');
     const recruitApplyChannel = await getOrCreateTextChannel('подать-заявку', recruitCat.id);
     const botUserId = guild.members.me?.id || guild.client?.user?.id;
@@ -197,10 +197,13 @@ export class ServerSetupService {
     if (botUserId) {
       reviewOverwrites.push({
         id: botUserId,
-        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks],
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ManageChannels],
       });
     }
-    const recruitReviewChannel = await getOrCreateTextChannel('заявки-набор', recruitCat.id, reviewOverwrites);
+    const recruitReviewChannel = await getOrCreateTextChannel('заявки-лог', recruitCat.id, reviewOverwrites);
+
+    // 2.1 Dedicated Category for active applicant tickets
+    const ticketsCat = await getOrCreateCategory('📨 ЗАЯВКИ В СЕМЬЮ', reviewOverwrites);
 
     // 3. Category: МЕРОПРИЯТИЯ (МП)
     const eventsCat = await getOrCreateCategory('⚔️ МЕРОПРИЯТИЯ (МП)');
@@ -241,13 +244,13 @@ export class ServerSetupService {
       where: { guildId: guild.id },
       update: {
         channelId: recruitApplyChannel.id,
-        categoryId: recruitCat.id,
+        categoryId: ticketsCat.id,
         logChannelId: recruitReviewChannel.id,
       },
       create: {
         guildId: guild.id,
         channelId: recruitApplyChannel.id,
-        categoryId: recruitCat.id,
+        categoryId: ticketsCat.id,
         logChannelId: recruitReviewChannel.id,
       },
     });

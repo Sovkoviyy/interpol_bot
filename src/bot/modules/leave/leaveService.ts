@@ -1,9 +1,12 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
 import prisma from '../../../database/client';
+import { AuditLogger } from '../logging/auditLogger';
+
+export type LeaveType = 'VACATION' | 'TIMEOFF';
 
 export class LeaveService {
   /**
-   * Request a leave of absence
+   * Request a leave of absence (VACATION or TIMEOFF)
    */
   static async requestLeave(
     guildId: string,
@@ -11,19 +14,36 @@ export class LeaveService {
     userTag: string,
     startDate: Date,
     endDate: Date,
-    reason: string
+    reason: string,
+    type: LeaveType = 'VACATION'
   ) {
     const startMs = startDate.getTime();
     const endMs = endDate.getTime();
     if (isNaN(startMs) || isNaN(endMs)) {
-      throw new Error('Некорректный формат дат отпуска');
+      throw new Error('Некорректный формат дат');
     }
     if (endMs <= startMs) {
-      throw new Error('Дата окончания отпуска должна быть позже даты начала');
+      throw new Error('Дата окончания должна быть позже даты начала');
     }
-    const diffDays = Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24));
-    if (diffDays > 14) {
-      throw new Error('Максимальная продолжительность отпуска — 14 дней (2 недели)');
+
+    const diffMs = endMs - startMs;
+    const diffMinutes = Math.round(diffMs / (1000 * 60));
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (type === 'VACATION') {
+      if (diffDays < 1) {
+        throw new Error('Минимальная продолжительность отпуска — 1 день');
+      }
+      if (diffDays > 14) {
+        throw new Error('Максимальная продолжительность отпуска — 14 дней (2 недели)');
+      }
+    } else if (type === 'TIMEOFF') {
+      if (diffMinutes < 5) {
+        throw new Error('Минимальная продолжительность отгула — 5 минут');
+      }
+      if (diffMinutes > 24 * 60) {
+        throw new Error('Максимальная продолжительность отгула — 24 часа');
+      }
     }
 
     const existingPending = await prisma.leaveRequest.findFirst({
@@ -40,17 +60,32 @@ export class LeaveService {
       create: { guildId, userId, userTag },
     });
 
-    return await prisma.leaveRequest.create({
+    const leave = await prisma.leaveRequest.create({
       data: {
         guildId,
         userId,
         userTag,
+        type,
         startDate,
         endDate,
         reason,
         status: 'PENDING',
       },
     });
+
+    await AuditLogger.recordEntry({
+      guildId,
+      action: 'LEAVE_REQUESTED',
+      category: 'LEAVE',
+      title: 'Подана заявка на отсутствие',
+      description: `Подана заявка на ${type === 'VACATION' ? 'отпуск' : 'отгул'}: ${reason}`,
+      executorId: userId,
+      executorTag: userTag,
+      targetId: userId,
+      targetTag: userTag,
+    }).catch(() => null);
+
+    return leave;
   }
 
   /**
@@ -87,15 +122,27 @@ export class LeaveService {
       });
     }
 
+    await AuditLogger.recordEntry({
+      guildId: leave.guildId,
+      action: approved ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED',
+      category: 'LEAVE',
+      title: `${approved ? 'Одобрена' : 'Отклонена'} заявка на ${leave.type === 'VACATION' ? 'отпуск' : 'отгул'}`,
+      description: `${approved ? 'Одобрен' : 'Отклонен'} ${leave.type === 'VACATION' ? 'отпуск' : 'отгул'} для ${leave.userTag}. ${rejectionReason ? `Причина: ${rejectionReason}` : ''}`,
+      executorId: reviewerId,
+      executorTag: reviewerTag,
+      targetId: leave.userId,
+      targetTag: leave.userTag,
+    }).catch(() => null);
+
     return updated;
   }
 
   /**
-   * Get active leaves
+   * Get currently active leaves (status APPROVED and endDate >= now)
    */
   static async getActiveLeaves(guildId: string) {
     const now = new Date();
-    return await prisma.leaveRequest.findMany({
+    const active = await prisma.leaveRequest.findMany({
       where: {
         guildId,
         status: 'APPROVED',
@@ -103,19 +150,90 @@ export class LeaveService {
       },
       orderBy: { endDate: 'asc' },
     });
+
+    // Attach user profile & character info
+    const userIds = active.map(a => a.userId);
+    const profiles = await prisma.userProfile.findMany({
+      where: { guildId, userId: { in: userIds } },
+      include: { characters: true },
+    });
+    const profileMap = new Map(profiles.map(p => [p.userId, p]));
+
+    return active.map(item => {
+      const p = profileMap.get(item.userId);
+      const remainingMs = Math.max(0, item.endDate.getTime() - now.getTime());
+      const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+      const remainingDays = Math.floor(remainingHours / 24);
+      const remHoursOnly = remainingHours % 24;
+      const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+
+      let remainingText = '';
+      if (remainingDays > 0) {
+        remainingText = `${remainingDays} д. ${remHoursOnly} ч.`;
+      } else if (remainingHours > 0) {
+        remainingText = `${remainingHours} ч. ${remainingMins} мин.`;
+      } else {
+        remainingText = `${remainingMins} мин.`;
+      }
+
+      return {
+        ...item,
+        profile: p || null,
+        remainingMs,
+        remainingText,
+      };
+    });
   }
 
   /**
    * Get all requests
    */
   static async getAllRequests(guildId: string, status?: string) {
-    return await prisma.leaveRequest.findMany({
+    const requests = await prisma.leaveRequest.findMany({
       where: {
         guildId,
         ...(status && status !== 'ALL' ? { status } : {}),
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    const userIds = requests.map(r => r.userId);
+    const profiles = await prisma.userProfile.findMany({
+      where: { guildId, userId: { in: userIds } },
+      include: { characters: true },
+    });
+    const profileMap = new Map(profiles.map(p => [p.userId, p]));
+
+    return requests.map(r => ({
+      ...r,
+      profile: profileMap.get(r.userId) || null,
+    }));
+  }
+
+  /**
+   * Get audit history/logs of leaves
+   */
+  static async getLeaveLogs(guildId: string) {
+    const logs = await prisma.leaveRequest.findMany({
+      where: {
+        guildId,
+        status: { in: ['APPROVED', 'REJECTED'] },
+      },
+      orderBy: { reviewedAt: 'desc' },
+      take: 100,
+    });
+
+    const userIds = logs.map(l => l.userId);
+    const profiles = await prisma.userProfile.findMany({
+      where: { guildId, userId: { in: userIds } },
+      include: { characters: true },
+    });
+    const profileMap = new Map(profiles.map(p => [p.userId, p]));
+
+    return logs.map(l => ({
+      ...l,
+      profile: profileMap.get(l.userId) || null,
+    }));
   }
 
   /**
@@ -124,27 +242,33 @@ export class LeaveService {
   static async deployLeavePanel(channel: TextChannel) {
     const embed = new EmbedBuilder()
       .setColor(0xF59E0B)
-      .setTitle('🏖️ Заявка на отпуск / Неактив / АФК | Семья INTERPOL')
+      .setTitle('🏖️ Заявка на отпуск / отгул | Семья INTERPOL')
       .setDescription(
-        'Если вы временно не можете проявлять активность в игре по уважительной причине (сессия, работа, отъезд), ' +
-        'оформите официальную заявку на отпуск.\n\n' +
-        '**Правила отпусков:**\n' +
-        '• Максимальная продолжительность: **до 14 дней (2 недели)**\n' +
-        '• После одобрения статус вашего профиля переходит в «В отпуске»\n' +
-        '• Во время отпуска вам не начисляются штрафы за пропуск МП\n\n' +
-        '👇 Нажмите кнопку ниже для заполнения формы:'
+        'Если вы временно не можете проявлять активность в игре по уважительной причине (сессия, работа, отъезд, неотложные дела), ' +
+        'оформите официальную заявку на отпуск или отгул.\n\n' +
+        '**Правила:**\n' +
+        '• 🏖️ **Отпуск:** от **1 до 14 дней** (2 недели)\n' +
+        '• ⏱️ **Отгул:** от **5 минут до 24 часов**\n' +
+        '• После одобрения статус профиля обновляется\n' +
+        '• Во время активного отпуска/отгула не начисляются штрафы за пропуск МП\n\n' +
+        '👇 Выберите тип заявки ниже:'
       )
-      .setFooter({ text: 'INTERPOL Majestic RP • Заявки на неактив' })
+      .setFooter({ text: 'INTERPOL Majestic RP • Отпуска и отгулы' })
       .setTimestamp();
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId('panel_request_leave')
-        .setLabel('🏖️ Подать на отпуск (до 14 дней)')
-        .setStyle(ButtonStyle.Primary)
+        .setCustomId('panel_request_vacation')
+        .setLabel('🏖️ Отпуск (1 - 14 дней)')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('panel_request_timeoff')
+        .setLabel('⏱️ Отгул (5 мин - 24 ч)')
+        .setStyle(ButtonStyle.Secondary)
     );
 
     return await channel.send({ embeds: [embed], components: [row] });
   }
 }
+
 

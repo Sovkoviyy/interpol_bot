@@ -226,7 +226,7 @@ export const ServerSetup: React.FC = () => {
   const categories = (state?.channels || []).filter((c: any) => c.type === 4 || c.type === 'GUILD_CATEGORY');
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 w-full">
       {/* Header & Server Selector */}
       <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-6 backdrop-blur-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -316,7 +316,7 @@ export const ServerSetup: React.FC = () => {
               Создать всю структуру каналов, категорий и сообщений в 1 клик
             </h2>
             <p className="text-xs text-gray-300 leading-relaxed">
-              Бот автоматически сформирует готовый сервер для семьи Majestic RP: создаст категории информации, набора,
+              Бот автоматически сформирует готовый сервер для семьи: создаст категории информации, набора,
               МП, академии и аудита, настроит права доступа, пропишет ID каналов в базу и опубликует рабочие интерактивные сообщения с кнопками.
             </p>
             <div className="pt-2 flex items-center gap-2">
@@ -375,7 +375,7 @@ export const ServerSetup: React.FC = () => {
                   <IdCard className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Привязка Majestic Static ID</h3>
+                  <h3 className="text-sm font-semibold text-white">Привязка Static ID</h3>
                   <p className="text-[11px] text-gray-400">Кнопка «🆔 Привязать статик»</p>
                 </div>
               </div>
@@ -488,7 +488,7 @@ export const ServerSetup: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал для проверки анкет рекрутерами</label>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал для логов и проверки анкет (#заявки-лог)</label>
                 <select
                   value={bindings.recruitmentReviewChannelId}
                   onChange={(e) => setBindings({ ...bindings, recruitmentReviewChannelId: e.target.value })}

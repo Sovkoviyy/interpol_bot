@@ -48,7 +48,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <Flame className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">INTERPOL BOT</h1>
-          <p className="text-sm text-slate-400 mt-1">Панель управления семьей на Majestic RP</p>
+          <p className="text-sm text-slate-400 mt-1">Панель управления семьей Interpol</p>
         </div>
 
         {error && (
