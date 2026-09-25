@@ -2,6 +2,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel
 import prisma from '../../../database/client';
 import bot from '../../client';
 import { NicknameService } from '../nicknames/nicknameService';
+import { extractFirstName } from '../../utils/nameUtils';
 
 export class ProfileService {
   /**
@@ -40,7 +41,7 @@ export class ProfileService {
   static async setStatic(guildId: string, userId: string, staticId: string, characterName?: string, userTag?: string, setAsMain = true) {
     const profile = await this.getOrCreateProfile(guildId, userId, userTag);
     const cleanStatic = staticId.trim();
-    const cleanNick = characterName?.trim() || null;
+    const cleanNick = characterName ? extractFirstName(characterName) : null;
 
     // Check existing characters
     const existingChars = await prisma.userCharacter.findMany({

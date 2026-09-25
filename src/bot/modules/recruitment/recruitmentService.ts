@@ -23,6 +23,7 @@ import { AcademyService } from '../academy/academyService';
 import { ProfileService } from '../profiles/profileService';
 import { buildCustomTemplateEmbed } from '../../utils/templateEmbed';
 import { NicknameService } from '../nicknames/nicknameService';
+import { extractFirstName, sanitizeChannelNamePart } from '../../utils/nameUtils';
 import bot from '../../client';
 
 export class RecruitmentService {
@@ -258,6 +259,9 @@ export class RecruitmentService {
         }
       }
 
+      // Extract FIRST NAME strictly (without surname)
+      const firstName = extractFirstName(candidateCharName || interaction.user.username);
+
       // Automatically bind provided data directly into UserProfile
       try {
         if (candidateStaticId) {
@@ -265,7 +269,7 @@ export class RecruitmentService {
             guild.id,
             interaction.user.id,
             candidateStaticId,
-            candidateCharName,
+            firstName,
             interaction.user.tag,
             true
           );
@@ -276,13 +280,18 @@ export class RecruitmentService {
         console.warn('[Recruitment] Could not auto-bind static on modal submit:', bindErr.message);
       }
 
-      // Channel name: format like hit-251156 (candidateName-staticId)
-      const cleanNick = (candidateCharName || interaction.user.username)
-        .toLowerCase()
-        .replace(/[^a-z0-9а-я_-]/gi, '')
-        .slice(0, 15);
-      const cleanStatic = candidateStaticId ? candidateStaticId.slice(0, 10) : interaction.user.id.slice(-4);
-      const channelName = `${cleanNick || 'кандидат'}-${cleanStatic}`;
+      // Update Discord nickname to FIRST NAME strictly (without surname)
+      const member = (interaction.member as GuildMember) || await guild.members.fetch(interaction.user.id).catch(() => null);
+      if (typeof (member as any)?.setNickname === 'function' && member?.manageable && firstName) {
+        await member.setNickname(firstName, 'Подача заявки в семью (Имя без фамилии)').catch(err => {
+          console.warn(`[Recruitment] Could not set nickname for ${interaction.user.tag}:`, err.message);
+        });
+      }
+
+      // Channel name: format strictly like имя-статик (e.g. tony-142055)
+      const cleanFirstName = sanitizeChannelNamePart(firstName, 'кандидат');
+      const cleanStatic = candidateStaticId ? candidateStaticId.replace(/[^\d]/g, '').slice(0, 10) : interaction.user.id.slice(-4);
+      const channelName = `${cleanFirstName}-${cleanStatic}`;
 
       // Resolve bot user ID safely
       const botUserId = guild.members.me?.id || bot.user?.id;
@@ -881,20 +890,27 @@ export class RecruitmentService {
         }
       } catch {}
 
-      if (staticId || candidateName) {
+      const firstName = extractFirstName(candidateName || targetMember.displayName || targetMember.user.username);
+
+      if (staticId || firstName) {
         await ProfileService.setStatic(
           guild.id,
           targetMember.id,
           staticId || targetMember.id.slice(-5),
-          candidateName || targetMember.displayName,
+          firstName,
           targetMember.user.tag,
           true
         ).catch(() => null);
       }
 
-      await AcademyService.createAcademyChannel(guild, targetMember, staticId).catch(err => {
+      await AcademyService.createAcademyChannel(guild, targetMember, staticId, firstName).catch(err => {
         console.warn('[Academy] Could not auto-create academy channel:', err.message);
       });
+
+      // Update Discord nickname strictly to first name without surname
+      if (typeof (targetMember as any)?.setNickname === 'function' && targetMember?.manageable && firstName) {
+        await targetMember.setNickname(firstName, 'Одобрение заявки в семью (Имя без фамилии)').catch(() => null);
+      }
 
       // Auto-sync nickname according to roles and bound profile
       await NicknameService.syncMemberNickname(targetMember, 'Одобрение заявки в семью').catch(() => null);

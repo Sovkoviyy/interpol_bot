@@ -98,6 +98,13 @@ async function runSimulation() {
       },
       kickable: true,
       manageable: true,
+      nickname: null as string | null,
+      displayName: tag.split('#')[0],
+      setNickname: async (newNick: string) => {
+        memberObj.nickname = newNick;
+        memberObj.displayName = newNick;
+        return memberObj;
+      },
       kick: async (_reason?: string) => true,
       send: async (_payload: any) => true,
       toString: () => `<@${id}>`,
@@ -274,7 +281,7 @@ async function runSimulation() {
   console.assert(bindModalRes.replied, 'Modal submission must reply');
   const profileAfterBind = await ProfileService.getOrCreateProfile(testGuildId, memberId);
   console.assert(profileAfterBind.staticId === '142055', 'Static ID must be saved in database');
-  console.assert(profileAfterBind.characterName === 'Tony Montana', 'Character name must be saved in database');
+  console.assert(profileAfterBind.characterName === 'Tony', 'Character name must be saved in database as first name only');
   pass(`Modal modal_bind_static handled via event dispatch: Static=${profileAfterBind.staticId}, Name=${profileAfterBind.characterName}`);
 
   // 1c. Slash Command: /profile (self)

@@ -30,7 +30,7 @@ export function registerChannelLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(channel.guild, 'CHANNELS', embed);
+    await AuditLogger.sendHumanOrBotLog(channel.guild, 'CHANNELS', executor, embed);
   });
 
   // Channel Delete
@@ -54,7 +54,7 @@ export function registerChannelLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(channel.guild, 'CHANNELS', embed);
+    await AuditLogger.sendHumanOrBotLog(channel.guild, 'CHANNELS', executor, embed);
   });
 
   // Channel Update
@@ -89,6 +89,6 @@ export function registerChannelLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(newChannel.guild, 'CHANNELS', embed);
+    await AuditLogger.sendHumanOrBotLog(newChannel.guild, 'CHANNELS', executor, embed);
   });
 }

@@ -155,7 +155,7 @@ export function registerMessageLogs() {
     // Clean from cache
     messageCache.delete(message.id);
 
-    await AuditLogger.sendLog(guild, 'MESSAGES', embed);
+    await AuditLogger.sendHumanOrBotLog(guild, 'MESSAGES', executor, embed);
   });
 
   // Message Edit

@@ -16,6 +16,7 @@ import { ProfileService } from '../profiles/profileService';
 import { AuditLogger } from '../logging/auditLogger';
 import { RecruitmentService } from '../recruitment/recruitmentService';
 import { NicknameService } from '../nicknames/nicknameService';
+import { extractFirstName, sanitizeChannelNamePart } from '../../utils/nameUtils';
 
 export class AcademyService {
   /**
@@ -68,24 +69,25 @@ export class AcademyService {
   /**
    * Create a private academy channel for a new recruit
    */
-  static async createAcademyChannel(guild: Guild, member: GuildMember, staticId?: string) {
+  static async createAcademyChannel(guild: Guild, member: GuildMember, staticId?: string, overrideName?: string) {
     const config = await this.getConfig(guild.id);
     const profile = await ProfileService.getOrCreateProfile(guild.id, member.id, member.user.tag);
 
     const effectiveStatic = staticId || profile.staticId || member.id.slice(-5);
     const cleanStatic = (effectiveStatic || '').toString().replace(/[^\d]/g, '').trim() || member.id.slice(-5);
 
-    // Extract FIRST NAME from full in-game RP name (e.g. "Ivan Ivanov" -> "ivan")
-    const rawName = (profile.characterName || member.displayName || member.user.username).trim();
-    const parts = rawName.split(/[\s_.-]+/);
-    const firstName = parts[0] || 'игрок';
-    const cleanFirstName = firstName
-      .toLowerCase()
-      .replace(/[^a-z0-9а-яё]/gi, '')
-      .slice(0, 15) || 'игрок';
+    // Extract FIRST NAME strictly (without surname!)
+    const rawName = (overrideName || profile.characterName || member.displayName || member.user.username).trim();
+    const firstName = extractFirstName(rawName);
+    const cleanFirstName = sanitizeChannelNamePart(firstName, 'академик');
 
-    // Channel name strictly format: имя-статик (e.g. ivan-12345)
+    // Channel name strictly format: имя-статик (e.g. tony-142055)
     const channelName = `${cleanFirstName}-${cleanStatic}`;
+
+    // Update Discord nickname to first name (without surname)
+    if (typeof (member as any)?.setNickname === 'function' && member.manageable && firstName) {
+      await member.setNickname(firstName, 'Академия: установка имени без фамилии').catch(() => null);
+    }
 
     // Ensure category ACADEMY
     let targetCategoryId = config.categoryId;

@@ -27,7 +27,7 @@ export function registerRoleLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(role.guild, 'ROLES', embed);
+    await AuditLogger.sendHumanOrBotLog(role.guild, 'ROLES', executor, embed);
   });
 
   // Role Delete
@@ -48,7 +48,7 @@ export function registerRoleLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(role.guild, 'ROLES', embed);
+    await AuditLogger.sendHumanOrBotLog(role.guild, 'ROLES', executor, embed);
   });
 
   // Role Update
@@ -84,6 +84,6 @@ export function registerRoleLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(newRole.guild, 'ROLES', embed);
+    await AuditLogger.sendHumanOrBotLog(newRole.guild, 'ROLES', executor, embed);
   });
 }

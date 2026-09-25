@@ -20,6 +20,7 @@ import { AcademyService } from '../modules/academy/academyService';
 import { VoiceTrackerService } from '../modules/voiceTracker/voiceTrackerService';
 import { ProfileService } from '../modules/profiles/profileService';
 import { LeaveService } from '../modules/leave/leaveService';
+import { NicknameService } from '../modules/nicknames/nicknameService';
 import prisma from '../../database/client';
 
 let isInteractionHandlerRegistered = false;
@@ -546,6 +547,9 @@ export function registerInteractionHandler() {
               characterName,
               interaction.user.tag
             );
+            if (interaction.member && (interaction.member as GuildMember).manageable) {
+              await NicknameService.syncMemberNickname(interaction.member as GuildMember, 'Привязка статика и ника через панель').catch(() => null);
+            }
             await interaction.editReply({
               content: `✅ Ваш Static ID **${staticId}**${characterName ? ` (${characterName})` : ''} успешно привязан!`
             });

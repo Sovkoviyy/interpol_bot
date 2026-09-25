@@ -220,7 +220,7 @@ export class EventScheduler {
                 `Канал: <#${event.channelId}>`
               )
               .setTimestamp();
-            await AuditLogger.sendLog(guild, 'EVENTS', deleteEmbed);
+            await AuditLogger.sendLog(guild, 'BOT', deleteEmbed);
           } catch (err) {
             console.error(`[EventScheduler] Error deleting message for event ${event.id}:`, err);
           }

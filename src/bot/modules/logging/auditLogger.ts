@@ -8,6 +8,7 @@ import {
 } from 'discord.js';
 import prisma from '../../../database/client';
 import { LogCategoryType } from '../../../shared/types';
+import bot from '../../client';
 
 export class AuditLogger {
   /**
@@ -198,15 +199,17 @@ export class AuditLogger {
         });
       }
 
-      // Automatically persist to DB for website audit logs
+      // Automatically persist to DB for website audit logs without duplicate Discord dispatch
       const title = embed.data.title || `${categoryType} Log`;
       const description = embed.data.description || '';
-      await this.recordEntry({
-        guildId: guild.id,
-        category: categoryType,
-        action: categoryType,
-        title,
-        description,
+      await prisma.auditLogEntry.create({
+        data: {
+          guildId: guild.id,
+          category: categoryType,
+          action: categoryType,
+          title,
+          description,
+        },
       }).catch(() => null);
     } catch (error) {
       console.error(`[AuditLogger Error] Failed to send log for ${categoryType}:`, error);
@@ -214,8 +217,28 @@ export class AuditLogger {
   }
 
   /**
+   * Safe log routing: routes to 'BOT' channel if performed by a bot or Interpol bot itself,
+   * otherwise routes to the human log category.
+   */
+  public static async sendHumanOrBotLog(
+    guild: Guild,
+    humanCategory: LogCategoryType,
+    executor: { id?: string; bot?: boolean; tag?: string | null } | null | undefined,
+    embed: EmbedBuilder
+  ): Promise<void> {
+    const botId = bot.user?.id;
+    const isBot = Boolean(executor?.bot || (executor?.id && executor.id === botId));
+
+    if (isBot) {
+      await this.sendLog(guild, 'BOT', embed);
+    } else {
+      await this.sendLog(guild, humanCategory, embed);
+    }
+  }
+
+  /**
    * Directly record a comprehensive audit log entry into the database
-   * and post an embed to the dedicated bot logs channel (#бот-лог) in Discord
+   * and post an embed to the dedicated bot logs channel (#бот-лог) in Discord ONLY if it's a bot action
    */
   public static async recordEntry(params: {
     guildId: string;
@@ -228,6 +251,7 @@ export class AuditLogger {
     targetId?: string | null;
     targetTag?: string | null;
     metadata?: any;
+    skipDiscord?: boolean;
   }): Promise<void> {
     try {
       if (!params.guildId) return;
@@ -246,7 +270,11 @@ export class AuditLogger {
         },
       });
 
-      // Forward bot action embed to dedicated #бот-лог channel in Discord
+      // ONLY forward to Discord #бот-лог if this is explicitly a BOT category action and not skipped
+      if (params.skipDiscord || params.category.toUpperCase() !== 'BOT') {
+        return;
+      }
+
       const { default: botClient } = await import('../../client');
       const guild = botClient.guilds.cache.get(params.guildId) || await botClient.guilds.fetch(params.guildId).catch(() => null);
       if (guild) {
@@ -310,19 +338,14 @@ export class AuditLogger {
     targetId?: string
   ) {
     try {
-      const logs = await guild.fetchAuditLogs({ limit: 1, type: action });
-      const entry = logs.entries.first();
-      if (!entry) return null;
-
-      // Check if entry is recent (within 10 seconds)
-      const isRecent = Date.now() - entry.createdTimestamp < 10000;
-      if (!isRecent) return null;
-
-      if (targetId && entry.targetId && entry.targetId !== targetId) {
-        return null;
-      }
-
-      return entry.executor;
+      const logs = await guild.fetchAuditLogs({ limit: 5, type: action });
+      const entry = logs.entries.find(e => {
+        const isRecent = Date.now() - e.createdTimestamp < 15000;
+        if (!isRecent) return false;
+        if (targetId && e.targetId && e.targetId !== targetId) return false;
+        return true;
+      });
+      return entry?.executor || null;
     } catch {
       return null;
     }

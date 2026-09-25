@@ -94,7 +94,11 @@ export function registerMemberLogs() {
       .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
       .setTimestamp();
 
-    await AuditLogger.sendLog(member.guild, 'MEMBERS', embed);
+    if (member.user.bot) {
+      await AuditLogger.sendLog(member.guild, 'BOT', embed);
+    } else {
+      await AuditLogger.sendLog(member.guild, 'MEMBERS', embed);
+    }
   });
 
   // Member Leave / Kick
@@ -165,7 +169,13 @@ export function registerMemberLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(member.guild, 'MEMBERS', logEmbed);
+    if (isKicked) {
+      await AuditLogger.sendHumanOrBotLog(member.guild, 'MEMBERS', kickExecutor, logEmbed);
+    } else if (member.user?.bot) {
+      await AuditLogger.sendLog(member.guild, 'BOT', logEmbed);
+    } else {
+      await AuditLogger.sendLog(member.guild, 'MEMBERS', logEmbed);
+    }
   });
 
   // Member Ban
@@ -188,7 +198,7 @@ export function registerMemberLogs() {
       .setThumbnail(ban.user.displayAvatarURL({ size: 256 }))
       .setTimestamp();
 
-    await AuditLogger.sendLog(ban.guild, 'MEMBERS', embed);
+    await AuditLogger.sendHumanOrBotLog(ban.guild, 'MEMBERS', banExecutor, embed);
   });
 
   // Member Unban
@@ -209,24 +219,31 @@ export function registerMemberLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(ban.guild, 'MEMBERS', embed);
+    await AuditLogger.sendHumanOrBotLog(ban.guild, 'MEMBERS', unbanExecutor, embed);
   });
 
   // Member Update (Nickname, Roles, Timeout)
   bot.on(Events.GuildMemberUpdate, async (oldMember: GuildMember | PartialGuildMember, newMember: GuildMember) => {
     // 1. Nickname change
     if (oldMember.nickname !== newMember.nickname) {
+      const executor = await AuditLogger.getAuditLogExecutor(
+        newMember.guild,
+        AuditLogEvent.MemberUpdate,
+        newMember.id
+      );
+
       const embed = new EmbedBuilder()
         .setColor(0x3498DB)
         .setTitle('🏷️ Изменен никнейм')
         .setDescription(
           `**Участник:** ${newMember} (\`${newMember.user.tag}\`)\n` +
+          `**Исполнитель:** ${executor ? `${executor} (\`${executor.tag}\`)` : 'Сам участник'}\n` +
           `**Было:** \`${oldMember.nickname || oldMember.user?.username || 'Нет'}\`\n` +
           `**Стало:** \`${newMember.nickname || newMember.user.username}\`\n` +
           `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
         )
         .setTimestamp();
-      await AuditLogger.sendLog(newMember.guild, 'MEMBERS', embed);
+      await AuditLogger.sendHumanOrBotLog(newMember.guild, 'MEMBERS', executor, embed);
     }
 
     // 2. Roles added / removed
@@ -255,7 +272,7 @@ export function registerMemberLogs() {
         )
         .setTimestamp();
 
-      await AuditLogger.sendLog(newMember.guild, 'ROLES', embed);
+      await AuditLogger.sendHumanOrBotLog(newMember.guild, 'ROLES', executor, embed);
 
       // Auto-update nickname based on configured role bindings
       await NicknameService.syncMemberNickname(newMember, 'Обновление ролей').catch(() => null);
@@ -281,7 +298,7 @@ export function registerMemberLogs() {
         )
         .setTimestamp();
 
-      await AuditLogger.sendLog(newMember.guild, 'MEMBERS', embed);
+      await AuditLogger.sendHumanOrBotLog(newMember.guild, 'MEMBERS', executor, embed);
     }
   });
 }

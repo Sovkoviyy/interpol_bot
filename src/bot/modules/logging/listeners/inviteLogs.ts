@@ -125,7 +125,7 @@ export function registerInviteLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(guild, 'INVITES', embed);
+    await AuditLogger.sendHumanOrBotLog(guild, 'INVITES', invite.inviter, embed);
   });
 
   // Invite Delete

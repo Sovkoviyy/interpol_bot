@@ -255,10 +255,9 @@ export class AntiNukeService {
         }
       }
 
-      // 5. Send to BOT and MEMBERS audit logs
+      // 5. Send strictly to BOT audit log
       const { AuditLogger } = await import('../logging/auditLogger');
       await AuditLogger.sendLog(guild, 'BOT', alertEmbed);
-      await AuditLogger.sendLog(guild, 'MEMBERS', alertEmbed);
     } catch (err) {
       console.error('[AntiNuke] Error handling bot add:', err);
     }

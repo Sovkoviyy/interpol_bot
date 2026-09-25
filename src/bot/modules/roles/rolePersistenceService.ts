@@ -160,7 +160,6 @@ export class RolePersistenceService {
                 )
                 .setTimestamp();
 
-              await AuditLogger.sendLog(guild, 'MEMBERS', embed);
               await AuditLogger.sendLog(guild, 'BOT', embed);
             }
           } catch (e) {

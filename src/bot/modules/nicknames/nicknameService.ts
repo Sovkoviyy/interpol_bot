@@ -1,6 +1,7 @@
 import { Guild, GuildMember, PermissionFlagsBits } from 'discord.js';
 import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
+import { extractFirstName } from '../../utils/nameUtils';
 
 export interface UserMainCharacterInfo {
   characterName: string;
@@ -111,10 +112,13 @@ export class NicknameService {
       }
     }
 
+    // Extract strictly the first name (without surname)
+    const firstName = extractFirstName(mainChar.characterName || member.displayName || member.user.username);
+
     // Apply template replacements
     let nick = format
       .replace(/{prefix}/g, prefix)
-      .replace(/{name}/g, mainChar.characterName)
+      .replace(/{name}/g, firstName)
       .replace(/{static}/g, mainChar.staticId)
       .trim();
 
