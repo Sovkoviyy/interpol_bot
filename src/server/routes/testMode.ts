@@ -565,4 +565,90 @@ testModeRouter.post('/full-wipe', async (req: AuthenticatedRequest, res: Respons
   }
 });
 
+/**
+ * POST /api/test-mode/grant-all-admin
+ * Grant Administrator role to all members in Discord
+ */
+testModeRouter.post('/grant-all-admin', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const guild = await getDiscordGuild(guildId);
+    if (!guild) return res.status(400).json({ error: 'Сервер Discord не подключен' });
+
+    const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+    if (!botMember || !botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+      return res.status(400).json({ error: 'У бота нет прав на управление ролями (Manage Roles)' });
+    }
+
+    // 1. Fetch all roles to find or create an admin role manageable by the bot
+    await guild.roles.fetch().catch(() => null);
+    const botHighestRole = botMember.roles.highest;
+
+    let adminRole = guild.roles.cache.find(
+      r => r.name === 'Администратор (Test)' && r.permissions.has(PermissionFlagsBits.Administrator) && r.position < botHighestRole.position
+    );
+
+    if (!adminRole) {
+      adminRole = guild.roles.cache.find(
+        r => !r.managed && r.id !== guild.id && r.permissions.has(PermissionFlagsBits.Administrator) && r.position < botHighestRole.position
+      );
+    }
+
+    // If still no role found, create one
+    if (!adminRole) {
+      adminRole = await guild.roles.create({
+        name: 'Администратор (Test)',
+        color: 0xEC4899,
+        permissions: [PermissionFlagsBits.Administrator],
+        reason: 'Тестовый режим: роль администратора для всех участников',
+      });
+    }
+
+    // 2. Fetch all members
+    const members = await guild.members.fetch();
+    let grantedCount = 0;
+    let alreadyHadCount = 0;
+    let failedCount = 0;
+
+    for (const member of members.values()) {
+      if (member.user.bot) continue;
+
+      if (member.roles.cache.has(adminRole.id)) {
+        alreadyHadCount++;
+        continue;
+      }
+
+      try {
+        await member.roles.add(adminRole, 'Тестовый режим: выдача роли администратора');
+        grantedCount++;
+      } catch {
+        failedCount++;
+      }
+    }
+
+    // 3. Log action to bot logs (#бот-лог)
+    await AuditLogger.recordEntry({
+      guildId,
+      action: 'TEST_MODE_GRANT_ALL_ADMIN',
+      category: 'BOT',
+      title: 'Массовая выдача роли администратора',
+      description: `Роль «${adminRole.name}» выдана ${grantedCount} участникам сервера (уже имели: ${alreadyHadCount}, пропущено/ошибок: ${failedCount})`,
+      executorId: req.user!.userId,
+      executorTag: req.user!.username,
+    }).catch(() => null);
+
+    return res.json({
+      success: true,
+      roleName: adminRole.name,
+      roleId: adminRole.id,
+      grantedCount,
+      alreadyHadCount,
+      failedCount,
+      totalMembers: members.filter(m => !m.user.bot).size,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default testModeRouter;

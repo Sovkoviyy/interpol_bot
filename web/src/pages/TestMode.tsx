@@ -5,6 +5,7 @@ import {
   Trash2, 
   AlertTriangle, 
   ShieldAlert, 
+  ShieldCheck,
   CheckCircle2, 
   FolderTree, 
   Users, 
@@ -235,6 +236,34 @@ export const TestMode: React.FC = () => {
     }
   };
 
+  const handleGrantAllAdmin = async () => {
+    const confirmed = await modal.confirm({
+      title: 'Выдать всем права администратора?',
+      message: 'Бот найдет или создаст роль «Администратор (Test)» с правами Администратора и выдаст ее всем участникам сервера в Discord.',
+      confirmText: 'Выдать всем админку',
+      type: 'pink',
+    });
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      const res = await api.post('/test-mode/grant-all-admin');
+      modal.alert({
+        title: 'Успешно!',
+        message: `Роль «${res.data.roleName}» успешно выдана ${res.data.grantedCount} участникам сервера (уже имели: ${res.data.alreadyHadCount || 0}).`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось выдать права администратора',
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6 w-full">
       {/* Header */}
@@ -297,6 +326,34 @@ export const TestMode: React.FC = () => {
           >
             <Rocket className="w-4 h-4" />
             <span>{loading ? 'Развертывание...' : '1-Клик Развернуть структуру'}</span>
+          </button>
+        </div>
+
+        {/* Tool 2: Grant Admin Role to Everyone */}
+        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Выдать админку всем</h3>
+                <p className="text-xs text-slate-400">Массовая выдача прав администратора</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 pt-1">
+              Находит или создает роль <strong>«Администратор (Test)»</strong> с полными правами Администратора и выдает ее всем участникам сервера в Discord для тестирования.
+            </p>
+          </div>
+
+          <button
+            onClick={handleGrantAllAdmin}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white rounded-xl text-xs font-semibold shadow-lg shadow-pink-600/25 transition-all disabled:opacity-50"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>{loading ? 'Выдача...' : 'Выдать всем админку'}</span>
           </button>
         </div>
 
