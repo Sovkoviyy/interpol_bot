@@ -39,131 +39,96 @@ export class EventService {
 
     if (!event) throw new Error('Event not found');
 
-    const checkInUnix = Math.floor(event.checkInTime.getTime() / 1000);
     const eventUnix = Math.floor(event.eventTime.getTime() / 1000);
 
-    const isLimited = event.type === 'LIMITED';
+    const limit = event.participantLimit || 35;
     const confirmed = event.participants.filter(p => p.status === 'CONFIRMED');
     const reserve = event.participants.filter(p => p.status === 'RESERVE');
 
-    const color = event.status === 'ACTIVE' 
-      ? THEME.COLORS.PRIMARY 
-      : (event.status === 'FINISHED' ? THEME.COLORS.SUCCESS : THEME.COLORS.DANGER);
-
-    const descParts: string[] = [];
-
-    if (event.description) {
-      descParts.push(THEME.format.quote(event.description));
-      descParts.push('');
+    let roleMention = '';
+    if (event.targetRoleId && event.targetRoleId !== 'none') {
+      if (event.targetRoleId === 'everyone') roleMention = '@everyone';
+      else if (event.targetRoleId === 'here') roleMention = '@here';
+      else roleMention = `<@&${event.targetRoleId}>`;
     }
 
-    descParts.push(THEME.format.item('Начало', `<t:${eventUnix}:t> (<t:${eventUnix}:R>)`));
-    descParts.push(THEME.format.item('Чек-ин', `<t:${checkInUnix}:t> (<t:${checkInUnix}:R>)`));
-    descParts.push(THEME.format.item('Организатор', `<@${event.createdById}>`));
+    const voiceDisplay = event.voiceChannelId ? `<#${event.voiceChannelId}>` : 'Capt Voice';
+    const mapDisplay = event.mapName || 'Не выбрана';
 
-    if (event.voiceChannelId) {
-      descParts.push(THEME.format.item('Голосовой канал', `<#${event.voiceChannelId}>`));
+    let confirmedList = 'Пусто';
+    if (confirmed.length > 0) {
+      confirmedList = confirmed.map((p, idx) => `${idx + 1}. <@${p.userId}>`).join('\n');
     }
+
+    let reserveList = 'Пусто';
+    if (reserve.length > 0) {
+      reserveList = reserve.map((p, idx) => `${idx + 1}. <@${p.userId}>`).join('\n');
+    }
+
+    const separator = '────────────────────────────────────────';
+
+    const descParts: string[] = [
+      `### 🎯 Сбор на ${event.title.toUpperCase()}${roleMention ? ` ${roleMention}` : ''}`,
+      `**Время:** <t:${eventUnix}:F> (<t:${eventUnix}:R>)`,
+      `**Войс:** 🔊 ┠ ${voiceDisplay}`,
+      `**Карта:** ${mapDisplay}`,
+    ];
 
     if (event.partyCode) {
-      descParts.push(THEME.format.item('Код группы', THEME.format.code(event.partyCode)));
+      descParts.push(`**Код группы:** \`${event.partyCode}\``);
+    }
+    if (event.description) {
+      descParts.push(`**Инфо:** *${event.description}*`);
     }
 
-    if (event.targetRoleId && event.targetRoleId !== 'none') {
-      const roleText = event.targetRoleId === 'everyone'
-        ? '@everyone'
-        : (event.targetRoleId === 'here' ? '@here' : `<@&${event.targetRoleId}>`);
-      descParts.push(THEME.format.item('Уведомление', roleText));
-    }
+    descParts.push(
+      '',
+      separator,
+      `✅ **Основной список (${confirmed.length}/${limit})**`,
+      confirmedList,
+      '',
+      separator,
+      `🪑 **Резерв (${reserve.length})**`,
+      reserveList
+    );
 
-    descParts.push('');
-    descParts.push(THEME.format.subtext('Нажмите на кнопку ниже, чтобы записаться в состав или резерв'));
+    const embed = new EmbedBuilder()
+      .setColor(event.status === 'ACTIVE' ? THEME.COLORS.PRIMARY : (event.status === 'FINISHED' ? THEME.COLORS.SUCCESS : THEME.COLORS.DANGER))
+      .setDescription(descParts.join('\n'));
 
-    const fields: { name: string; value: string; inline?: boolean }[] = [];
-
-    if (isLimited) {
-      const limit = event.participantLimit || 10;
-      let confirmedText = confirmed.length > 0 
-        ? confirmed.map((p, idx) => `\`${idx + 1}.\` <@${p.userId}>`).join('\n')
-        : '*Список пуст. Ожидание участников.*';
-
-      if (confirmedText.length > 1024) confirmedText = confirmedText.slice(0, 1000) + '...';
-
-      fields.push({
-        name: `Основной состав (${confirmed.length}/${limit})`,
-        value: confirmedText,
-        inline: false,
-      });
-
-      if (reserve.length > 0) {
-        let reserveText = reserve
-          .map((p, idx) => `\`${idx + 1}.\` <@${p.userId}>`)
-          .join('\n');
-        if (reserveText.length > 1024) reserveText = reserveText.slice(0, 1000) + '...';
-
-        fields.push({
-          name: `Резерв (${reserve.length})`,
-          value: reserveText,
-          inline: false,
-        });
-      }
-    }
-
-    let footerText = 'INTERPOL • Сбор состава';
     if (event.status === 'FINISHED') {
-      footerText = 'INTERPOL • Мероприятие завершено';
+      embed.setFooter({ text: '🏁 Мероприятие завершено • Сообщение удалится через 30 мин' });
     } else if (event.status === 'CANCELLED') {
-      footerText = 'INTERPOL • Мероприятие отменено';
+      embed.setFooter({ text: '❌ Мероприятие отменено организатором' });
     }
 
-    return createThemedEmbed({
-      title: `СБОР СОСТАВА • ${event.title.toUpperCase()}`,
-      description: descParts.join('\n'),
-      color,
-      fields,
-      footerText,
-    });
+    return embed;
   }
 
   /**
    * Action buttons for an event
    */
-  public static buildEventButtons(eventId: string, isLimited: boolean, isFinished = false): ActionRowBuilder<ButtonBuilder>[] {
+  public static buildEventButtons(eventId: string, isLimited: boolean = true, isFinished = false): ActionRowBuilder<ButtonBuilder>[] {
     if (isFinished) return [];
 
-    const row = new ActionRowBuilder<ButtonBuilder>();
-
-    if (isLimited) {
-      row.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`event_join_${eventId}`)
-          .setLabel('Записаться')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`event_reserve_${eventId}`)
-          .setLabel('В резерв')
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId(`event_leave_${eventId}`)
-          .setLabel('Отказаться')
-          .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-          .setCustomId(`event_manage_${eventId}`)
-          .setLabel('Управление')
-          .setStyle(ButtonStyle.Primary)
-      );
-    } else {
-      row.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`event_leave_${eventId}`)
-          .setLabel('Не смогу')
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId(`event_manage_${eventId}`)
-          .setLabel('Завершить сбор')
-          .setStyle(ButtonStyle.Danger)
-      );
-    }
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`event_join_${eventId}`)
+        .setLabel('Записаться')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`event_reserve_${eventId}`)
+        .setLabel('В резерв')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`event_leave_${eventId}`)
+        .setLabel('Отказаться')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`event_manage_${eventId}`)
+        .setLabel('Управление')
+        .setStyle(ButtonStyle.Primary)
+    );
 
     return [row];
   }

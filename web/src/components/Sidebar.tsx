@@ -12,7 +12,6 @@ import {
   MessageSquare, 
   Sparkles,
   GraduationCap,
-  Radio,
   Coins,
   ShieldAlert,
   CalendarOff,
@@ -62,8 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions, isBypass }) =
     {
       title: 'Мероприятия (МП)',
       links: [
-        { to: '/voice-tracker', label: 'Умный войс & МП', icon: Radio, visible: true },
-        { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: isAdmin || userPermissions?.manageEvents },
+        { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: true },
       ],
     },
     {

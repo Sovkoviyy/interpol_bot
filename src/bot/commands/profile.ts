@@ -144,55 +144,24 @@ export const setStaticCommand = {
 export const topCommand = {
   data: new SlashCommandBuilder()
     .setName('top')
-    .setDescription('Рейтинг участников по посещению МП и времени в войсе')
-    .addStringOption((opt) =>
-      opt
-        .setName('category')
-        .setDescription('Категория топа')
-        .setRequired(false)
-        .addChoices(
-          { name: 'По количеству сыгранных МП', value: 'mp' },
-          { name: 'По времени в голосовых каналах МП', value: 'voice' }
-        )
-    ),
+    .setDescription('Рейтинг самых активных участников семьи по сыгранным МП'),
 
   async execute(interaction: ChatInputCommandInteraction) {
-    const category = interaction.options.getString('category') || 'mp';
+    const top = await ProfileService.getTopByMp(interaction.guildId!, 10);
+    const lines = top.map((p: any, i: number) => {
+      const medal = i === 0 ? '`1.`' : i === 1 ? '`2.`' : i === 2 ? '`3.`' : `\`${i + 1}.\``;
+      const staticStr = p.staticId ? ` [${p.staticId}]` : '';
+      return `${medal} <@${p.userId}>${staticStr} — **${p.mpCount} МП**`;
+    });
 
-    if (category === 'mp') {
-      const top = await ProfileService.getTopByMp(interaction.guildId!, 10);
-      const lines = top.map((p: any, i: number) => {
-        const medal = i === 0 ? '`1.`' : i === 1 ? '`2.`' : i === 2 ? '`3.`' : `\`${i + 1}.\``;
-        const staticStr = p.staticId ? ` [${p.staticId}]` : '';
-        return `${medal} <@${p.userId}>${staticStr} — **${p.mpCount} МП**`;
-      });
+    const embed = createThemedEmbed({
+      title: 'РЕЙТИНГ СОСТАВА • СЫГРАННЫЕ МП',
+      color: THEME.COLORS.PRIMARY,
+      description: lines.length > 0 ? lines.join('\n') : '*Пока нет данных о сыгранных мероприятиях.*',
+      footerText: 'INTERPOL • Majestic RP',
+    });
 
-      const embed = createThemedEmbed({
-        title: 'РЕЙТИНГ СОСТАВА • СЫГРАННЫЕ МП',
-        color: THEME.COLORS.PRIMARY,
-        description: lines.length > 0 ? lines.join('\n') : '*Пока нет данных о сыгранных мероприятиях.*',
-        footerText: 'INTERPOL • Majestic RP',
-      });
-
-      await interaction.reply({ embeds: [embed] });
-    } else {
-      const top = await ProfileService.getTopByVoice(interaction.guildId!, 10);
-      const lines = top.map((p: any, i: number) => {
-        const medal = i === 0 ? '`1.`' : i === 1 ? '`2.`' : i === 2 ? '`3.`' : `\`${i + 1}.\``;
-        const hours = (p.voiceMinutes / 60).toFixed(1);
-        const staticStr = p.staticId ? ` [${p.staticId}]` : '';
-        return `${medal} <@${p.userId}>${staticStr} — **${hours} ч.**`;
-      });
-
-      const embed = createThemedEmbed({
-        title: 'РЕЙТИНГ СОСТАВА • ВРЕМЯ В ВОЙСЕ МП',
-        color: THEME.COLORS.PRIMARY,
-        description: lines.length > 0 ? lines.join('\n') : '*Пока нет данных о времени в голосовых каналах.*',
-        footerText: 'INTERPOL • Majestic RP',
-      });
-
-      await interaction.reply({ embeds: [embed] });
-    }
+    await interaction.reply({ embeds: [embed] });
   },
 };
 

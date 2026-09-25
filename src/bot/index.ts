@@ -6,7 +6,6 @@ import { registerInteractionHandler } from './interactions/interactionHandler';
 import { initializeLoggingModule } from './modules/logging';
 import { EventScheduler } from './modules/events/eventScheduler';
 import { AntiNukeService } from './modules/antiNuke/antiNukeService';
-import { VoiceTrackerService } from './modules/voiceTracker/voiceTrackerService';
 import prisma from '../database/client';
 
 export async function startBot() {
@@ -25,11 +24,6 @@ export async function startBot() {
     if ('guild' in channel) {
       await AntiNukeService.handleChannelDelete(channel as GuildChannel);
     }
-  });
-
-  // Attach Voice Tracker attendance listener
-  bot.on(Events.VoiceStateUpdate, async (oldState, newState) => {
-    await VoiceTrackerService.handleVoiceStateUpdate(oldState, newState);
   });
 
   bot.once('ready', async () => {

@@ -15,7 +15,6 @@ import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
 import { ProfileService } from '../profiles/profileService';
 import { LeaveService } from '../leave/leaveService';
-import { VoiceTrackerService } from '../voiceTracker/voiceTrackerService';
 import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export interface ProvisionResult {
@@ -375,14 +374,6 @@ export class ServerSetupService {
       } catch (e: any) {
         console.error('[ServerSetup] Failed to deploy welcome embed:', e.message);
       }
-
-      // Voice tracker MP control panel
-      try {
-        await VoiceTrackerService.postControlPanel(guild, eventAnnounceChannel.id);
-        panelsDeployed.push('Пульт управления МП');
-      } catch (e: any) {
-        console.error('[ServerSetup] Failed to deploy voice tracker panel:', e.message);
-      }
     }
 
     return {
@@ -500,10 +491,6 @@ export class ServerSetupService {
           .setTimestamp();
 
         const msg = await channel.send({ embeds: [welcomeEmbed] });
-        return { success: true, messageId: msg.id, channelId: channel.id };
-      }
-      case 'voice-tracker': {
-        const msg = await VoiceTrackerService.postControlPanel(guild, channel.id);
         return { success: true, messageId: msg.id, channelId: channel.id };
       }
       default:

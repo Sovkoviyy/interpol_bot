@@ -14,7 +14,6 @@ import botMessagesRouter from './routes/botMessages';
 import embedsRouter from './routes/embeds';
 import profilesRouter from './routes/profiles';
 import academyRouter from './routes/academy';
-import voiceTrackerRouter from './routes/voiceTracker';
 import leaveRouter from './routes/leave';
 import payrollRouter from './routes/payroll';
 import blacklistRouter from './routes/blacklist';
@@ -48,7 +47,6 @@ export function createServer() {
   app.use('/api/embeds', embedsRouter);
   app.use('/api/profiles', profilesRouter);
   app.use('/api/academy', academyRouter);
-  app.use('/api/voice-tracker', voiceTrackerRouter);
   app.use('/api/leave', leaveRouter);
   app.use('/api/payroll', payrollRouter);
   app.use('/api/blacklist', blacklistRouter);

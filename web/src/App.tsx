@@ -14,7 +14,6 @@ import { Members } from './pages/Members';
 import { BotMessages } from './pages/BotMessages';
 import { EmbedBuilder } from './pages/EmbedBuilder';
 import { Academy } from './pages/Academy';
-import { VoiceTracker } from './pages/VoiceTracker';
 import { RecruiterPayroll } from './pages/RecruiterPayroll';
 import { AntiNuke } from './pages/AntiNuke';
 import { Blacklist } from './pages/Blacklist';
@@ -89,7 +88,6 @@ export const App: React.FC = () => {
                           <Route path="/profiles" element={<Profiles />} />
                           <Route path="/nicknames" element={<Nicknames />} />
                           <Route path="/academy" element={<Academy />} />
-                          <Route path="/voice-tracker" element={<VoiceTracker />} />
                           <Route path="/recruitment" element={<Recruitment />} />
                           <Route path="/events" element={<Events />} />
                           <Route path="/leaves" element={<Leaves />} />

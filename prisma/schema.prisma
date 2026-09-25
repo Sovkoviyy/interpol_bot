@@ -102,6 +102,7 @@ model EventGathering {
   title             String
   description       String?
   type              String   // UNLIMITED, LIMITED
+  mapName           String?  // Название карты
   checkInTime       DateTime // Время проверки явки
   eventTime         DateTime // Время начала мероприятия
   partyCode         String?  // Код группы

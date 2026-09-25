@@ -14,25 +14,20 @@ import { THEME, createThemedEmbed } from '../utils/theme';
 export const eventCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('event')
-    .setDescription('Создание сборов на семейные мероприятия (дропы, цеха, ВЗМ и др.)')
+    .setDescription('Создание сборов на мероприятия (Капты, ВЗЗ, МЦЛ)')
     .addSubcommand(sub =>
       sub
         .setName('create')
-        .setDescription('Объявить сбор на мероприятие')
+        .setDescription('Объявить сбор на мероприятие по спискам')
         .addStringOption(opt =>
           opt
             .setName('title')
-            .setDescription('Название или тип мероприятия (например: Дроп, Цех, ВЗМ, МЦЛ)')
-            .setRequired(true)
-        )
-        .addStringOption(opt =>
-          opt
-            .setName('type')
-            .setDescription('Тип сбора')
+            .setDescription('Тип мероприятия (Капты, ВЗЗ, МЦЛ)')
             .setRequired(true)
             .addChoices(
-              { name: 'Без ограничения участников (Массовый)', value: 'UNLIMITED' },
-              { name: 'С ограничением мест (Спецсостав / Капт / ВЗМ)', value: 'LIMITED' }
+              { name: 'Капты', value: 'Капты' },
+              { name: 'ВЗЗ', value: 'ВЗЗ' },
+              { name: 'МЦЛ', value: 'МЦЛ' }
             )
         )
         .addStringOption(opt =>
@@ -43,9 +38,23 @@ export const eventCommand: Command = {
         )
         .addStringOption(opt =>
           opt
+            .setName('map')
+            .setDescription('Карта проведения (например: Мегамолл, Порт; по умолчанию: Не выбрана)')
+            .setRequired(false)
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('limit')
+            .setDescription('Лимит основного списка (по умолчанию: 35)')
+            .setMinValue(5)
+            .setMaxValue(100)
+            .setRequired(false)
+        )
+        .addStringOption(opt =>
+          opt
             .setName('checkin_time')
             .setDescription('Время проверки явки (например 19:50 или через сколько минут: 20)')
-            .setRequired(true)
+            .setRequired(false)
         )
         .addStringOption(opt =>
           opt
@@ -56,22 +65,20 @@ export const eventCommand: Command = {
               { name: 'Завтра', value: 'tomorrow' },
               { name: 'Послезавтра (+2 дня)', value: 'after_tomorrow' }
             )
-        )
-        .addStringOption(opt =>
-          opt
-            .setName('party_code')
-            .setDescription('Код группы для сбора в игре')
+            .setRequired(false)
         )
         .addChannelOption(opt =>
           opt
             .setName('voice_channel')
-            .setDescription('Голосовой канал (если не указать, возьмется запомненный)')
+            .setDescription('Голосовой канал для сбора')
             .addChannelTypes(ChannelType.GuildVoice)
+            .setRequired(false)
         )
         .addRoleOption(opt =>
           opt
             .setName('role')
-            .setDescription('Конкретная роль сервера для упоминания (например @Капт-состав или @Семья)')
+            .setDescription('Роль сервера для упоминания (например @Капт-состав)')
+            .setRequired(false)
         )
         .addStringOption(opt =>
           opt
@@ -83,16 +90,19 @@ export const eventCommand: Command = {
               { name: '@here (только онлайн)', value: 'here' },
               { name: 'Без упоминания (тихий сбор)', value: 'none' }
             )
+            .setRequired(false)
         )
-        .addIntegerOption(opt =>
+        .addStringOption(opt =>
           opt
-            .setName('limit')
-            .setDescription('Максимальное количество участников (для типа с ограничением)')
+            .setName('party_code')
+            .setDescription('Код группы для сбора в игре')
+            .setRequired(false)
         )
         .addStringOption(opt =>
           opt
             .setName('description')
             .setDescription('Дополнительное примечание / экипировка / правила')
+            .setRequired(false)
         )
     ),
 
@@ -108,15 +118,16 @@ export const eventCommand: Command = {
       await interaction.deferReply({ ephemeral: true });
 
       const title = interaction.options.getString('title', true);
-      const type = interaction.options.getString('type', true) as 'UNLIMITED' | 'LIMITED';
+      const map = interaction.options.getString('map') || 'Не выбрана';
+      const limit = interaction.options.getInteger('limit') || 35;
+      const type = 'LIMITED';
       const startTimeStr = interaction.options.getString('start_time', true);
-      const checkinTimeStr = interaction.options.getString('checkin_time', true);
+      const checkinTimeStr = interaction.options.getString('checkin_time');
       const dateChoice = interaction.options.getString('date') || 'today';
       const partyCode = interaction.options.getString('party_code');
       const voiceChannel = interaction.options.getChannel('voice_channel');
       const targetRole = interaction.options.getRole('role');
       const mentionChoice = interaction.options.getString('mention') || 'default';
-      const limit = interaction.options.getInteger('limit');
       const description = interaction.options.getString('description');
 
       // Fetch saved channel defaults from GuildConfig
@@ -183,7 +194,7 @@ export const eventCommand: Command = {
       };
 
       const eventTime = parseTime(startTimeStr);
-      const checkInTime = parseTime(checkinTimeStr);
+      const checkInTime = checkinTimeStr ? parseTime(checkinTimeStr) : new Date(eventTime.getTime() - 10 * 60000);
 
       // Create event in database
       const event = await prisma.eventGathering.create({
@@ -191,13 +202,14 @@ export const eventCommand: Command = {
           guildId: guild.id,
           title,
           description,
-          type,
+          type: 'LIMITED',
+          mapName: map,
           checkInTime,
           eventTime,
           partyCode,
           voiceChannelId: finalVoiceChannelId,
           targetRoleId: finalTargetRoleId,
-          participantLimit: type === 'LIMITED' ? (limit || 10) : null,
+          participantLimit: limit,
           status: 'ACTIVE',
           channelId: interaction.channelId,
           createdById: interaction.user.id,
@@ -208,7 +220,7 @@ export const eventCommand: Command = {
 
       // Send announcement message in the current text channel
       const embed = await EventService.buildEventEmbed(event.id);
-      const components = EventService.buildEventButtons(event.id, type === 'LIMITED');
+      const components = EventService.buildEventButtons(event.id, true);
 
       let pingContent: string | undefined = undefined;
       if (finalTargetRoleId === 'everyone') {
@@ -219,8 +231,6 @@ export const eventCommand: Command = {
         pingContent = undefined;
       } else if (finalTargetRoleId) {
         pingContent = `<@&${finalTargetRoleId}>`;
-      } else if (type === 'UNLIMITED') {
-        pingContent = '@here';
       }
 
       const channel = interaction.channel;
@@ -245,7 +255,6 @@ export const eventCommand: Command = {
       if (finalTargetRoleId === 'everyone') mentionDisplay = '@everyone';
       else if (finalTargetRoleId === 'here') mentionDisplay = '@here';
       else if (finalTargetRoleId && finalTargetRoleId !== 'none') mentionDisplay = `<@&${finalTargetRoleId}>`;
-      else if (type === 'UNLIMITED') mentionDisplay = '@here (по умолчанию)';
 
       // Send audit log to #ивенты-лог
       const createEmbed = createThemedEmbed({
@@ -257,7 +266,7 @@ export const eventCommand: Command = {
           THEME.format.item('Организатор', `<@${interaction.user.id}> (\`${interaction.user.tag}\`)`),
           THEME.format.item('Канал сбора', `<#${interaction.channelId}>`),
           THEME.format.item('Упоминание', mentionDisplay),
-          THEME.format.item('Формат', type === 'LIMITED' ? `С ограничением (${limit || 10} мест)` : 'Без ограничений'),
+          THEME.format.item('Формат', `По спискам (${limit || 35} мест)`),
           THEME.format.item('Чек-ин', `<t:${Math.floor(checkInTime.getTime() / 1000)}:f>`),
           THEME.format.item('Старт', `<t:${Math.floor(eventTime.getTime() / 1000)}:f>`),
         ].join('\n'),

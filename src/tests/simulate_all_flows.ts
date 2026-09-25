@@ -4,7 +4,6 @@ import { Events, ChannelType, PermissionFlagsBits, EmbedBuilder, Collection } fr
 import { registerInteractionHandler } from '../bot/interactions/interactionHandler';
 import { registerCommands } from '../bot/commands/index';
 import { AcademyService } from '../bot/modules/academy/academyService';
-import { VoiceTrackerService } from '../bot/modules/voiceTracker/voiceTrackerService';
 import { EventService } from '../bot/modules/events/eventService';
 import { RecruitmentService } from '../bot/modules/recruitment/recruitmentService';
 import { ProfileService } from '../bot/modules/profiles/profileService';
@@ -555,13 +554,12 @@ async function runSimulation() {
   pass(`Modal recruit_modal_reject_${app2.id} rejected candidate with reason`);
 
   // =========================================================================
-  // 4. FLOW: VOICE TRACKER (Slash command, Select menu, Status & End buttons)
+  // 4. FLOW: EVENT CREATION & EMBED LAYOUT (Капты, ВЗЗ, МЦЛ)
   // =========================================================================
-  step('4. FLOW: Voice Tracker (/voice-control, vt_type_select, vt_status_button, vt_end_button)');
+  step('4. FLOW: Event Creation & Embed Layout (/event create, mapName, exact visual layout)');
 
-  // 4a. Slash command: /voice-control deploy
-  const vcDeployCmd: any = {
-    commandName: 'voice-control',
+  const eventCmd: any = {
+    commandName: 'event',
     isButton: () => false,
     isModalSubmit: () => false,
     isStringSelectMenu: () => false,
@@ -573,82 +571,37 @@ async function runSimulation() {
     guildId: testGuildId,
     channelId: 'ch_text_general',
     options: {
-      getSubcommand: () => 'deploy',
-      getChannel: (_name: string) => channelsMap.get('ch_text_general'),
+      getSubcommand: () => 'create',
+      getString: (name: string) => {
+        if (name === 'title') return 'Капты';
+        if (name === 'start_time') return '20:00';
+        if (name === 'map') return 'Мегамолл';
+        return null;
+      },
+      getInteger: (name: string) => (name === 'limit' ? 35 : null),
+      getChannel: () => null,
+      getRole: () => null,
     },
   };
-  const vcDeployRes = await dispatchInteraction(vcDeployCmd);
-  console.assert(vcDeployRes.replied, '/voice-control deploy must reply with confirmation');
-  pass('Slash command /voice-control deploy executed successfully');
+  const eventCmdRes = await dispatchInteraction(eventCmd);
+  console.assert(eventCmdRes.replied, '/event create must reply');
+  pass('Slash command /event create executed successfully for Капты with map');
 
-  // 4b. Select menu: vt_type_select
-  const vtSelectInteraction: any = {
-    customId: 'vt_type_select',
-    values: ['Дроп [16:00]'],
-    isButton: () => false,
-    isModalSubmit: () => false,
-    isStringSelectMenu: () => true,
-    isChatInputCommand: () => false,
-    isRepliable: () => true,
-    member: recruiterMember,
-    user: recruiterMember.user,
-    guild: mockGuildObj,
-    guildId: testGuildId,
-    channelId: 'ch_text_general',
-  };
-  await dispatchInteraction(vtSelectInteraction);
-  const activeVoiceSession = await prisma.voiceTrackerSession.findFirst({
-    where: { guildId: testGuildId, status: 'ACTIVE' },
+  const createdCaptEvent = await prisma.eventGathering.findFirst({
+    where: { guildId: testGuildId, title: 'Капты' },
+    orderBy: { createdAt: 'desc' },
   });
-  console.assert(activeVoiceSession !== null, 'Active voice tracker session must be started');
-  console.assert(activeVoiceSession?.eventName === 'Дроп [16:00]', 'Voice session event name must match');
-  pass(`Select menu vt_type_select started active session «${activeVoiceSession?.eventName}»`);
+  console.assert(createdCaptEvent !== null, 'Event gathering must be created in DB');
+  console.assert(createdCaptEvent?.mapName === 'Мегамолл', 'Event mapName must be Мегамолл');
+  console.assert(createdCaptEvent?.participantLimit === 35, 'Event limit must be 35');
 
-  // 4c. Button click: vt_status_button
-  const vtStatusBtn: any = {
-    customId: 'vt_status_button',
-    isButton: () => true,
-    isModalSubmit: () => false,
-    isStringSelectMenu: () => false,
-    isChatInputCommand: () => false,
-    isRepliable: () => true,
-    member: regularMember,
-    user: regularMember.user,
-    guild: mockGuildObj,
-    guildId: testGuildId,
-    channelId: 'ch_text_general',
-  };
-  const vtStatusRes = await dispatchInteraction(vtStatusBtn);
-  console.assert(vtStatusRes.replied, 'vt_status_button must reply with status');
-  pass('Button vt_status_button reported voice session status');
-
-  // 4d. Simulate Voice Gateway events (Join late, temporary disconnect, rejoin)
-  const oldStateLeave = { guild: mockGuildObj, channelId: null, member: createMockMember('user_late_007', 'Late#007') } as any;
-  const newStateJoin = { guild: mockGuildObj, channelId: 'vc_mp_channel', member: createMockMember('user_late_007', 'Late#007') } as any;
-  await VoiceTrackerService.handleVoiceStateUpdate(oldStateLeave, newStateJoin);
-  pass('Voice gateway voiceStateUpdate tracked attendee');
-
-  // 4e. Button click: vt_end_button
-  const vtEndBtn: any = {
-    customId: 'vt_end_button',
-    isButton: () => true,
-    isModalSubmit: () => false,
-    isStringSelectMenu: () => false,
-    isChatInputCommand: () => false,
-    isRepliable: () => true,
-    member: recruiterMember,
-    user: recruiterMember.user,
-    guild: mockGuildObj,
-    guildId: testGuildId,
-    channelId: 'ch_text_general',
-  };
-  await dispatchInteraction(vtEndBtn);
-  const completedVoiceSession = await prisma.voiceTrackerSession.findFirst({
-    where: { guildId: testGuildId, status: 'COMPLETED' },
-    orderBy: { endedAt: 'desc' },
-  });
-  console.assert(completedVoiceSession !== null, 'Voice session must be COMPLETED');
-  pass('Button vt_end_button ended tracking session and finalized attendance');
+  // Verify embed layout matches exact required format
+  const embed = await EventService.buildEventEmbed(createdCaptEvent!.id);
+  console.assert(embed.data.description?.includes('### 🎯 Сбор на КАПТЫ'), 'Embed must have correct header');
+  console.assert(embed.data.description?.includes('**Карта:** Мегамолл'), 'Embed must include map info');
+  console.assert(embed.data.description?.includes('Основной список (0/35)'), 'Embed must show participant limit');
+  console.assert(embed.data.description?.includes('Резерв (0)'), 'Embed must show reserve section');
+  pass('Event embed correctly formatted with single description, map name, and lists');
 
   // =========================================================================
   // 5. FLOW: EVENTS GATHERING (Join, Reserve, Leave auto-promotion, Admin Kick)

@@ -5,7 +5,6 @@ import { recruitCommand } from './recruit';
 import { eventCommand } from './event';
 import { logsCommand } from './logs';
 import { profileCommand, setStaticCommand, topCommand, penaltyCommand } from './profile';
-import { voiceControlCommand } from './voiceControl';
 import { academyCommand } from './academy';
 
 export function registerCommands() {
@@ -17,7 +16,6 @@ export function registerCommands() {
     setStaticCommand,
     topCommand,
     penaltyCommand,
-    voiceControlCommand,
     academyCommand,
   ];
 
@@ -42,7 +40,6 @@ export async function deploySlashCommands() {
     setStaticCommand.data.toJSON(),
     topCommand.data.toJSON(),
     penaltyCommand.data.toJSON(),
-    voiceControlCommand.data.toJSON(),
     academyCommand.data.toJSON(),
   ];
 

@@ -17,7 +17,6 @@ import bot from '../client';
 import { RecruitmentService } from '../modules/recruitment/recruitmentService';
 import { EventService } from '../modules/events/eventService';
 import { AcademyService } from '../modules/academy/academyService';
-import { VoiceTrackerService } from '../modules/voiceTracker/voiceTrackerService';
 import { ProfileService } from '../modules/profiles/profileService';
 import { LeaveService } from '../modules/leave/leaveService';
 import { NicknameService } from '../modules/nicknames/nicknameService';
@@ -65,7 +64,7 @@ export function registerInteractionHandler() {
           const mpTypeInput = new TextInputBuilder()
             .setCustomId('report_mp_type')
             .setLabel('Тип мероприятия')
-            .setPlaceholder('например: Дроп, Цех, ВЗМ, МЦЛ, Капт')
+            .setPlaceholder('например: Капт, ВЗЗ, МЦЛ')
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
@@ -207,61 +206,6 @@ export function registerInteractionHandler() {
           );
 
           await interaction.showModal(modal);
-          return;
-        }
-
-        // --- Voice Tracker Buttons ---
-        if (customId === 'voice_tracker_end_btn' || customId === 'vt_end_button') {
-          await interaction.deferReply({ ephemeral: true });
-          try {
-            if (!guild) throw new Error('Сервер Discord не найден.');
-            await VoiceTrackerService.endSession(guild, member);
-            await interaction.editReply({ content: '🏁 Текущее мероприятие успешно завершено. Статистика отправлена в лог.' });
-          } catch (err: any) {
-            await interaction.editReply({ content: `❌ ${err.message}` });
-          }
-          return;
-        }
-
-        if (customId === 'vt_start_button' || customId === 'voice_tracker_start_btn') {
-          await interaction.deferReply({ ephemeral: true });
-          try {
-            if (!guild) throw new Error('Сервер Discord не найден.');
-            const mpTypes = await VoiceTrackerService.getAvailableMpTypes(guild.id);
-            const defaultMp = mpTypes[0]?.name || 'Сбор на МП';
-            await VoiceTrackerService.startSession(guild, defaultMp, member);
-            await interaction.editReply({
-              content: `⚔️ Мероприятие **«${defaultMp}»** успешно запущено! Войс-канал переименован, учет явки начался.`,
-            });
-          } catch (err: any) {
-            await interaction.editReply({ content: `❌ ${err.message}` });
-          }
-          return;
-        }
-
-        if (customId === 'voice_tracker_status_btn' || customId === 'vt_status_button' || customId === 'vt_status_btn') {
-          const config = await VoiceTrackerService.getConfig(interaction.guildId || (guild ? guild.id : ''));
-          const voiceChannel = config.voiceChannelId && guild
-            ? guild.channels.cache.get(config.voiceChannelId)
-            : null;
-
-          const session = await prisma.voiceTrackerSession.findFirst({
-            where: { guildId: interaction.guildId!, status: 'ACTIVE' },
-          });
-
-          if (!session) {
-            await interaction.reply({
-              content: 'ℹ️ В данный момент нет активного мероприятия в голосовом канале.',
-              ephemeral: true,
-            });
-            return;
-          }
-
-          const membersCount = voiceChannel && 'members' in voiceChannel ? (voiceChannel as any).members.size : 0;
-          await interaction.reply({
-            content: `🔊 **Активное МП:** «${session.eventName}»\n👥 **Сейчас в войсе:** \`${membersCount}\` чел.`,
-            ephemeral: true,
-          });
           return;
         }
 
@@ -765,21 +709,6 @@ export function registerInteractionHandler() {
         const member = interaction.member as GuildMember;
         if (member && !member.guild && guild) {
           (member as any).guild = guild;
-        }
-
-        if (customId === 'voice_tracker_select_mp' || customId === 'vt_type_select') {
-          const selectedMp = interaction.values[0];
-          await interaction.deferReply({ ephemeral: true });
-          try {
-            if (!guild) throw new Error('Сервер Discord не найден.');
-            await VoiceTrackerService.startSession(guild, selectedMp, member);
-            await interaction.editReply({
-              content: `⚔️ Мероприятие **«${selectedMp}»** успешно запущено! Войс-канал переименован, учет явки начался.`,
-            });
-          } catch (err: any) {
-            await interaction.editReply({ content: `❌ ${err.message}` });
-          }
-          return;
         }
 
         if (customId.startsWith('event_admin_kick_')) {
