@@ -1,6 +1,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
 import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export type LeaveType = 'VACATION' | 'TIMEOFF';
 
@@ -240,30 +241,32 @@ export class LeaveService {
    * Deploy interactive button panel in a Discord channel to let members submit leave requests
    */
   static async deployLeavePanel(channel: TextChannel) {
-    const embed = new EmbedBuilder()
-      .setColor(0xF59E0B)
-      .setTitle('🏖️ Заявка на отпуск / отгул | Семья INTERPOL')
-      .setDescription(
-        'Если вы временно не можете проявлять активность в игре по уважительной причине (сессия, работа, отъезд, неотложные дела), ' +
-        'оформите официальную заявку на отпуск или отгул.\n\n' +
-        '**Правила:**\n' +
-        '• 🏖️ **Отпуск:** от **1 до 14 дней** (2 недели)\n' +
-        '• ⏱️ **Отгул:** от **5 минут до 24 часов**\n' +
-        '• После одобрения статус профиля обновляется\n' +
-        '• Во время активного отпуска/отгула не начисляются штрафы за пропуск МП\n\n' +
-        '👇 Выберите тип заявки ниже:'
-      )
-      .setFooter({ text: 'INTERPOL Majestic RP • Отпуска и отгулы' })
-      .setTimestamp();
+    const embed = createThemedEmbed({
+      color: THEME.COLORS.PRIMARY,
+      title: 'Оформление отпуска и неактива',
+      description: [
+        `> Официальная подача заявлений на временное освобождение от обязательных мероприятий семьи **${channel.guild.name}**.`,
+        '',
+        '### Регламент отпусков и отгулов:',
+        '- **Отпуск:** оформляется на срок от 1 до 14 календарных дней.',
+        '- **Отгул:** оформляется на короткий срок от 5 минут до 24 часов.',
+        '- Во время активного отпуска или отгула штрафы за пропуск МП не начисляются.',
+        '- При досрочном возвращении статус обновляется автоматически при посещении первого МП.',
+        '',
+        '-# Выберите формат заявления с помощью кнопок ниже.',
+      ].join('\n'),
+      thumbnailUrl: channel.guild.iconURL({ size: 256 }),
+      footerText: `${channel.guild.name} • Регламент отпусков`,
+    });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('panel_request_vacation')
-        .setLabel('🏖️ Отпуск (1 - 14 дней)')
+        .setLabel('Отпуск (1 - 14 дней)')
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId('panel_request_timeoff')
-        .setLabel('⏱️ Отгул (5 мин - 24 ч)')
+        .setLabel('Отгул (до 24 часов)')
         .setStyle(ButtonStyle.Secondary)
     );
 

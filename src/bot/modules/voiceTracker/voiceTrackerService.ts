@@ -13,6 +13,7 @@ import {
 import prisma from '../../../database/client';
 import { ProfileService } from '../profiles/profileService';
 import bot from '../../client';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export interface MpTypeDefinition {
   id: string;
@@ -210,16 +211,18 @@ export class VoiceTrackerService {
       const logChannel = (guild.channels.cache.get(config.logChannelId) || 
         await guild.channels.fetch(config.logChannelId).catch(() => null)) as TextChannel | null;
       if (logChannel && logChannel.isTextBased()) {
-        const startEmbed = new EmbedBuilder()
-          .setColor(0xEC4899)
-          .setTitle(`⚔️ Начало мероприятия: ${eventName}`)
-          .setDescription(
-            `**Организатор:** ${startedBy} (\`${startedBy.user.tag}\`)\n` +
-            `**Голосовой канал:** ${voiceChannel}\n` +
-            `**Участников на старте:** \`${voiceChannel.members.size}\` чел.\n` +
-            `Бот начал учет времени и посещаемости.`
-          )
-          .setTimestamp();
+        const startEmbed = createThemedEmbed({
+          title: `СТАРТ МЕРОПРИЯТИЯ • ${eventName.toUpperCase()}`,
+          color: THEME.COLORS.PRIMARY,
+          description: [
+            THEME.format.quote('Запущен учет времени и посещаемости состава семьи.'),
+            '',
+            THEME.format.item('Организатор', `${startedBy} (\`${startedBy.user.tag}\`)`),
+            THEME.format.item('Голосовой канал', `${voiceChannel}`),
+            THEME.format.item('Участников на старте', `\`${voiceChannel.members.size}\` чел.`),
+          ].join('\n'),
+          footerText: 'INTERPOL • Учет мероприятий',
+        });
 
         await logChannel.send({ embeds: [startEmbed] }).catch(() => null);
       }
@@ -311,39 +314,36 @@ export class VoiceTrackerService {
       if (logChannel && logChannel.isTextBased()) {
         const totalMinutes = Math.floor((now.getTime() - session.startedAt.getTime()) / 60000);
 
-        const summaryEmbed = new EmbedBuilder()
-          .setColor(0x10B981)
-          .setTitle(`🏁 Завершено мероприятие: ${session.eventName}`)
-          .setDescription(
-            `**Длительность:** \`${totalMinutes} мин.\`\n` +
-            `**Всего побывало участников:** \`${attendeesList.length}\` чел.\n` +
-            `**Завершил:** ${endedBy ? endedBy : 'Система'}\n\n` +
-            `📋 **Список состава:**`
-          )
-          .setTimestamp();
-
-        // Top attendees preview
         const attendeesLines = attendeesList
           .sort((a, b) => b.durationSeconds - a.durationSeconds)
           .map((a, i) => {
             const flags = [];
-            if (a.isLate) flags.push('⚠️ Опоздал');
-            if (a.leftEarly) flags.push('🏃 Ушел раньше');
+            if (a.isLate) flags.push('Опоздание');
+            if (a.leftEarly) flags.push('Ранний выход');
             const flagStr = flags.length > 0 ? ` (${flags.join(', ')})` : '';
-            return `**${i + 1}.** <@${a.userId}> — \`${a.durationMinutes} мин.\`${flagStr}`;
+            return `\`${i + 1}.\` <@${a.userId}> — **${a.durationMinutes} мин.**${flagStr}`;
           });
 
-        if (attendeesLines.length > 0) {
-          summaryEmbed.addFields({
-            name: 'Участники и время нахождения',
-            value: attendeesLines.slice(0, 25).join('\n') + (attendeesLines.length > 25 ? `\n...и еще ${attendeesLines.length - 25}` : ''),
-          });
-        } else {
-          summaryEmbed.addFields({
-            name: 'Участники',
-            value: 'Никто не зашел в голосовой канал во время сбора.',
-          });
-        }
+        const summaryEmbed = createThemedEmbed({
+          title: `ЗАВЕРШЕНИЕ МЕРОПРИЯТИЯ • ${session.eventName.toUpperCase()}`,
+          color: THEME.COLORS.SUCCESS,
+          description: [
+            THEME.format.quote('Мероприятие успешно завершено. Статистика внесена в профили участников.'),
+            '',
+            THEME.format.item('Длительность', THEME.format.code(`${totalMinutes} мин.`)),
+            THEME.format.item('Всего участников', THEME.format.code(`${attendeesList.length} чел.`)),
+            THEME.format.item('Завершил', `${endedBy ? endedBy : 'Система'}`),
+          ].join('\n'),
+          fields: [
+            {
+              name: 'Участники и время нахождения',
+              value: attendeesLines.length > 0
+                ? attendeesLines.slice(0, 25).join('\n') + (attendeesLines.length > 25 ? `\n...и еще ${attendeesLines.length - 25}` : '')
+                : '*Никто не зашел в голосовой канал во время сбора.*',
+            },
+          ],
+          footerText: 'INTERPOL • Учет мероприятий',
+        });
 
         await logChannel.send({ embeds: [summaryEmbed] }).catch(() => null);
       }
@@ -408,33 +408,46 @@ export class VoiceTrackerService {
     const active = this.activeSessions.get(guild.id);
     const mpTypes = await this.getAvailableMpTypes(guild.id);
 
-    let statusText = '⚪ **Статус:** Ожидание сбора (нет активных МП)';
-    let color = 0xEC4899;
+    let statusLines: string[];
+    let color: number;
 
     if (active) {
       const elapsedMins = Math.floor((Date.now() - active.startedAt.getTime()) / 60000);
-      statusText = `🟢 **Активно сейчас:** \`${active.eventName}\`\n⏱️ **Идет уже:** \`${elapsedMins} мин.\`\n👥 **Участников:** \`${active.attendees.size} чел.\``;
-      color = 0x10B981;
+      statusLines = [
+        THEME.format.item('Текущее МП', THEME.format.code(active.eventName)),
+        THEME.format.item('Длительность', THEME.format.code(`${elapsedMins} мин.`)),
+        THEME.format.item('Участников в канале', THEME.format.code(`${active.attendees.size} чел.`)),
+      ];
+      color = THEME.COLORS.SUCCESS;
+    } else {
+      statusLines = [
+        THEME.format.item('Статус', 'Ожидание сбора (нет активных МП)'),
+      ];
+      color = THEME.COLORS.PRIMARY;
     }
 
-    const embed = new EmbedBuilder()
-      .setColor(color)
-      .setTitle('🎛️ Пульт управления мероприятиями (МП)')
-      .setDescription(
-        'Используйте меню ниже для быстрого запуска и отслеживания явки на мероприятиях семьи.\n\n' +
-        `${statusText}\n\n` +
-        '🟢 **При запуске:** бот переименует войс канал, включит логирование и зафиксирует опоздавших.\n' +
-        '🔴 **При завершении:** бот вернет название канала, рассчитает время каждого и начислит +1 МП в профили.'
-      )
-      .setFooter({ text: 'Interpol Majestic RP • Управление мероприятиями' })
-      .setTimestamp();
+    const embed = createThemedEmbed({
+      title: 'ПУЛЬТ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ (МП)',
+      color,
+      description: [
+        THEME.format.quote('Автоматизированный сбор и фиксация состава на мероприятиях.'),
+        '',
+        ...statusLines,
+        '',
+        THEME.format.section('Регламент работы'),
+        THEME.format.bullet('**При запуске:** бот фиксирует явку, состав и время подключения.'),
+        THEME.format.bullet('**При завершении:** бот рассчитывает длительность и начисляет +1 МП в профили.'),
+        '',
+        THEME.format.subtext('Выберите категорию мероприятия в меню ниже для запуска или переключения.'),
+      ].join('\n'),
+      footerText: 'INTERPOL • Управление мероприятиями',
+    });
 
     // Map mpTypes (capped at 25 for Discord select menu limit)
     const options = mpTypes.slice(0, 25).map((mp) => ({
       label: mp.name.slice(0, 100),
       value: mp.name.slice(0, 100),
       description: (mp.description || `Мероприятие ${mp.name}`).slice(0, 100),
-      emoji: mp.emoji ? mp.emoji.slice(0, 20) : undefined,
     }));
 
     if (options.length === 0) {
@@ -442,7 +455,6 @@ export class VoiceTrackerService {
         label: 'Мероприятие (по умолчанию)',
         value: 'Мероприятие',
         description: 'Сбор состава',
-        emoji: '⚔️',
       });
     }
 
@@ -456,12 +468,12 @@ export class VoiceTrackerService {
     const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('voice_tracker_end_btn')
-        .setLabel('🏁 Завершить текущее МП')
+        .setLabel('Завершить текущее МП')
         .setStyle(ButtonStyle.Danger)
         .setDisabled(!active),
       new ButtonBuilder()
         .setCustomId('voice_tracker_status_btn')
-        .setLabel('📊 Текущий состав в войсе')
+        .setLabel('Текущий состав в войсе')
         .setStyle(ButtonStyle.Secondary)
     );
 

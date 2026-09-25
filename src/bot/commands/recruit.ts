@@ -8,9 +8,9 @@ import {
   ButtonBuilder, 
   ButtonStyle 
 } from 'discord.js';
-import bot from '../client';
-import { Command } from '../client';
+import bot, { Command } from '../client';
 import prisma from '../../database/client';
+import { THEME, createThemedEmbed } from '../utils/theme';
 
 export const recruitCommand: Command = {
   data: new SlashCommandBuilder()
@@ -63,26 +63,30 @@ export const recruitCommand: Command = {
         return;
       }
 
-      const embed = new EmbedBuilder()
-        .setColor(0x3498DB)
-        .setTitle(`🦅 Набор в семью ${guild.name}`)
-        .setDescription(
-          `Приветствуем тебя на сервере семьи **${guild.name}**!\n\n` +
-          `Мы всегда рады активным, целеустремленным и адекватным игрокам.\n` +
-          `Если ты хочешь стать частью нашей команды, участвовать в дропах, цехах, каптах и других активностях — нажми кнопку ниже и заполни анкету!\n\n` +
-          `📌 **Перед подачей убедись:**\n` +
-          `• Твой Discord открыт для получения сообщений от бота;\n` +
-          `• Ты заполнил все поля анкеты честно и без обмана.`
-        )
-        .setThumbnail(guild.iconURL({ size: 256 }))
-        .setFooter({ text: `${guild.name} • Система рекрутинга` })
-        .setTimestamp();
+      const embed = createThemedEmbed({
+        color: THEME.COLORS.PRIMARY,
+        title: '👋 Путь в семью начинается здесь!',
+        description: [
+          `> Заявки в семью принимаются на сервере **${guild.name}**. Уведомление о приглашении на обзвон отправляется в созданный тикет.`,
+          '',
+          '- **Внимательно прочитайте все пункты** при подаче заявки. Если не ответили на все вопросы — **заявка отклоняется**.',
+          '- **Срок рассмотрения заявки:** от 1 до 3 дней.',
+          '',
+          '### Дополнительные правила к подаче заявки:',
+          '- Подать заявку можно только при открытом наборе. Если нет доступа к подаче — набор закрыт.',
+          '- Откаты с МП / стрельбы должны быть актуальными (при наличии запроса рекрутера).',
+          '- Любое нарушение условий или обман в анкете — **отказ и внесение в ЧС**.',
+          '',
+          '-# Нажмите на кнопку ниже, чтобы открыть форму анкеты.',
+        ].join('\n'),
+        thumbnailUrl: guild.iconURL({ size: 256 }),
+        footerText: `${guild.name} • Набор в семью`,
+      });
 
       const button = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId('recruit_apply_button')
           .setLabel('Подать заявку')
-          .setEmoji('📝')
           .setStyle(ButtonStyle.Primary)
       );
 

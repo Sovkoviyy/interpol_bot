@@ -3,6 +3,7 @@ import prisma from '../../../database/client';
 import bot from '../../client';
 import { NicknameService } from '../nicknames/nicknameService';
 import { extractFirstName } from '../../utils/nameUtils';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export class ProfileService {
   /**
@@ -376,25 +377,29 @@ export class ProfileService {
    * Deploy interactive button panel in a Discord channel to let members bind their static ID
    */
   static async deployStaticBindingPanel(channel: TextChannel) {
-    const embed = new EmbedBuilder()
-      .setColor(0xEC4899)
-      .setTitle('🆔 Привязка Majestic Static ID | Семья INTERPOL')
-      .setDescription(
-        'Каждый участник и академик семьи должен привязать свой внутриигровой Static ID и никнейм персонажа.\n\n' +
-        '**Зачем это нужно:**\n' +
-        '• Учет посещения мероприятий (МП, дропы, цеха, ВЗМ)\n' +
-        '• Сдача отчетов и повышение со 2 ранга\n' +
-        '• Личная статистика и отображение в топе актива семьи\n\n' +
-        '👇 Нажмите кнопку ниже, чтобы ввести свой Static ID:'
-      )
-      .setFooter({ text: 'INTERPOL Majestic RP • Привязка профиля' })
-      .setTimestamp();
+    const embed = createThemedEmbed({
+      color: THEME.COLORS.PRIMARY,
+      title: 'Синхронизация профиля • Majestic RP',
+      description: [
+        `> Обязательная привязка игрового Static ID и имени персонажа семьи **${channel.guild.name}**.`,
+        '',
+        '### Для чего необходима привязка:',
+        '- Автоматический учет посещения мероприятий (дропы, цеха, ВЗМ, капты).',
+        '- Сдача отчетов в академии и отслеживание нормы повышения.',
+        '- Синхронизация роли и авто-форматирование никнейма в Discord.',
+        '- Личная статистика и отображение в рейтинге состава семьи.',
+        '',
+        '-# Нажмите кнопку ниже для ввода или обновления своего Static ID.',
+      ].join('\n'),
+      thumbnailUrl: channel.guild.iconURL({ size: 256 }),
+      footerText: `${channel.guild.name} • База данных состава`,
+    });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('panel_bind_static')
-        .setLabel('🆔 Привязать статик')
-        .setStyle(ButtonStyle.Success)
+        .setLabel('Привязать статик')
+        .setStyle(ButtonStyle.Primary)
     );
 
     return await channel.send({ embeds: [embed], components: [row] });

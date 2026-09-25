@@ -3,6 +3,7 @@ import bot from '../../client';
 import prisma from '../../../database/client';
 import { EventService } from './eventService';
 import { AuditLogger } from '../logging/auditLogger';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export class EventScheduler {
   private static timer: NodeJS.Timeout | null = null;
@@ -56,32 +57,37 @@ export class EventScheduler {
         });
 
         const finishLines: string[] = [
-          `🚀 **Мероприятие официально началось!**\n`,
+          THEME.format.quote('Мероприятие официально началось.'),
+          '',
         ];
-        if (event.voiceChannelId) finishLines.push(`> 🔊 **Голосовой канал:** <#${event.voiceChannelId}>`);
-        if (event.partyCode) finishLines.push(`> 🔑 **Код группы:** \`${event.partyCode}\``);
-        finishLines.push(`\nВсем участникам хорошей игры и побед! Сообщение сбора удалится через 30 минут.`);
+        if (event.voiceChannelId) finishLines.push(THEME.format.item('Голосовой канал', `<#${event.voiceChannelId}>`));
+        if (event.partyCode) finishLines.push(THEME.format.item('Код группы', THEME.format.code(event.partyCode)));
+        finishLines.push('');
+        finishLines.push(THEME.format.subtext('Всем участникам хорошей игры. Карточка сбора удалится через 30 минут.'));
 
-        const finishEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
-          .setTitle(`🏁 Старт мероприятия: ${event.title}`)
-          .setDescription(finishLines.join('\n'))
-          .setTimestamp();
+        const finishEmbed = createThemedEmbed({
+          title: `СТАРТ МЕРОПРИЯТИЯ • ${event.title.toUpperCase()}`,
+          color: THEME.COLORS.SUCCESS,
+          description: finishLines.join('\n'),
+          footerText: 'INTERPOL • Старт сбора',
+        });
 
         await channel.send({ embeds: [finishEmbed] });
         await EventService.refreshAnnouncement(guild, event.id);
         this.sentMilestones.delete(event.id);
 
         // Audit log in #ивенты-лог
-        const logEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
-          .setTitle(`🏁 Мероприятие завершено (старт): ${event.title}`)
-          .setDescription(
-            `Мероприятие **${event.title}** завершилось (время начала наступило).\n` +
-            `Канал: <#${event.channelId}>\n` +
-            `Участников: ${event.participants.length}`
-          )
-          .setTimestamp();
+        const logEmbed = createThemedEmbed({
+          title: `МЕРОПРИЯТИЕ ЗАВЕРШЕНО • ${event.title.toUpperCase()}`,
+          color: THEME.COLORS.SUCCESS,
+          description: [
+            THEME.format.quote('Сбор участников окончен, мероприятие началось.'),
+            '',
+            THEME.format.item('Канал', `<#${event.channelId}>`),
+            THEME.format.item('Участников в составе', THEME.format.code(event.participants.length)),
+          ].join('\n'),
+          footerText: 'INTERPOL • Журнал сборов',
+        });
         await AuditLogger.sendLog(guild, 'EVENTS', logEmbed);
 
         continue;
@@ -148,18 +154,18 @@ export class EventScheduler {
             reminderLines.push(`> 🔊 **Голосовой канал:** <#${event.voiceChannelId}>`);
           }
           if (event.partyCode) {
-            reminderLines.push(`> 🔑 **Код группы:** \`${event.partyCode}\``);
+            reminderLines.push(THEME.format.item('Код группы', THEME.format.code(event.partyCode)));
           }
           if (event.messageId) {
-            reminderLines.push(`> 📍 [Открыть карточку сбора](https://discord.com/channels/${guild.id}/${event.channelId}/${event.messageId})`);
+            reminderLines.push(THEME.format.item('Карточка сбора', `[Открыть сообщение](https://discord.com/channels/${guild.id}/${event.channelId}/${event.messageId})`));
           }
 
-          const reminderEmbed = new EmbedBuilder()
-            .setColor(targetMin <= 3 ? 0xED4245 : (targetMin <= 5 ? 0xFEE75C : 0x5865F2))
-            .setTitle(`⏰ Напоминание: ${event.title}`)
-            .setDescription(reminderLines.join('\n'))
-            .setFooter({ text: 'Приготовьте экипировку и занимайте места в канале' })
-            .setTimestamp();
+          const reminderEmbed = createThemedEmbed({
+            title: `НАПОМИНАНИЕ • ${event.title.toUpperCase()}`,
+            color: targetMin <= 3 ? THEME.COLORS.DANGER : (targetMin <= 5 ? THEME.COLORS.WARNING : THEME.COLORS.PRIMARY),
+            description: reminderLines.join('\n'),
+            footerText: 'INTERPOL • Занимайте места в канале сбора',
+          });
 
           await channel.send({
             content: pings || undefined,
@@ -211,15 +217,17 @@ export class EventScheduler {
               }
             }
 
-            // Log auto-deletion to #ивенты-лог
-            const deleteEmbed = new EmbedBuilder()
-              .setColor(0x95A5A6)
-              .setTitle(`🗑️ Удалено сообщение сбора: ${event.title}`)
-              .setDescription(
-                `Сообщение сбора на мероприятие **«${event.title}»** было автоматически удалено спустя 30 минут после его завершения.\n` +
-                `Канал: <#${event.channelId}>`
-              )
-              .setTimestamp();
+            // Log auto-deletion to #бот-лог
+            const deleteEmbed = createThemedEmbed({
+              title: `ОЧИСТКА СООБЩЕНИЯ СБОРА • ${event.title.toUpperCase()}`,
+              color: THEME.COLORS.MUTED,
+              description: [
+                THEME.format.quote('Сообщение сбора автоматически удалено спустя 30 минут после завершения.'),
+                '',
+                THEME.format.item('Канал', `<#${event.channelId}>`),
+              ].join('\n'),
+              footerText: 'INTERPOL • Автоочистка',
+            });
             await AuditLogger.sendLog(guild, 'BOT', deleteEmbed);
           } catch (err) {
             console.error(`[EventScheduler] Error deleting message for event ${event.id}:`, err);

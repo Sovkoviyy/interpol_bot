@@ -17,6 +17,7 @@ import { AuditLogger } from '../logging/auditLogger';
 import { RecruitmentService } from '../recruitment/recruitmentService';
 import { NicknameService } from '../nicknames/nicknameService';
 import { extractFirstName, sanitizeChannelNamePart } from '../../utils/nameUtils';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export class AcademyService {
   /**
@@ -261,34 +262,35 @@ export class AcademyService {
   ): EmbedBuilder {
     const totalNeeded = requiredMp + penaltyMp;
     const remaining = Math.max(0, totalNeeded - approvedCount);
-    const percent = Math.min(100, Math.round((approvedCount / (totalNeeded || 1)) * 100));
+    const isCompleted = approvedCount >= totalNeeded;
 
-    // Visual progress bar [████░░░░░░]
-    const totalBars = 10;
-    const filledBars = Math.min(totalBars, Math.round((approvedCount / (totalNeeded || 1)) * totalBars));
-    const emptyBars = totalBars - filledBars;
-    const progressBar = '█'.repeat(filledBars) + '░'.repeat(emptyBars);
+    const desc = [
+      THEME.format.quote(`Личное дело академика семьи INTERPOL.`),
+      '',
+      THEME.format.item('Кандидат', `<@${memberUser.id}>`),
+      THEME.format.item('Статик', THEME.format.code(`#${staticId}`)),
+      THEME.format.item('Критерий повышения', `Подтвердить ${THEME.format.bold(totalNeeded)} МП для 2 ранга`),
+      '',
+      THEME.format.progressBar(approvedCount, totalNeeded),
+      '',
+      THEME.format.section('Регламент сдачи отчетов'),
+      THEME.format.quote('После участия в дропе, цехе, ВЗМ, МЦЛ или капте нажмите кнопку ниже и прикрепите скриншот.'),
+      '',
+      THEME.format.subtext('После вердикта рекрутера сообщение отчета удаляется, а данный статус обновляется.'),
+    ].join('\n');
 
-    return new EmbedBuilder()
-      .setColor(approvedCount >= totalNeeded ? 0x10B981 : 0xEC4899)
-      .setTitle(`🎓 Личный канал академии | ${staticId}`)
-      .setDescription(
-        `Приветствуем тебя в семье, <@${memberUser.id}>!\n\n` +
-        `**Твой статик:** \`${staticId}\`\n` +
-        `**Условие повышения на 2 ранг:** Отыграть и сдать отчеты по **${totalNeeded} МП**.\n\n` +
-        `\`[${progressBar}]\` **${percent}%** (${approvedCount}/${totalNeeded} МП)\n\n` +
-        `📌 **Как сдавать отчеты:**\n` +
-        `После участия в мероприятии (Дроп, Цех, ВЗМ, МЦЛ, Капт) нажми на кнопку ниже **«📸 Сдать отчет по МП»**, укажи тип МП и прикрепи ссылку на скриншот (или загрузи скрин прямо сюда).\n\n` +
-        `Рекрутеры проверят твой отчет. После одобрения/отклонения сообщение с отчетом удаляется, а этот закрепленный статус обновляется автоматически.`
-      )
-      .addFields(
-        { name: '📊 Сдано отчетов', value: `\`${approvedCount} / ${totalNeeded} МП\``, inline: true },
-        { name: '⚖️ Штрафов', value: `\`${penaltyMp} МП\``, inline: true },
-        { name: '⏳ Осталось сдать', value: `\`${remaining} МП\``, inline: true }
-      )
-      .setThumbnail(memberUser.avatarUrl || null)
-      .setFooter({ text: 'INTERPOL Academy • Статус обновляется автоматически' })
-      .setTimestamp();
+    return createThemedEmbed({
+      title: `ЛИЧНЫЙ КАНАЛ АКАДЕМИИ • #${staticId}`,
+      description: desc,
+      color: isCompleted ? THEME.COLORS.SUCCESS : THEME.COLORS.PRIMARY,
+      fields: [
+        { name: 'Подтверждено', value: `\`${approvedCount} / ${totalNeeded} МП\``, inline: true },
+        { name: 'Штрафы', value: `\`${penaltyMp} МП\``, inline: true },
+        { name: 'Остаток', value: `\`${remaining} МП\``, inline: true },
+      ],
+      thumbnailUrl: memberUser.avatarUrl || null,
+      footerText: 'INTERPOL Academy • Актуализация в реальном времени',
+    });
   }
 
   /**
@@ -298,11 +300,11 @@ export class AcademyService {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('academy_submit_report_btn')
-        .setLabel('📸 Сдать отчет по МП')
+        .setLabel('Сдать отчет по МП')
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId('academy_check_progress_btn')
-        .setLabel('📊 Мой прогресс')
+        .setLabel('Мой прогресс')
         .setStyle(ButtonStyle.Secondary)
     );
   }
@@ -421,27 +423,31 @@ export class AcademyService {
     const guild = member.guild || (guildId ? (bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null)) : null);
     const channel = guild ? ((guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null)) as TextChannel | null) : null;
     if (channel && channel.isTextBased()) {
-      const embed = new EmbedBuilder()
-        .setColor(0xF59E0B)
-        .setTitle(`📝 Новый отчет по МП: ${mpType}`)
-        .setDescription(
-          `**Академик:** ${member} (\`${member.user.tag}\`)\n` +
-          `**Тип МП:** ${mpType}\n` +
-          (comment ? `**Комментарий:** ${comment}\n` : '') +
-          `**Скриншоты:**\n${screenshotUrls.map((u, i) => `[Скриншот ${i + 1}](${u})`).join(' • ')}`
-        )
-        .setThumbnail(screenshotUrls[0] || null)
-        .setFooter({ text: `ID отчета: ${report.id} • Ожидает проверки рекрутером` })
-        .setTimestamp();
+      const desc = [
+        THEME.format.item('Академик', `${member} (\`${member.user.tag}\`)`),
+        THEME.format.item('Категория МП', THEME.format.code(mpType)),
+        comment ? THEME.format.item('Комментарий', comment) : null,
+        THEME.format.item('Материалы', screenshotUrls.map((u, i) => `[Скриншот ${i + 1}](${u})`).join(' • ')),
+        '',
+        THEME.format.subtext('Ожидает рассмотрения рекрутером семьи.'),
+      ].filter(Boolean).join('\n');
+
+      const embed = createThemedEmbed({
+        title: `ОТЧЕТ ПО МЕРОПРИЯТИЮ • ${mpType.toUpperCase()}`,
+        description: desc,
+        color: THEME.COLORS.WARNING,
+        thumbnailUrl: screenshotUrls[0] || null,
+        footerText: `ID: ${report.id} • INTERPOL Academy`,
+      });
 
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`academy_approve_report_${report.id}`)
-          .setLabel('✅ Одобрить отчет')
+          .setLabel('Одобрить отчет')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`academy_reject_report_${report.id}`)
-          .setLabel('❌ Отклонить отчет')
+          .setLabel('Отклонить отчет')
           .setStyle(ButtonStyle.Danger)
       );
 
@@ -525,42 +531,44 @@ export class AcademyService {
       const current = updatedChannel.approvedMpCount;
 
       if (channel) {
-        const approvedEmbed = new EmbedBuilder()
-          .setColor(0x10B981)
-          .setTitle('✅ Отчет по МП одобрен!')
-          .setDescription(
-            `Рекрутер ${reviewer} одобрил отчет по **${report.mpType}**.\n\n` +
-            `📊 **Прогресс:** \`${current} / ${neededTotal}\` МП`
-          )
-          .setTimestamp();
+        const approvedEmbed = createThemedEmbed({
+          title: 'ОТЧЕТ ПО МЕРОПРИЯТИЮ ОДОБРЕН',
+          color: THEME.COLORS.SUCCESS,
+          description: [
+            THEME.format.quote(`Рекрутер ${reviewer} подтвердил отчет по **${report.mpType}**.`),
+            '',
+            THEME.format.item('Текущий прогресс', THEME.format.code(`${current} / ${neededTotal} МП`)),
+          ].join('\n'),
+        });
 
         await channel.send({ embeds: [approvedEmbed] });
 
         // Check if member reached the required amount of MPs for Rank 2 promotion!
         if (current >= neededTotal) {
-          const promotionReadyEmbed = new EmbedBuilder()
-            .setColor(0xEC4899)
-            .setTitle('🎉 Академик готов к повышению на 2 ранг!')
-            .setDescription(
-              `Академик <@${report.userId}> успешно выполнил норму: **${current} из ${neededTotal} МП**!\n\n` +
-              `Рекрутеры, проверьте кандидата и примите решение о выдаче 2 ранга.`
-            )
-            .setFooter({ text: 'Используйте кнопки ниже для повышения или отказа' })
-            .setTimestamp();
+          const promotionReadyEmbed = createThemedEmbed({
+            title: 'АТТЕСТАЦИЯ АКАДЕМИКА • НОРМА ВЫПОЛНЕНА',
+            color: THEME.COLORS.PRIMARY,
+            description: [
+              THEME.format.quote(`Кандидат <@${report.userId}> успешно выполнил норму: **${current} из ${neededTotal} МП**.`),
+              '',
+              THEME.format.subtext('Рекрутерам необходимо провести аттестацию и подтвердить перевод на 2 ранг.'),
+            ].join('\n'),
+            footerText: 'INTERPOL Academy • Аттестация состава',
+          });
 
           const promoRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
               .setCustomId(`academy_promote_confirm_${updatedChannel.id}`)
-              .setLabel('🎖️ Одобрить повышение на 2 ранг')
+              .setLabel('Одобрить 2 ранг')
               .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
               .setCustomId(`academy_promote_reject_${updatedChannel.id}`)
-              .setLabel('⚠️ Отклонить / Добавить штраф')
+              .setLabel('Отклонить / Штраф')
               .setStyle(ButtonStyle.Danger)
           );
 
           await channel.send({
-            content: `🔔 <@${report.userId}> достиг 10 МП!`,
+            content: `<@${report.userId}> норма 10 МП выполнена`,
             embeds: [promotionReadyEmbed],
             components: [promoRow],
           });
@@ -570,15 +578,17 @@ export class AcademyService {
       if (channel) {
         await this.refreshStatusMessage(channel, report.academyChannelId || undefined);
 
-        const rejectEmbed = new EmbedBuilder()
-          .setColor(0xEF4444)
-          .setTitle('❌ Отчет по МП отклонен')
-          .setDescription(
-            `Рекрутер ${reviewer} отклонил ваш отчет по **${report.mpType}**.\n\n` +
-            `**Причина:** ${rejectionReason || 'Не указана'}\n` +
-            `*Этот отчет не идет в зачет.*`
-          )
-          .setTimestamp();
+        const rejectEmbed = createThemedEmbed({
+          title: 'ОТЧЕТ ПО МЕРОПРИЯТИЮ ОТКЛОНЕН',
+          color: THEME.COLORS.DANGER,
+          description: [
+            THEME.format.quote(`Рекрутер ${reviewer} отклонил ваш отчет по **${report.mpType}**.`),
+            '',
+            THEME.format.item('Причина', rejectionReason || 'Не соответствует регламенту'),
+            '',
+            THEME.format.subtext('Данный отчет не засчитан в прогресс академии.'),
+          ].join('\n'),
+        });
 
         await channel.send({ embeds: [rejectEmbed] });
       }
@@ -648,16 +658,18 @@ export class AcademyService {
 
       // 4. Send celebration
       if (channel && channel.isTextBased()) {
-        const celebrationEmbed = new EmbedBuilder()
-          .setColor(0xEC4899)
-          .setTitle('🎖️ Академик успешно повышен на 2 ранг!')
-          .setDescription(
-            `Поздравляем <@${academy.userId}> с успешным прохождением академии семьи!\n` +
-            `Вам присвоен **2 ранг** (Основной состав).\n\n` +
-            `Повышение провел: ${reviewer} (\`${reviewer.user.tag}\`).\n` +
-            `Канал отправляется в архив.`
-          )
-          .setTimestamp();
+        const celebrationEmbed = createThemedEmbed({
+          title: 'АТТЕСТАЦИЯ ПРОЙДЕНА • ПРИСВОЕН 2 РАНГ',
+          color: THEME.COLORS.PRIMARY,
+          description: [
+            THEME.format.quote(`Поздравляем <@${academy.userId}> с успешным окончанием академии.`),
+            '',
+            THEME.format.item('Новый ранг', '2 ранг (Основной состав)'),
+            THEME.format.item('Аттестацию провел', `${reviewer} (\`${reviewer.user.tag}\`)`),
+            '',
+            THEME.format.subtext('Личный канал академии переносится в архив.'),
+          ].join('\n'),
+        });
 
         await channel.send({ embeds: [celebrationEmbed] });
 
@@ -685,16 +697,17 @@ export class AcademyService {
       if (channel && channel.isTextBased()) {
         await this.refreshStatusMessage(channel, academyChannelId);
 
-        const penaltyEmbed = new EmbedBuilder()
-          .setColor(0xEF4444)
-          .setTitle('⚠️ Повышение отклонено | Назначен штраф')
-          .setDescription(
-            `Рекрутер ${reviewer} отклонил повышение на 2 ранг.\n\n` +
-            `**Причина:** ${rejectionReason || 'Требуется дополнительная активность'}\n` +
-            `**Штраф:** +${penalty} дополнительных МП.\n\n` +
-            `📊 **Новая норма:** \`${updated.approvedMpCount} / ${updated.requiredMp + updated.penaltyMp}\` МП`
-          )
-          .setTimestamp();
+        const penaltyEmbed = createThemedEmbed({
+          title: 'АТТЕСТАЦИЯ ОТКЛОНЕНА • НАЗНАЧЕН ШТРАФ',
+          color: THEME.COLORS.DANGER,
+          description: [
+            THEME.format.quote(`Рекрутер ${reviewer} отклонил перевод на 2 ранг.`),
+            '',
+            THEME.format.item('Причина', rejectionReason || 'Требуется дополнительная активность'),
+            THEME.format.item('Штраф', THEME.format.code(`+${penalty} МП`)),
+            THEME.format.item('Новая норма', THEME.format.code(`${updated.approvedMpCount} / ${updated.requiredMp + updated.penaltyMp} МП`)),
+          ].join('\n'),
+        });
 
         await channel.send({ embeds: [penaltyEmbed] });
       }

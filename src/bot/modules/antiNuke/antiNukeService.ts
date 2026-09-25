@@ -11,6 +11,7 @@ import {
   TextChannel 
 } from 'discord.js';
 import prisma from '../../../database/client';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export class AntiNukeService {
   /**
@@ -124,18 +125,24 @@ export class AntiNukeService {
         alertUserIds.push(guild.ownerId);
       }
 
-      const alertEmbed = new EmbedBuilder()
-        .setColor(0xED4245)
-        .setTitle('🚨 СРАБОТАЛА ЗАЩИТА СЕРВЕРА (ANTI-NUKE)')
-        .setDescription(
-          `**Удален канал:** \`#${channel.name}\` (ID: \`${channel.id}\`)\n` +
-          `**Нарушитель:** <@${executor.id}> (\`${executor.tag}\` / \`${executor.id}\`)\n` +
-          `**Примененные меры:**\n` +
-          `• ❌ С нарушителя сняты все роли доступа на сервере.\n` +
-          (restoredChannel ? `• 🔄 Канал успешно восстановлен: ${restoredChannel}\n` : `• ⚠️ Не удалось восстановить канал автоматически.\n`)
-        )
-        .setThumbnail(executor.displayAvatarURL())
-        .setTimestamp();
+      const alertEmbed = createThemedEmbed({
+        title: 'СРАБОТАЛА ЗАЩИТА СЕРВЕРА • ANTI-NUKE',
+        color: THEME.COLORS.DANGER,
+        description: [
+          THEME.format.quote('Зафиксировано несанкционированное удаление канала.'),
+          '',
+          THEME.format.item('Удаленный канал', `\`#${channel.name}\` (\`${channel.id}\`)`),
+          THEME.format.item('Инициатор', `<@${executor.id}> (\`${executor.tag}\`)`),
+          '',
+          THEME.format.section('Принятые меры защиты'),
+          THEME.format.bullet('С нарушителя сняты все роли доступа на сервере.'),
+          restoredChannel
+            ? THEME.format.bullet(`Канал успешно восстановлен: ${restoredChannel}`)
+            : THEME.format.bullet('Автоматическое восстановление канала не удалось.'),
+        ].join('\n'),
+        thumbnailUrl: executor.displayAvatarURL(),
+        footerText: 'INTERPOL • Безопасность сервера',
+      });
 
       for (const adminId of alertUserIds) {
         try {
@@ -224,18 +231,26 @@ export class AntiNukeService {
         alertUserIds.push(guild.ownerId);
       }
 
-      const alertEmbed = new EmbedBuilder()
-        .setColor(0xED4245)
-        .setTitle('🚨 СРАБОТАЛА ЗАЩИТА СЕРВЕРА (ANTI-NUKE): ДОБАВЛЕН БОТ')
-        .setDescription(
-          `**Добавленный бот:** ${member} (\`${member.user.tag}\` / \`${member.id}\`)\n` +
-          `**Инициатор добавления:** ${executor ? `<@${executor.id}> (\`${executor.tag}\` / \`${executor.id}\`)` : 'Неизвестно (аудит-лог недоступен)'}\n` +
-          `**Примененные меры:**\n` +
-          (botKicked ? `• 👢 Добавленный бот немедленно исключен с сервера.\n` : `• ⚠️ Не удалось исключить бота (проверьте права бота).\n`) +
-          (offenderStripped ? `• ❌ С пользователя ${executor?.tag} сняты все роли доступа.\n` : '')
-        )
-        .setThumbnail(member.user.displayAvatarURL())
-        .setTimestamp();
+      const alertEmbed = createThemedEmbed({
+        title: 'СРАБОТАЛА ЗАЩИТА СЕРВЕРА • ДОБАВЛЕН БОТ',
+        color: THEME.COLORS.DANGER,
+        description: [
+          THEME.format.quote('Зафиксировано несанкционированное добавление бота.'),
+          '',
+          THEME.format.item('Добавленный бот', `${member} (\`${member.user.tag}\` / \`${member.id}\`)`),
+          THEME.format.item('Инициатор', executor ? `<@${executor.id}> (\`${executor.tag}\`)` : 'Неизвестно'),
+          '',
+          THEME.format.section('Принятые меры защиты'),
+          botKicked
+            ? THEME.format.bullet('Добавленный бот немедленно исключен с сервера.')
+            : THEME.format.bullet('Не удалось исключить бота (проверьте права).'),
+          offenderStripped
+            ? THEME.format.bullet(`С пользователя ${executor?.tag} сняты все роли доступа.`)
+            : '',
+        ].filter(Boolean).join('\n'),
+        thumbnailUrl: member.user.displayAvatarURL(),
+        footerText: 'INTERPOL • Безопасность сервера',
+      });
 
       for (const adminId of alertUserIds) {
         try {

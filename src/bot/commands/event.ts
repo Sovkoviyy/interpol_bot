@@ -9,6 +9,7 @@ import prisma from '../../database/client';
 import { Command } from '../client';
 import { EventService } from '../modules/events/eventService';
 import { AuditLogger } from '../modules/logging/auditLogger';
+import { THEME, createThemedEmbed } from '../utils/theme';
 
 export const eventCommand: Command = {
   data: new SlashCommandBuilder()
@@ -247,22 +248,25 @@ export const eventCommand: Command = {
       else if (type === 'UNLIMITED') mentionDisplay = '@here (по умолчанию)';
 
       // Send audit log to #ивенты-лог
-      const createEmbed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle(`📢 Создано новое мероприятие: ${event.title}`)
-        .setDescription(
-          `Создатель: <@${interaction.user.id}> (${interaction.user.tag})\n` +
-          `Канал сбора: <#${interaction.channelId}>\n` +
-          `Упоминание: **${mentionDisplay}**\n` +
-          `Тип: **${type === 'LIMITED' ? `С ограничением (${limit || 10} мест)` : 'Без ограничений'}**\n` +
-          `Чек-ин: <t:${Math.floor(checkInTime.getTime() / 1000)}:f>\n` +
-          `Старт: <t:${Math.floor(eventTime.getTime() / 1000)}:f>`
-        )
-        .setTimestamp();
+      const createEmbed = createThemedEmbed({
+        title: `ОБЪЯВЛЕН СБОР • ${event.title.toUpperCase()}`,
+        color: THEME.COLORS.PRIMARY,
+        description: [
+          THEME.format.quote('Организован новый сбор на мероприятие.'),
+          '',
+          THEME.format.item('Организатор', `<@${interaction.user.id}> (\`${interaction.user.tag}\`)`),
+          THEME.format.item('Канал сбора', `<#${interaction.channelId}>`),
+          THEME.format.item('Упоминание', mentionDisplay),
+          THEME.format.item('Формат', type === 'LIMITED' ? `С ограничением (${limit || 10} мест)` : 'Без ограничений'),
+          THEME.format.item('Чек-ин', `<t:${Math.floor(checkInTime.getTime() / 1000)}:f>`),
+          THEME.format.item('Старт', `<t:${Math.floor(eventTime.getTime() / 1000)}:f>`),
+        ].join('\n'),
+        footerText: 'INTERPOL • Журнал сборов',
+      });
       await AuditLogger.sendLog(guild, 'EVENTS', createEmbed);
 
       await interaction.editReply({
-        content: `✅ Сбор на мероприятие **«${title}»** успешно объявлен!`,
+        content: `Сбор на мероприятие **«${title}»** успешно объявлен.`,
       });
     }
   },

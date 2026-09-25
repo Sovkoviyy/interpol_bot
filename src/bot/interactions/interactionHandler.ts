@@ -22,6 +22,7 @@ import { ProfileService } from '../modules/profiles/profileService';
 import { LeaveService } from '../modules/leave/leaveService';
 import { NicknameService } from '../modules/nicknames/nicknameService';
 import prisma from '../../database/client';
+import { THEME, createThemedEmbed } from '../utils/theme';
 
 let isInteractionHandlerRegistered = false;
 
@@ -105,18 +106,24 @@ export function registerInteractionHandler() {
           const neededTotal = academy.requiredMp + academy.penaltyMp;
           const remaining = Math.max(0, neededTotal - academy.approvedMpCount);
 
-          const progressEmbed = new EmbedBuilder()
-            .setColor(0xEC4899)
-            .setTitle('📊 Ваш текущий прогресс в академии')
-            .setDescription(
-              `• **Одобрено МП:** \`${academy.approvedMpCount} / ${neededTotal}\`\n` +
-              `• **Штрафные МП:** \`${academy.penaltyMp}\`\n` +
-              `• **Осталось сыграть:** \`${remaining}\` МП\n\n` +
-              (remaining === 0
-                ? '🎉 **Вы выполнили норму!** Ожидайте подтверждения от рекрутера.'
-                : 'Продолжайте посещать сборы семьи и сдавать отчеты!')
-            )
-            .setTimestamp();
+          const progressEmbed = createThemedEmbed({
+            title: 'ПРОГРЕСС В АКАДЕМИИ',
+            color: remaining === 0 ? THEME.COLORS.SUCCESS : THEME.COLORS.PRIMARY,
+            description: [
+              THEME.format.quote('Текущая статистика выполнения нормативов академии.'),
+              '',
+              THEME.format.item('Подтверждено МП', THEME.format.code(`${academy.approvedMpCount} / ${neededTotal}`)),
+              THEME.format.item('Штрафные МП', THEME.format.code(`${academy.penaltyMp}`)),
+              THEME.format.item('Осталось сдать', THEME.format.code(`${remaining} МП`)),
+              '',
+              THEME.format.progressBar(academy.approvedMpCount, neededTotal),
+              '',
+              remaining === 0
+                ? THEME.format.bold('Норма выполнена. Ожидайте аттестации рекрутером.')
+                : THEME.format.subtext('Посещайте мероприятия семьи и сдавайте отчеты в этом канале.'),
+            ].join('\n'),
+            footerText: 'INTERPOL Academy • Личный прогресс',
+          });
 
           await interaction.reply({ embeds: [progressEmbed], ephemeral: true });
           return;
@@ -611,26 +618,29 @@ export function registerInteractionHandler() {
                   await guild.channels.fetch(guildConfig.leaveRequestChannelId).catch(() => null)) as TextChannel | null;
                 if (leaveChannel && leaveChannel.isTextBased()) {
                   const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-                  const leaveEmbed = new EmbedBuilder()
-                    .setColor(0xF59E0B)
-                    .setTitle('🏖️ Новая заявка на отпуск')
-                    .setDescription(
-                      `**Участник:** ${member || interaction.user} (\`${interaction.user.tag}\`)\n` +
-                      `**Тип:** \`🏖️ Отпуск\`\n` +
-                      `**Период:** с **${startDate.toLocaleDateString('ru-RU')}** по **${endDate.toLocaleDateString('ru-RU')}** (\`${days} дн.\`)\n` +
-                      `**Причина:** ${reason}\n` +
-                      `**ID заявки:** \`${leave.id}\``
-                    )
-                    .setTimestamp();
+                  const leaveEmbed = createThemedEmbed({
+                    title: 'ЗАЯВКА НА ОТПУСК',
+                    color: THEME.COLORS.WARNING,
+                    description: [
+                      THEME.format.quote('Новая заявка на временное освобождение от обязанностей.'),
+                      '',
+                      THEME.format.item('Участник', `${member || interaction.user} (\`${interaction.user.tag}\`)`),
+                      THEME.format.item('Тип', 'Отпуск'),
+                      THEME.format.item('Период', `с ${THEME.format.bold(startDate.toLocaleDateString('ru-RU'))} по ${THEME.format.bold(endDate.toLocaleDateString('ru-RU'))} (\`${days} дн.\`)`),
+                      THEME.format.item('Причина', reason),
+                      THEME.format.item('ID заявки', THEME.format.code(leave.id)),
+                    ].join('\n'),
+                    footerText: 'INTERPOL • Управление отпусками',
+                  });
 
                   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
                     new ButtonBuilder()
                       .setCustomId(`leave_approve_${leave.id}`)
-                      .setLabel('✅ Одобрить')
+                      .setLabel('Одобрить')
                       .setStyle(ButtonStyle.Success),
                     new ButtonBuilder()
                       .setCustomId(`leave_reject_${leave.id}`)
-                      .setLabel('❌ Отклонить')
+                      .setLabel('Отклонить')
                       .setStyle(ButtonStyle.Danger)
                   );
 
@@ -707,26 +717,29 @@ export function registerInteractionHandler() {
                   const remM = durationMinutes % 60;
                   const durText = hours > 0 ? `${hours} ч. ${remM > 0 ? `${remM} мин.` : ''}` : `${remM} мин.`;
 
-                  const leaveEmbed = new EmbedBuilder()
-                    .setColor(0x3B82F6)
-                    .setTitle('⏱️ Новая заявка на отгул')
-                    .setDescription(
-                      `**Участник:** ${member || interaction.user} (\`${interaction.user.tag}\`)\n` +
-                      `**Тип:** \`⏱️ Отгул\`\n` +
-                      `**Длительность:** \`${durText}\` (до ${endDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})\n` +
-                      `**Причина:** ${reason}\n` +
-                      `**ID заявки:** \`${leave.id}\``
-                    )
-                    .setTimestamp();
+                  const leaveEmbed = createThemedEmbed({
+                    title: 'ЗАЯВКА НА ОТГУЛ',
+                    color: THEME.COLORS.WARNING,
+                    description: [
+                      THEME.format.quote('Новая заявка на кратковременный отгул.'),
+                      '',
+                      THEME.format.item('Участник', `${member || interaction.user} (\`${interaction.user.tag}\`)`),
+                      THEME.format.item('Тип', 'Кратковременный отгул'),
+                      THEME.format.item('Длительность', `${THEME.format.bold(durText)} (до ${endDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})`),
+                      THEME.format.item('Причина', reason),
+                      THEME.format.item('ID заявки', THEME.format.code(leave.id)),
+                    ].join('\n'),
+                    footerText: 'INTERPOL • Управление отпусками',
+                  });
 
                   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
                     new ButtonBuilder()
                       .setCustomId(`leave_approve_${leave.id}`)
-                      .setLabel('✅ Одобрить')
+                      .setLabel('Одобрить')
                       .setStyle(ButtonStyle.Success),
                     new ButtonBuilder()
                       .setCustomId(`leave_reject_${leave.id}`)
-                      .setLabel('❌ Отклонить')
+                      .setLabel('Отклонить')
                       .setStyle(ButtonStyle.Danger)
                   );
 

@@ -25,6 +25,7 @@ import { buildCustomTemplateEmbed } from '../../utils/templateEmbed';
 import { NicknameService } from '../nicknames/nicknameService';
 import { extractFirstName, sanitizeChannelNamePart } from '../../utils/nameUtils';
 import bot from '../../client';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export class RecruitmentService {
   private static async resolveGuild(interaction: { guild?: Guild | null; guildId?: string | null }): Promise<Guild | null> {
@@ -444,41 +445,48 @@ export class RecruitmentService {
       });
 
       // Create ticket embed
-      const embed = new EmbedBuilder()
-        .setColor(0x3498DB)
-        .setTitle(`📋 Новая заявка в семью: ${interaction.user.username}`)
-        .setDescription(
-          `**Кандидат:** ${interaction.user} (\`${interaction.user.tag}\` / \`${interaction.user.id}\`)\n` +
-          `**Дата подачи:** <t:${Math.floor(Date.now() / 1000)}:F> (<t:${Math.floor(Date.now() / 1000)}:R>)\n` +
-          `**Статус:** ⏳ Ожидает рассмотрения\n\n` +
-          `*Рекрутеры могут нажать кнопку ниже, чтобы взять заявку в работу.*`
-        )
-        .setThumbnail(interaction.user.displayAvatarURL({ size: 256 }));
+      const nowUnix = Math.floor(Date.now() / 1000);
+      const descLines = [
+        THEME.format.quote('Новая анкета кандидата на вступление в семью.'),
+        '',
+        THEME.format.item('Кандидат', `${interaction.user} (\`${interaction.user.tag}\`)`),
+        THEME.format.item('Дата подачи', `<t:${nowUnix}:F> (<t:${nowUnix}:R>)`),
+        THEME.format.item('Статус', 'Ожидает рассмотрения'),
+        '',
+        THEME.format.subtext('Рекрутеры семьи могут принять решение с помощью кнопок ниже'),
+      ];
 
-      for (const [question, answer] of Object.entries(answers)) {
-        embed.addFields({ name: question, value: answer || 'Не указано', inline: false });
-      }
+      const ticketFields = Object.entries(answers).map(([question, answer]) => ({
+        name: question,
+        value: answer || 'Не указано',
+        inline: false,
+      }));
+
+      const embed = createThemedEmbed({
+        title: `ЗАЯВКА В СЕМЬЮ • ${interaction.user.username.toUpperCase()}`,
+        description: descLines.join('\n'),
+        color: THEME.COLORS.PRIMARY,
+        thumbnailUrl: interaction.user.displayAvatarURL({ size: 256 }),
+        fields: ticketFields,
+        footerText: 'INTERPOL • Набор в семью',
+      });
 
       const buttonsRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`recruit_claim_${application.id}`)
           .setLabel('Взять на рассмотрение')
-          .setEmoji('📌')
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId(`recruit_approve_${application.id}`)
           .setLabel('Одобрить')
-          .setEmoji('✅')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`recruit_interview_${application.id}`)
           .setLabel('Обзвон')
-          .setEmoji('🎙️')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`recruit_reject_${application.id}`)
           .setLabel('Отклонить')
-          .setEmoji('❌')
           .setStyle(ButtonStyle.Danger)
       );
 
@@ -515,10 +523,11 @@ export class RecruitmentService {
               .replace(/{user}/g, `<@${interaction.user.id}>`)
               .replace(/{guild}/g, guild.name);
             
-            const greetingEmbed = new EmbedBuilder()
-              .setColor(0xEC4899)
-              .setTitle(`🌸 ${greetingTitle}`)
-              .setDescription(greetingDesc);
+            const greetingEmbed = createThemedEmbed({
+              title: greetingTitle.toUpperCase(),
+              description: THEME.format.quote(greetingDesc),
+              color: THEME.COLORS.PRIMARY,
+            });
             await ticketChannel.send({ embeds: [greetingEmbed] }).catch(() => null);
           }
         }
@@ -527,37 +536,36 @@ export class RecruitmentService {
       }
 
       await interaction.editReply({
-        content: `✅ Ваша заявка успешно создана! Перейдите в канал: <#${ticketChannel.id}>`,
+        content: `Ваша заявка успешно создана. Перейдите в канал: <#${ticketChannel.id}>`,
       }).catch(() => null);
 
       // Log to Recruitment Channel (#заявки-набор)
-      const recruitLogEmbed = new EmbedBuilder()
-        .setColor(0x3498DB)
-        .setTitle(`📋 Новая заявка на вступление: ${interaction.user.tag}`)
-        .setDescription(
-          `**Кандидат:** ${interaction.user} (\`${interaction.user.tag}\` / \`${interaction.user.id}\`)\n` +
-          `**Канал заявки:** <#${ticketChannel.id}>\n` +
-          `**Время подачи:** <t:${Math.floor(Date.now() / 1000)}:F> (<t:${Math.floor(Date.now() / 1000)}:R>)`
-        )
-        .setThumbnail(interaction.user.displayAvatarURL())
-        .setTimestamp();
-
-      for (const [q, a] of Object.entries(answers)) {
-        recruitLogEmbed.addFields({ name: q, value: a || 'Не указано', inline: false });
-      }
+      const recruitLogEmbed = createThemedEmbed({
+        title: `НОВАЯ ЗАЯВКА В СЕМЬЮ • ${interaction.user.tag.toUpperCase()}`,
+        color: THEME.COLORS.PRIMARY,
+        description: [
+          THEME.format.item('Кандидат', `${interaction.user} (\`${interaction.user.tag}\`)`),
+          THEME.format.item('Канал заявки', `<#${ticketChannel.id}>`),
+          THEME.format.item('Время подачи', `<t:${nowUnix}:F> (<t:${nowUnix}:R>)`),
+        ].join('\n'),
+        fields: ticketFields,
+        thumbnailUrl: interaction.user.displayAvatarURL(),
+        footerText: 'INTERPOL • Журнал заявок',
+      });
 
       await this.sendRecruitmentLog(guild, recruitLogEmbed);
 
       // Log to BOT logs
-      const logEmbed = new EmbedBuilder()
-        .setColor(0x3498DB)
-        .setTitle('📋 Создана новая заявка')
-        .setDescription(
-          `**Кандидат:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-          `**Канал:** <#${ticketChannel.id}>\n` +
-          `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-        )
-        .setTimestamp();
+      const logEmbed = createThemedEmbed({
+        title: 'СОЗДАНА НОВАЯ ЗАЯВКА',
+        color: THEME.COLORS.PRIMARY,
+        description: [
+          THEME.format.item('Кандидат', `${interaction.user} (\`${interaction.user.tag}\`)`),
+          THEME.format.item('Канал', `<#${ticketChannel.id}>`),
+          THEME.format.item('Время', `<t:${nowUnix}:F>`),
+        ].join('\n'),
+        footerText: 'INTERPOL • Бот-лог',
+      });
       await AuditLogger.sendLog(guild, 'BOT', logEmbed).catch(() => null);
     } catch (err: any) {
       console.error('[Recruitment handleModalSubmit Error]:', err);
@@ -636,27 +644,31 @@ export class RecruitmentService {
 
     const guild = await this.resolveGuild(interaction);
     if (guild) {
-      const claimEmbed = new EmbedBuilder()
-        .setColor(0xFEE75C)
-        .setTitle(`📌 Заявка взята на рассмотрение: ${application.userTag}`)
-        .setDescription(
-          `**Кандидат:** <@${application.userId}> (\`${application.userTag}\`)\n` +
-          `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-          (application.channelId ? `**Канал заявки:** <#${application.channelId}>\n` : '') +
-          `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-        )
-        .setTimestamp();
+      const candidateTag = application.userTag || 'Кандидат';
+      const claimEmbed = createThemedEmbed({
+        title: `ЗАЯВКА В РАБОТЕ • ${candidateTag.toUpperCase()}`,
+        color: THEME.COLORS.WARNING,
+        description: [
+          THEME.format.quote('Заявка принята на рассмотрение рекрутером.'),
+          '',
+          THEME.format.item('Кандидат', `<@${application.userId}> (\`${application.userTag}\`)`),
+          THEME.format.item('Рекрутер', `${interaction.user} (\`${interaction.user.tag}\`)`),
+          application.channelId ? THEME.format.item('Канал заявки', `<#${application.channelId}>`) : null,
+          THEME.format.item('Время', `<t:${Math.floor(Date.now() / 1000)}:F>`),
+        ].filter(Boolean).join('\n'),
+        footerText: 'INTERPOL • Набор в семью',
+      });
       await this.sendRecruitmentLog(guild, claimEmbed);
     }
 
     // Update original embed if possible
     if (interaction.message && interaction.message.embeds.length > 0) {
       const oldEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
-      oldEmbed.setColor(0xFEE75C);
+      oldEmbed.setColor(THEME.COLORS.WARNING);
       oldEmbed.setDescription(
         oldEmbed.data.description?.replace(
           /Статус: .*/,
-          `Статус: 🟡 На рассмотрении у ${interaction.user} (\`${interaction.user.tag}\`)`
+          `Статус: На рассмотрении у ${interaction.user} (\`${interaction.user.tag}\`)`
         ) || null
       );
       await interaction.message.edit({ embeds: [oldEmbed] });
@@ -669,7 +681,7 @@ export class RecruitmentService {
   public static async handleInterview(interaction: ButtonInteraction, applicationId: string): Promise<void> {
     const member = interaction.member as GuildMember;
     if (!(await this.isRecruiter(member))) {
-      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', ephemeral: true });
+      await interaction.reply({ content: 'У вас нет прав рекрутера для этого действия.', ephemeral: true });
       return;
     }
 
@@ -677,13 +689,13 @@ export class RecruitmentService {
       where: { id: applicationId },
     });
     if (!application) {
-      await interaction.reply({ content: '❌ Заявка не найдена в базе данных.', ephemeral: true });
+      await interaction.reply({ content: 'Заявка не найдена в базе данных.', ephemeral: true });
       return;
     }
 
     const guild = await this.resolveGuild(interaction);
     if (!guild) {
-      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      await interaction.reply({ content: 'Сервер Discord не найден.', ephemeral: true });
       return;
     }
 
@@ -694,7 +706,7 @@ export class RecruitmentService {
       const existingVoice = guild.channels.cache.get(application.interviewVoiceId);
       if (existingVoice) {
         await interaction.editReply({
-          content: `ℹ️ Комната для обзвона уже создана: <#${existingVoice.id}>! Перейдите туда для проведения собеседования.`,
+          content: `Комната для обзвона уже создана: <#${existingVoice.id}>. Перейдите туда для проведения собеседования.`,
         });
         return;
       }
@@ -762,7 +774,7 @@ export class RecruitmentService {
     const candidateMember = await guild.members.fetch(application.userId).catch(() => null);
     const candidateName = candidateMember?.displayName || application.userTag || 'Кандидат';
     const voiceChannel = await guild.channels.create({
-      name: `🔊 Обзвон: ${candidateName.slice(0, 15)}`,
+      name: `обзвон-${candidateName.slice(0, 15)}`,
       type: ChannelType.GuildVoice,
       parent: parentId,
       permissionOverwrites: overwrites,
@@ -780,19 +792,22 @@ export class RecruitmentService {
     });
 
     // Notify in ticket channel
-    const alertEmbed = new EmbedBuilder()
-      .setColor(0x3B82F6)
-      .setTitle('🎙️ Кандидат вызван на собеседование / обзвон!')
-      .setDescription(
-        `Рекрутер ${interaction.user} создал закрытый голосовой канал для обзвона.\n\n` +
-        `🔊 **Перейдите в канал:** <#${voiceChannel.id}>\n` +
-        `🔒 *Доступ в канал имеют исключительно кандидат <@${application.userId}> и рекрутеры семьи.*`
-      )
-      .setTimestamp();
+    const alertEmbed = createThemedEmbed({
+      title: 'СОБЕСЕДОВАНИЕ • ОБЗВОН КАНДИДАТА',
+      color: THEME.COLORS.PRIMARY,
+      description: [
+        THEME.format.quote(`Рекрутер ${interaction.user} открыл закрытую комнату для обзвона.`),
+        '',
+        THEME.format.item('Голосовой канал', `<#${voiceChannel.id}>`),
+        '',
+        THEME.format.subtext(`Доступ разрешен только кандидату <@${application.userId}> и рекрутерам семьи.`),
+      ].join('\n'),
+      footerText: 'INTERPOL • Собеседование',
+    });
 
     if (ticketChannel && ticketChannel.isTextBased()) {
       await (ticketChannel as TextChannel).send({
-        content: `<@${application.userId}>, вас вызывают на обзвон!`,
+        content: `<@${application.userId}> вас ожидают в голосовом канале`,
         embeds: [alertEmbed],
       }).catch(() => null);
     }
@@ -940,33 +955,38 @@ export class RecruitmentService {
     const channel = interaction.channel as TextChannel;
     const transcriptAttachment = channel ? await TranscriptService.generateTranscript(channel) : null;
 
-    const logEmbed = new EmbedBuilder()
-      .setColor(0x57F287)
-      .setTitle(`✅ Заявка одобрена: ${application.userTag}`)
-      .setDescription(
-        `**Кандидат:** <@${application.userId}> (\`${application.userId}\`)\n` +
-        `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-        `**Канал:** \`#${channel?.name || 'ticket'}\`\n` +
-        `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-      )
-      .setTimestamp();
+    const approvedUserTag = application.userTag || 'Кандидат';
+    const logEmbed = createThemedEmbed({
+      title: `ЗАЯВКА ОДОБРЕНА • ${approvedUserTag.toUpperCase()}`,
+      color: THEME.COLORS.SUCCESS,
+      description: [
+        THEME.format.quote('Кандидат успешно принят в состав семьи.'),
+        '',
+        THEME.format.item('Кандидат', `<@${application.userId}> (\`${application.userId}\`)`),
+        THEME.format.item('Рекрутер', `${interaction.user} (\`${interaction.user.tag}\`)`),
+        THEME.format.item('Канал', `\`#${channel?.name || 'ticket'}\``),
+        THEME.format.item('Время', `<t:${Math.floor(Date.now() / 1000)}:F>`),
+      ].join('\n'),
+      footerText: 'INTERPOL • Набор в семью',
+    });
 
     await this.sendRecruitmentLog(guild, logEmbed, transcriptAttachment ? [transcriptAttachment] : []);
 
     // Bot log
-    const botEmbed = new EmbedBuilder()
-      .setColor(0x57F287)
-      .setTitle('✅ Заявка в семью одобрена')
-      .setDescription(
-        `**Кандидат:** <@${application.userId}> (\`${application.userTag}\`)\n` +
-        `**Рекрутер:** ${interaction.user}\n` +
-        `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-      )
-      .setTimestamp();
+    const botEmbed = createThemedEmbed({
+      title: 'ЗАЯВКА В СЕМЬЮ ОДОБРЕНА',
+      color: THEME.COLORS.SUCCESS,
+      description: [
+        THEME.format.item('Кандидат', `<@${application.userId}> (\`${application.userTag}\`)`),
+        THEME.format.item('Рекрутер', `${interaction.user}`),
+        THEME.format.item('Время', `<t:${Math.floor(Date.now() / 1000)}:F>`),
+      ].join('\n'),
+      footerText: 'INTERPOL • Бот-лог',
+    });
     await AuditLogger.sendLog(guild, 'BOT', botEmbed);
 
     await interaction.editReply({
-      content: `✅ Заявка одобрена! Роль выдана. Канал будет удален через 5 секунд...`,
+      content: `Заявка одобрена. Роль выдана. Канал будет удален через 5 секунд...`,
     });
 
     setTimeout(async () => {
@@ -1063,34 +1083,39 @@ export class RecruitmentService {
     const channel = interaction.channel as TextChannel;
     const transcriptAttachment = channel ? await TranscriptService.generateTranscript(channel) : null;
 
-    const logEmbed = new EmbedBuilder()
-      .setColor(0xED4245)
-      .setTitle(`❌ Заявка отклонена: ${application.userTag}`)
-      .setDescription(
-        `**Кандидат:** <@${application.userId}> (\`${application.userId}\`)\n` +
-        `**Рекрутер:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-        `**Причина:** ${reason}\n` +
-        `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-      )
-      .setTimestamp();
+    const rejectedUserTag = application.userTag || 'Кандидат';
+    const logEmbed = createThemedEmbed({
+      title: `ЗАЯВКА ОТКЛОНЕНА • ${rejectedUserTag.toUpperCase()}`,
+      color: THEME.COLORS.DANGER,
+      description: [
+        THEME.format.quote('Заявка кандидата отклонена рекрутером.'),
+        '',
+        THEME.format.item('Кандидат', `<@${application.userId}> (\`${application.userId}\`)`),
+        THEME.format.item('Рекрутер', `${interaction.user} (\`${interaction.user.tag}\`)`),
+        THEME.format.item('Причина', reason),
+        THEME.format.item('Время', `<t:${Math.floor(Date.now() / 1000)}:F>`),
+      ].join('\n'),
+      footerText: 'INTERPOL • Набор в семью',
+    });
 
     await this.sendRecruitmentLog(guild, logEmbed, transcriptAttachment ? [transcriptAttachment] : []);
 
     // Bot log
-    const botEmbed = new EmbedBuilder()
-      .setColor(0xED4245)
-      .setTitle('❌ Заявка отклонена и кандидат кикнут')
-      .setDescription(
-        `**Кандидат:** <@${application.userId}> (\`${application.userTag}\`)\n` +
-        `**Рекрутер:** ${interaction.user}\n` +
-        `**Причина:** ${reason}\n` +
-        `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
-      )
-      .setTimestamp();
+    const botEmbed = createThemedEmbed({
+      title: 'ЗАЯВКА В СЕМЬЮ ОТКЛОНЕНА',
+      color: THEME.COLORS.DANGER,
+      description: [
+        THEME.format.item('Кандидат', `<@${application.userId}> (\`${application.userTag}\`)`),
+        THEME.format.item('Рекрутер', `${interaction.user}`),
+        THEME.format.item('Причина', reason),
+        THEME.format.item('Время', `<t:${Math.floor(Date.now() / 1000)}:F>`),
+      ].join('\n'),
+      footerText: 'INTERPOL • Бот-лог',
+    });
     await AuditLogger.sendLog(guild, 'BOT', botEmbed);
 
     await interaction.editReply({
-      content: `❌ Заявка отклонена. Пользователь кикнут. Канал будет удален через 5 секунд...`,
+      content: `Заявка отклонена. Пользователь кикнут. Канал будет удален через 5 секунд...`,
     });
 
     setTimeout(async () => {

@@ -8,6 +8,7 @@ import {
 import { ProfileService } from '../modules/profiles/profileService';
 import { NicknameService } from '../modules/nicknames/nicknameService';
 import prisma from '../../database/client';
+import { THEME, createThemedEmbed } from '../utils/theme';
 
 export const profileCommand = {
   data: new SlashCommandBuilder()
@@ -65,35 +66,34 @@ export const profileCommand = {
       : (profile.staticId ? [{ staticId: profile.staticId, characterName: profile.characterName, isMain: true }] : []);
 
     const charDisplay = chars.length > 0
-      ? chars.map(c => `${c.isMain ? '⭐ **Основной:**' : '• Альт:'} \`#${c.staticId}\` ${c.characterName ? `(${c.characterName})` : ''}`).join('\n')
+      ? chars.map(c => `${c.isMain ? '• **Основной:**' : '• Альт:'} \`#${c.staticId}\` ${c.characterName ? `(${c.characterName})` : ''}`).join('\n')
       : '*Не привязаны*';
 
-    const embed = new EmbedBuilder()
-      .setColor(0xEC4899)
-      .setTitle(`👤 Профиль участника | ${profile.userTag || targetUser.tag}`)
-      .setThumbnail(targetUser.displayAvatarURL())
-      .addFields(
-        { name: '🆔 Статики Majestic RP', value: charDisplay, inline: false },
-        { name: '🎖️ Ранг', value: profile.rank === 1 ? '1 (Академик)' : `${profile.rank} ранг`, inline: true },
-        { name: '⚔️ Отыграно МП', value: `\`${profile.mpCount}\``, inline: true },
-        { name: '⚖️ Штрафные МП', value: `\`${profile.penaltyMp}\``, inline: true },
-        { name: '🎙️ Время в войсе МП', value: `\`${voiceHours} ч.\``, inline: true },
-        {
-          name: '📌 Статус',
-          value: profile.status === 'ON_LEAVE'
-            ? `🌴 В отпуске до ${profile.leaveUntil ? new Date(profile.leaveUntil).toLocaleDateString('ru-RU') : 'конца недели'}`
-            : profile.status === 'BLACKLISTED'
-            ? '⛔ В черном списке'
-            : '🟢 Активен',
-          inline: true,
-        }
-      )
-      .setFooter({ text: 'Interpol Bot • Majestic RP' })
-      .setTimestamp();
+    const statusDisplay = profile.status === 'ON_LEAVE'
+      ? `В отпуске до ${profile.leaveUntil ? new Date(profile.leaveUntil).toLocaleDateString('ru-RU') : 'конца недели'}`
+      : profile.status === 'BLACKLISTED'
+      ? 'В черном списке'
+      : 'Активен';
+
+    const fields = [
+      { name: 'Статики Majestic RP', value: charDisplay, inline: false },
+      { name: 'Ранг', value: profile.rank === 1 ? '1 ранг (Академия)' : `${profile.rank} ранг`, inline: true },
+      { name: 'Сыграно МП', value: `\`${profile.mpCount}\``, inline: true },
+      { name: 'Штрафные МП', value: `\`${profile.penaltyMp}\``, inline: true },
+      { name: 'Время в войсе МП', value: `\`${voiceHours} ч.\``, inline: true },
+      { name: 'Статус', value: statusDisplay, inline: true },
+    ];
 
     if (profile.notes) {
-      embed.addFields({ name: '📝 Заметки / Штрафы', value: profile.notes.slice(0, 1024), inline: false });
+      fields.push({ name: 'Заметки / Взыскания', value: profile.notes.slice(0, 1024), inline: false });
     }
+
+    const embed = createThemedEmbed({
+      title: `ЛИЧНОЕ ДЕЛО УЧАСТНИКА • ${profile.userTag || targetUser.tag}`,
+      thumbnailUrl: targetUser.displayAvatarURL(),
+      fields,
+      footerText: 'INTERPOL • Majestic RP',
+    });
 
     await interaction.reply({ embeds: [embed] });
   },
@@ -126,15 +126,16 @@ export const setStaticCommand = {
       await NicknameService.syncMemberNickname(interaction.member as GuildMember, 'Привязка статика и ника').catch(() => null);
     }
 
-    const embed = new EmbedBuilder()
-      .setColor(0x10B981)
-      .setTitle('✅ Данные успешно сохранены')
-      .setDescription(
-        `К вашему Discord-аккаунту привязаны данные:\n` +
-        `• **Static ID:** \`${updated.staticId}\`\n` +
-        `• **Игровой ник:** \`${updated.characterName || 'Не указан'}\``
-      )
-      .setTimestamp();
+    const embed = createThemedEmbed({
+      title: 'ПРИВЯЗКА ДАННЫХ • MAJESTIC RP',
+      color: THEME.COLORS.SUCCESS,
+      description: [
+        THEME.format.quote('Данные участника успешно сохранены в реестре семьи.'),
+        '',
+        THEME.format.item('Static ID', THEME.format.code(`#${updated.staticId}`)),
+        THEME.format.item('Имя персонажа', THEME.format.code(updated.characterName || 'Не указан')),
+      ].join('\n'),
+    });
 
     await interaction.reply({ embeds: [embed], ephemeral: true });
   },
@@ -161,32 +162,34 @@ export const topCommand = {
     if (category === 'mp') {
       const top = await ProfileService.getTopByMp(interaction.guildId!, 10);
       const lines = top.map((p: any, i: number) => {
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
+        const medal = i === 0 ? '`1.`' : i === 1 ? '`2.`' : i === 2 ? '`3.`' : `\`${i + 1}.\``;
         const staticStr = p.staticId ? ` [${p.staticId}]` : '';
-        return `${medal} <@${p.userId}>${staticStr} — \`${p.mpCount} МП\``;
+        return `${medal} <@${p.userId}>${staticStr} — **${p.mpCount} МП**`;
       });
 
-      const embed = new EmbedBuilder()
-        .setColor(0xEC4899)
-        .setTitle('🏆 Топ участников по сыгранным МП')
-        .setDescription(lines.length > 0 ? lines.join('\n') : 'Пока нет данных о сыгранных МП.')
-        .setTimestamp();
+      const embed = createThemedEmbed({
+        title: 'РЕЙТИНГ СОСТАВА • СЫГРАННЫЕ МП',
+        color: THEME.COLORS.PRIMARY,
+        description: lines.length > 0 ? lines.join('\n') : '*Пока нет данных о сыгранных мероприятиях.*',
+        footerText: 'INTERPOL • Majestic RP',
+      });
 
       await interaction.reply({ embeds: [embed] });
     } else {
       const top = await ProfileService.getTopByVoice(interaction.guildId!, 10);
       const lines = top.map((p: any, i: number) => {
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
+        const medal = i === 0 ? '`1.`' : i === 1 ? '`2.`' : i === 2 ? '`3.`' : `\`${i + 1}.\``;
         const hours = (p.voiceMinutes / 60).toFixed(1);
         const staticStr = p.staticId ? ` [${p.staticId}]` : '';
-        return `${medal} <@${p.userId}>${staticStr} — \`${hours} ч.\``;
+        return `${medal} <@${p.userId}>${staticStr} — **${hours} ч.**`;
       });
 
-      const embed = new EmbedBuilder()
-        .setColor(0xEC4899)
-        .setTitle('🎙️ Топ участников по времени в войсе МП')
-        .setDescription(lines.length > 0 ? lines.join('\n') : 'Пока нет данных о времени в войсе.')
-        .setTimestamp();
+      const embed = createThemedEmbed({
+        title: 'РЕЙТИНГ СОСТАВА • ВРЕМЯ В ВОЙСЕ МП',
+        color: THEME.COLORS.PRIMARY,
+        description: lines.length > 0 ? lines.join('\n') : '*Пока нет данных о времени в голосовых каналах.*',
+        footerText: 'INTERPOL • Majestic RP',
+      });
 
       await interaction.reply({ embeds: [embed] });
     }
@@ -236,17 +239,19 @@ export const penaltyCommand = {
       reason
     );
 
-    const embed = new EmbedBuilder()
-      .setColor(0xEF4444)
-      .setTitle('⚖️ Назначен штраф по МП')
-      .setDescription(
-        `**Участник:** ${targetUser} (\`${targetUser.tag}\`)\n` +
-        `**Назначил:** ${interaction.user} (\`${interaction.user.tag}\`)\n` +
-        `**Количество штрафных МП:** \`+${count}\`\n` +
-        `**Всего штрафов:** \`${updated.penaltyMp}\` МП\n` +
-        `**Причина:** ${reason}`
-      )
-      .setTimestamp();
+    const embed = createThemedEmbed({
+      title: 'ВЗЫСКАНИЕ • НАЗНАЧЕН ШТРАФ',
+      color: THEME.COLORS.DANGER,
+      description: [
+        THEME.format.quote('Дисциплинарное взыскание зафиксировано в реестре.'),
+        '',
+        THEME.format.item('Участник', `${targetUser} (\`${targetUser.tag}\`)`),
+        THEME.format.item('Назначил', `${interaction.user} (\`${interaction.user.tag}\`)`),
+        THEME.format.item('Штраф', THEME.format.code(`+${count} МП`)),
+        THEME.format.item('Суммарно штрафов', THEME.format.code(`${updated.penaltyMp} МП`)),
+        THEME.format.item('Причина', reason),
+      ].join('\n'),
+    });
 
     await interaction.reply({ embeds: [embed] });
   },

@@ -16,6 +16,7 @@ import { AuditLogger } from '../logging/auditLogger';
 import { ProfileService } from '../profiles/profileService';
 import { LeaveService } from '../leave/leaveService';
 import { VoiceTrackerService } from '../voiceTracker/voiceTrackerService';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export interface ProvisionResult {
   guildId: string;
@@ -316,27 +317,31 @@ export class ServerSetupService {
 
       // Recruitment apply panel
       try {
-        const recruitEmbed = new EmbedBuilder()
-          .setColor(0xEC4899)
-          .setTitle(`🦅 Набор в семью ${guild.name} | Majestic RP`)
-          .setDescription(
-            `Приветствуем тебя на сервере семьи **${guild.name}**!\n\n` +
-            `Мы ведем активный набор целеустремленных, адекватных и опытных бойцов.\n` +
-            `Если ты хочешь побеждать на дропах, цехах, ВЗМ и расти в дружном составе — нажми кнопку ниже и заполни заявку!\n\n` +
-            `📌 **Требования к кандидатам:**\n` +
-            `• Наличие микрофона и Discord;\n` +
-            `• Понимание правил сервера Majestic RP;\n` +
-            `• Готовность пройти академию и активно посещать сборы семьи.`
-          )
-          .setThumbnail(guild.iconURL({ size: 256 }))
-          .setFooter({ text: `${guild.name} • Система рекрутинга` })
-          .setTimestamp();
+        const recruitEmbed = createThemedEmbed({
+          color: THEME.COLORS.PRIMARY,
+          title: '👋 Путь в семью начинается здесь!',
+          description: [
+            `> Заявки в семью принимаются на сервере **${guild.name}**. Уведомление о приглашении на обзвон отправляется в созданный тикет.`,
+            '',
+            '- **Внимательно прочитайте все пункты** при подаче заявки. Если не ответили на все вопросы — **заявка отклоняется**.',
+            '- **Срок рассмотрения заявки:** от 1 до 3 дней.',
+            '',
+            '### Дополнительные правила к подаче заявки:',
+            '- Подать заявку можно только при открытом наборе. Если нет доступа к подаче — набор закрыт.',
+            '- Откаты с МП / стрельбы должны быть актуальными (при наличии запроса рекрутера).',
+            '- Любое нарушение условий или обман в анкете — **отказ и внесение в ЧС**.',
+            '',
+            '-# Нажмите на кнопку ниже, чтобы открыть форму анкеты.',
+          ].join('\n'),
+          thumbnailUrl: guild.iconURL({ size: 256 }),
+          footerText: `${guild.name} • Набор в семью`,
+        });
 
         const recruitRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
             .setCustomId('recruit_apply_button')
-            .setLabel('📝 Подать заявку в семью')
-            .setStyle(ButtonStyle.Success)
+            .setLabel('Подать заявку')
+            .setStyle(ButtonStyle.Primary)
         );
 
         await recruitApplyChannel.send({ embeds: [recruitEmbed], components: [recruitRow] });
@@ -347,21 +352,23 @@ export class ServerSetupService {
 
       // Welcome channel info embed
       try {
-        const welcomeEmbed = new EmbedBuilder()
-          .setColor(0xEC4899)
-          .setTitle(`👑 Сервер семьи ${guild.name} | Majestic RP`)
-          .setDescription(
-            `Добро пожаловать в Discord-сообщество семьи **${guild.name}**!\n\n` +
-            `Бот настроен и готов к автоматизации всех игровых процессов:\n\n` +
-            `• <#${staticChannel.id}> — Обязательная привязка Majestic Static ID\n` +
-            `• <#${leaveChannel.id}> — Оформление отпуска / неактива (до 14 дней)\n` +
-            `• <#${recruitApplyChannel.id}> — Электронная подача заявки в семью\n` +
-            `• <#${eventAnnounceChannel.id}> — Сборы на семейные мероприятия (МП)\n\n` +
-            `Успешной игры и приятного времяпрепровождения!`
-          )
-          .setThumbnail(guild.iconURL({ size: 256 }))
-          .setFooter({ text: `${guild.name} • Информационный портал` })
-          .setTimestamp();
+        const welcomeEmbed = createThemedEmbed({
+          color: THEME.COLORS.PRIMARY,
+          title: `Сервер семьи ${guild.name} • Информация`,
+          description: [
+            `> Добро пожаловать в сообщество семьи **${guild.name}** на Majestic RP.`,
+            '',
+            '### Навигация и автоматизация:',
+            `- <#${staticChannel.id}> — Обязательная привязка Majestic Static ID`,
+            `- <#${leaveChannel.id}> — Оформление отпуска / неактива (до 14 дней)`,
+            `- <#${recruitApplyChannel.id}> — Электронная подача заявки в семью`,
+            `- <#${eventAnnounceChannel.id}> — Сборы на семейные мероприятия (МП)`,
+            '',
+            '-# INTERPOL • Информационный портал',
+          ].join('\n'),
+          thumbnailUrl: guild.iconURL({ size: 256 }),
+          footerText: `${guild.name} • Информационный портал`,
+        });
 
         await welcomeChannel.send({ embeds: [welcomeEmbed] });
         panelsDeployed.push('Информационное приветствие');
@@ -445,27 +452,31 @@ export class ServerSetupService {
         return { success: true, messageId: msg.id, channelId: channel.id };
       }
       case 'recruit': {
-        const recruitEmbed = new EmbedBuilder()
-          .setColor(0xEC4899)
-          .setTitle(`🦅 Набор в семью ${guild.name} | Majestic RP`)
-          .setDescription(
-            `Приветствуем тебя на сервере семьи **${guild.name}**!\n\n` +
-            `Мы ведем активный набор целеустремленных, адекватных и опытных бойцов.\n` +
-            `Если ты хочешь побеждать на дропах, цехах, ВЗМ и расти в дружном составе — нажми кнопку ниже и заполни анкету!\n\n` +
-            `📌 **Требования к кандидатам:**\n` +
-            `• Наличие микрофона и Discord;\n` +
-            `• Понимание правил сервера Majestic RP;\n` +
-            `• Готовность пройти академию и активно посещать сборы семьи.`
-          )
-          .setThumbnail(guild.iconURL({ size: 256 }))
-          .setFooter({ text: `${guild.name} • Система рекрутинга` })
-          .setTimestamp();
+        const recruitEmbed = createThemedEmbed({
+          color: THEME.COLORS.PRIMARY,
+          title: '👋 Путь в семью начинается здесь!',
+          description: [
+            `> Заявки в семью принимаются на сервере **${guild.name}**. Уведомление о приглашении на обзвон отправляется в созданный тикет.`,
+            '',
+            '- **Внимательно прочитайте все пункты** при подаче заявки. Если не ответили на все вопросы — **заявка отклоняется**.',
+            '- **Срок рассмотрения заявки:** от 1 до 3 дней.',
+            '',
+            '### Дополнительные правила к подаче заявки:',
+            '- Подать заявку можно только при открытом наборе. Если нет доступа к подаче — набор закрыт.',
+            '- Откаты с МП / стрельбы должны быть актуальными (при наличии запроса рекрутера).',
+            '- Любое нарушение условий или обман в анкете — **отказ и внесение в ЧС**.',
+            '',
+            '-# Нажмите на кнопку ниже, чтобы открыть форму анкеты.',
+          ].join('\n'),
+          thumbnailUrl: guild.iconURL({ size: 256 }),
+          footerText: `${guild.name} • Набор в семью`,
+        });
 
         const recruitRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
             .setCustomId('recruit_apply_button')
-            .setLabel('📝 Подать заявку в семью')
-            .setStyle(ButtonStyle.Success)
+            .setLabel('Подать заявку')
+            .setStyle(ButtonStyle.Primary)
         );
 
         const msg = await channel.send({ embeds: [recruitEmbed], components: [recruitRow] });

@@ -14,6 +14,7 @@ import {
 import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
 import bot from '../../client';
+import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export class EventService {
   private static async resolveGuild(interaction: { guild?: Guild | null; guildId?: string | null }): Promise<Guild | null> {
@@ -45,76 +46,83 @@ export class EventService {
     const confirmed = event.participants.filter(p => p.status === 'CONFIRMED');
     const reserve = event.participants.filter(p => p.status === 'RESERVE');
 
-    const embed = new EmbedBuilder()
-      .setColor(event.status === 'ACTIVE' ? 0x5865F2 : (event.status === 'FINISHED' ? 0x2ECC71 : 0xED4245))
-      .setTitle(`⚔️  ${event.title}`);
+    const color = event.status === 'ACTIVE' 
+      ? THEME.COLORS.PRIMARY 
+      : (event.status === 'FINISHED' ? THEME.COLORS.SUCCESS : THEME.COLORS.DANGER);
 
     const descParts: string[] = [];
 
     if (event.description) {
-      descParts.push(`> 💬 *${event.description}*\n`);
+      descParts.push(THEME.format.quote(event.description));
+      descParts.push('');
     }
 
-    descParts.push(`⏰ **Начало:** <t:${eventUnix}:t> • <t:${eventUnix}:R>`);
-    descParts.push(`📋 **Чек-ин:** <t:${checkInUnix}:t> • <t:${checkInUnix}:R>`);
-    descParts.push(`👑 **Организатор:** <@${event.createdById}>`);
+    descParts.push(THEME.format.item('Начало', `<t:${eventUnix}:t> (<t:${eventUnix}:R>)`));
+    descParts.push(THEME.format.item('Чек-ин', `<t:${checkInUnix}:t> (<t:${checkInUnix}:R>)`));
+    descParts.push(THEME.format.item('Организатор', `<@${event.createdById}>`));
 
     if (event.voiceChannelId) {
-      descParts.push(`🔊 **Голосовой канал:** <#${event.voiceChannelId}>`);
+      descParts.push(THEME.format.item('Голосовой канал', `<#${event.voiceChannelId}>`));
     }
 
     if (event.partyCode) {
-      descParts.push(`🔑 **Код группы:** \`${event.partyCode}\``);
+      descParts.push(THEME.format.item('Код группы', THEME.format.code(event.partyCode)));
     }
 
     if (event.targetRoleId && event.targetRoleId !== 'none') {
       const roleText = event.targetRoleId === 'everyone'
         ? '@everyone'
         : (event.targetRoleId === 'here' ? '@here' : `<@&${event.targetRoleId}>`);
-      descParts.push(`🎯 **Упоминание:** ${roleText}`);
+      descParts.push(THEME.format.item('Уведомление', roleText));
     }
 
-    embed.setDescription(descParts.join('\n'));
+    descParts.push('');
+    descParts.push(THEME.format.subtext('Нажмите на кнопку ниже, чтобы записаться в состав или резерв'));
+
+    const fields: { name: string; value: string; inline?: boolean }[] = [];
 
     if (isLimited) {
       const limit = event.participantLimit || 10;
-      // Main roster
       let confirmedText = confirmed.length > 0 
         ? confirmed.map((p, idx) => `\`${idx + 1}.\` <@${p.userId}>`).join('\n')
-        : '*Список пуст. Нажмите «Записаться» ниже.*';
+        : '*Список пуст. Ожидание участников.*';
 
       if (confirmedText.length > 1024) confirmedText = confirmedText.slice(0, 1000) + '...';
 
-      embed.addFields({
-        name: `👥 Основной состав (${confirmed.length}/${limit})`,
+      fields.push({
+        name: `Основной состав (${confirmed.length}/${limit})`,
         value: confirmedText,
         inline: false,
       });
 
-      // Reserve list only when there are members in reserve
       if (reserve.length > 0) {
         let reserveText = reserve
           .map((p, idx) => `\`${idx + 1}.\` <@${p.userId}>`)
           .join('\n');
         if (reserveText.length > 1024) reserveText = reserveText.slice(0, 1000) + '...';
 
-        embed.addFields({
-          name: `🪑 Резерв (${reserve.length})`,
+        fields.push({
+          name: `Резерв (${reserve.length})`,
           value: reserveText,
           inline: false,
         });
       }
     }
 
-    let footerText = 'Сбор семьи • Нажмите кнопку ниже для записи';
+    let footerText = 'INTERPOL • Сбор состава';
     if (event.status === 'FINISHED') {
-      footerText = '🏁 Мероприятие завершено • Сообщение удалится через 30 мин';
+      footerText = 'INTERPOL • Мероприятие завершено';
     } else if (event.status === 'CANCELLED') {
-      footerText = '❌ Мероприятие отменено организатором';
+      footerText = 'INTERPOL • Мероприятие отменено';
     }
 
-    embed.setFooter({ text: footerText }).setTimestamp();
-    return embed;
+    return createThemedEmbed({
+      title: `СБОР СОСТАВА • ${event.title.toUpperCase()}`,
+      description: descParts.join('\n'),
+      color,
+      fields,
+      footerText,
+    });
   }
 
   /**
@@ -130,22 +138,18 @@ export class EventService {
         new ButtonBuilder()
           .setCustomId(`event_join_${eventId}`)
           .setLabel('Записаться')
-          .setEmoji('✋')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`event_reserve_${eventId}`)
           .setLabel('В резерв')
-          .setEmoji('🪑')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`event_leave_${eventId}`)
           .setLabel('Отказаться')
-          .setEmoji('🚪')
           .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
           .setCustomId(`event_manage_${eventId}`)
           .setLabel('Управление')
-          .setEmoji('⚙️')
           .setStyle(ButtonStyle.Primary)
       );
     } else {
@@ -153,12 +157,10 @@ export class EventService {
         new ButtonBuilder()
           .setCustomId(`event_leave_${eventId}`)
           .setLabel('Не смогу')
-          .setEmoji('❌')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`event_manage_${eventId}`)
           .setLabel('Завершить сбор')
-          .setEmoji('🏁')
           .setStyle(ButtonStyle.Danger)
       );
     }
