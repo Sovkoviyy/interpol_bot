@@ -90,16 +90,48 @@ export class ServerSetupService {
         color: r.color,
       }));
 
+    const me = guild.members.me;
+    const botPermissions = {
+      hasAdministrator: me?.permissions.has(PermissionFlagsBits.Administrator) ?? false,
+      manageRoles: me?.permissions.has(PermissionFlagsBits.ManageRoles) ?? false,
+      manageChannels: me?.permissions.has(PermissionFlagsBits.ManageChannels) ?? false,
+      sendMessages: me?.permissions.has(PermissionFlagsBits.SendMessages) ?? false,
+      embedLinks: me?.permissions.has(PermissionFlagsBits.EmbedLinks) ?? false,
+      manageNicknames: me?.permissions.has(PermissionFlagsBits.ManageNicknames) ?? false,
+      botHighestRoleName: me?.roles.highest.name || 'Bot',
+      botRolePosition: me?.roles.highest.position || 0,
+    };
+
+    let recruiterRoles: string[] = [];
+    if (recruitCfg?.recruiterRoleIds) {
+      try {
+        recruiterRoles = JSON.parse(recruitCfg.recruiterRoleIds);
+      } catch {
+        recruiterRoles = [];
+      }
+    }
+
+    const roleBindings = {
+      recruiterRoleId: recruiterRoles[0] || null,
+      recruitApprovedRoleId: recruitCfg?.memberRoleId || null,
+      academicRoleId: academyCfg?.academicRoleId || null,
+      promotedRoleId: academyCfg?.promotedRoleId || null,
+      tierCheckerRoleId: tierCfg?.checkerRoleId || null,
+      eventPriorityRoleId: guildCfg?.eventPriorityRoleId || null,
+    };
+
     return {
       guild: {
         id: guild.id,
         name: guild.name,
         icon: guild.iconURL({ size: 128 }),
         memberCount: guild.memberCount,
-        hasAdmin: guild.members.me?.permissions.has(PermissionFlagsBits.Administrator) ?? false,
+        hasAdmin: botPermissions.hasAdministrator,
       },
+      botPermissions,
       channels,
       roles,
+      roleBindings,
       bindings: {
         staticBindingChannelId: guildCfg?.staticBindingChannelId || null,
         leaveRequestChannelId: guildCfg?.leaveRequestChannelId || null,
@@ -596,5 +628,222 @@ export class ServerSetupService {
     }
 
     return { success: true };
+  }
+
+  /**
+   * Create a new role in Discord server
+   */
+  public static async createRole(guildId: string, roleData: { name: string; color?: number | string; hoist?: boolean }) {
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+    if (!guild) throw new Error(`Сервер Discord ${guildId} не найден`);
+
+    let colorNum: number | undefined = undefined;
+    if (typeof roleData.color === 'string') {
+      const hex = roleData.color.replace('#', '');
+      colorNum = parseInt(hex, 16);
+    } else if (typeof roleData.color === 'number') {
+      colorNum = roleData.color;
+    }
+
+    const created = await guild.roles.create({
+      name: roleData.name,
+      color: colorNum,
+      hoist: roleData.hoist !== false,
+      reason: 'INTERPOL BOT • Первоначальная настройка ролей сервера',
+    });
+
+    return {
+      id: created.id,
+      name: created.name,
+      color: created.color,
+    };
+  }
+
+  /**
+   * Create a new channel or category in Discord server
+   */
+  public static async createChannel(guildId: string, channelData: { name: string; type: number; parentId?: string; topic?: string }) {
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+    if (!guild) throw new Error(`Сервер Discord ${guildId} не найден`);
+
+    const created: any = await guild.channels.create({
+      name: channelData.name,
+      type: channelData.type,
+      parent: channelData.parentId || undefined,
+      topic: channelData.topic,
+      reason: 'INTERPOL BOT • Первоначальная настройка каналов сервера',
+    });
+
+    return {
+      id: created.id,
+      name: created.name,
+      type: created.type,
+      parentId: created.parentId,
+    };
+  }
+
+  /**
+   * Update role bindings (Recruiter, Academy 1 rank, Promotion 2 rank, Tier checker, Event priority)
+   */
+  public static async updateRoleBindings(guildId: string, roleBindings: any) {
+    if (roleBindings.recruiterRoleId !== undefined || roleBindings.recruitApprovedRoleId !== undefined) {
+      const recruiterRoles = roleBindings.recruiterRoleId ? [roleBindings.recruiterRoleId] : [];
+      await prisma.recruitmentConfig.upsert({
+        where: { guildId },
+        update: {
+          ...(roleBindings.recruiterRoleId !== undefined && { recruiterRoleIds: JSON.stringify(recruiterRoles) }),
+          ...(roleBindings.recruitApprovedRoleId !== undefined && { memberRoleId: roleBindings.recruitApprovedRoleId || null }),
+        },
+        create: {
+          guildId,
+          recruiterRoleIds: JSON.stringify(recruiterRoles),
+          memberRoleId: roleBindings.recruitApprovedRoleId || null,
+        },
+      });
+    }
+
+    if (roleBindings.academicRoleId !== undefined || roleBindings.promotedRoleId !== undefined) {
+      await prisma.academyConfig.upsert({
+        where: { guildId },
+        update: {
+          ...(roleBindings.academicRoleId !== undefined && { academicRoleId: roleBindings.academicRoleId || null }),
+          ...(roleBindings.promotedRoleId !== undefined && { promotedRoleId: roleBindings.promotedRoleId || null }),
+        },
+        create: {
+          guildId,
+          academicRoleId: roleBindings.academicRoleId || null,
+          promotedRoleId: roleBindings.promotedRoleId || null,
+        },
+      });
+    }
+
+    if (roleBindings.tierCheckerRoleId !== undefined) {
+      await prisma.tierConfig.upsert({
+        where: { guildId },
+        update: {
+          checkerRoleId: roleBindings.tierCheckerRoleId || null,
+        },
+        create: {
+          guildId,
+          checkerRoleId: roleBindings.tierCheckerRoleId || null,
+          enabled: true,
+        },
+      });
+    }
+
+    if (roleBindings.eventPriorityRoleId !== undefined) {
+      await prisma.guildConfig.upsert({
+        where: { guildId },
+        update: {
+          eventPriorityRoleId: roleBindings.eventPriorityRoleId || null,
+        },
+        create: {
+          guildId,
+          eventPriorityRoleId: roleBindings.eventPriorityRoleId || null,
+        },
+      });
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Auto-detect existing channels and roles on the server by keywords
+   */
+  public static async autoDetectBindings(guildId: string) {
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+    if (!guild) throw new Error(`Сервер Discord ${guildId} не найден`);
+
+    const channels = Array.from(guild.channels.cache.values());
+    const roles = Array.from(guild.roles.cache.values()).filter(r => r.name !== '@everyone');
+
+    // 1. Match Roles
+    const detectedRoles: any = {};
+    for (const r of roles) {
+      const lower = r.name.toLowerCase();
+      if (!detectedRoles.recruiterRoleId && lower.includes('рекрут')) {
+        detectedRoles.recruiterRoleId = r.id;
+      }
+      if (!detectedRoles.academicRoleId && (lower.includes('академ') || lower.includes('курсант') || lower.includes('1 ранг'))) {
+        detectedRoles.academicRoleId = r.id;
+      }
+      if (!detectedRoles.promotedRoleId && (lower.includes('основн') || lower.includes('участник') || lower.includes('состав') || lower.includes('2 ранг'))) {
+        detectedRoles.promotedRoleId = r.id;
+      }
+      if (!detectedRoles.tierCheckerRoleId && (lower.includes('тир') || lower.includes('стрелок') || lower.includes('проверяющ'))) {
+        detectedRoles.tierCheckerRoleId = r.id;
+      }
+      if (!detectedRoles.eventPriorityRoleId && (lower.includes('капт') || lower.includes('приоритет') || lower.includes('бизвар'))) {
+        detectedRoles.eventPriorityRoleId = r.id;
+      }
+    }
+
+    // 2. Match Channels & Categories
+    const detectedBindings: any = {};
+    for (const c of channels) {
+      const lower = c.name.toLowerCase();
+      const isCat = c.type === ChannelType.GuildCategory;
+      const isText = c.type === ChannelType.GuildText;
+
+      if (isText) {
+        if (!detectedBindings.staticBindingChannelId && (lower.includes('статик') || lower.includes('привязк'))) {
+          detectedBindings.staticBindingChannelId = c.id;
+        }
+        if (!detectedBindings.leaveRequestChannelId && (lower.includes('отпуск') || lower.includes('отгул'))) {
+          detectedBindings.leaveRequestChannelId = c.id;
+        }
+        if (!detectedBindings.recruitmentApplyChannelId && (lower.includes('заявк') || lower.includes('набор') || lower.includes('анкет'))) {
+          detectedBindings.recruitmentApplyChannelId = c.id;
+        }
+        if (!detectedBindings.tierApplyChannelId && (lower.includes('тир') || lower.includes('стрельб'))) {
+          detectedBindings.tierApplyChannelId = c.id;
+        }
+        if (!detectedBindings.eventAnnounceChannelId && (lower.includes('сбор') || lower.includes('мероприят') || lower.includes('мп'))) {
+          detectedBindings.eventAnnounceChannelId = c.id;
+        }
+        if (!detectedBindings.welcomeChannelId && (lower.includes('приветств') || lower.includes('добро-пожаловать') || lower.includes('welcome'))) {
+          detectedBindings.welcomeChannelId = c.id;
+        }
+        // Logs
+        if (!detectedBindings.messageLogsChannelId && lower.includes('сообщен')) detectedBindings.messageLogsChannelId = c.id;
+        if (!detectedBindings.memberLogsChannelId && (lower.includes('участник') || lower.includes('вход') || lower.includes('выход'))) detectedBindings.memberLogsChannelId = c.id;
+        if (!detectedBindings.roleLogsChannelId && lower.includes('рол')) detectedBindings.roleLogsChannelId = c.id;
+        if (!detectedBindings.channelLogsChannelId && lower.includes('канал')) detectedBindings.channelLogsChannelId = c.id;
+        if (!detectedBindings.voiceLogsChannelId && (lower.includes('войс') || lower.includes('голос'))) detectedBindings.voiceLogsChannelId = c.id;
+        if (!detectedBindings.inviteLogsChannelId && (lower.includes('инвайт') || lower.includes('приглаш'))) detectedBindings.inviteLogsChannelId = c.id;
+        if (!detectedBindings.botLogsChannelId && lower.includes('бот')) detectedBindings.botLogsChannelId = c.id;
+        if (!detectedBindings.eventLogsChannelId && (lower.includes('мероприят') || lower.includes('мп-лог'))) detectedBindings.eventLogsChannelId = c.id;
+      }
+
+      if (isCat) {
+        if (!detectedBindings.recruitmentReviewChannelId && (lower.includes('тикет') || lower.includes('заявк') || lower.includes('набор'))) {
+          detectedBindings.recruitmentReviewChannelId = c.id;
+        }
+        if (!detectedBindings.academyCategoryId && (lower.includes('академ') && !lower.includes('архив'))) {
+          detectedBindings.academyCategoryId = c.id;
+        }
+        if (!detectedBindings.academyArchiveCategoryId && lower.includes('архив')) {
+          detectedBindings.academyArchiveCategoryId = c.id;
+        }
+        if (!detectedBindings.tierCategoryId && lower.includes('тир')) {
+          detectedBindings.tierCategoryId = c.id;
+        }
+      }
+    }
+
+    // Save detected bindings
+    if (Object.keys(detectedBindings).length > 0) {
+      await this.updateBindings(guildId, detectedBindings);
+    }
+    if (Object.keys(detectedRoles).length > 0) {
+      await this.updateRoleBindings(guildId, detectedRoles);
+    }
+
+    return {
+      detectedRoles,
+      detectedBindings,
+      rolesCount: Object.keys(detectedRoles).length,
+      channelsCount: Object.keys(detectedBindings).length,
+    };
   }
 }

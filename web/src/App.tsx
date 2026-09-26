@@ -21,10 +21,10 @@ import { Blacklist } from './pages/Blacklist';
 import { Leaves } from './pages/Leaves';
 import { Profiles } from './pages/Profiles';
 import { ServerSetup } from './pages/ServerSetup';
-import { TestMode } from './pages/TestMode';
 import { Nicknames } from './pages/Nicknames';
 import { Tier } from './pages/Tier';
 import { ModalProvider } from './context/ModalContext';
+import { ShieldAlert } from 'lucide-react';
 
 const AnimatedPageRoutes: React.FC = () => {
   const location = useLocation();
@@ -58,7 +58,6 @@ const AnimatedPageRoutes: React.FC = () => {
           <Route path="/logs" element={<Logs />} />
           <Route path="/roles" element={<Roles />} />
           <Route path="/stats" element={<Stats />} />
-          <Route path="/test-mode" element={<TestMode />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </motion.div>
@@ -93,6 +92,14 @@ export const App: React.FC = () => {
     checkAuth();
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {}
+    localStorage.removeItem('token');
+    setUser(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#060709] bg-ambient-radial flex flex-col items-center justify-center gap-4">
@@ -104,6 +111,14 @@ export const App: React.FC = () => {
       </div>
     );
   }
+
+  const hasAccess = Boolean(
+    user?.permissions?.isAdmin ||
+    user?.permissions?.manageSettings ||
+    user?.permissions?.manageRecruiting ||
+    user?.permissions?.manageEvents ||
+    user?.permissions?.viewLogs
+  );
 
   return (
     <ModalProvider>
@@ -121,11 +136,54 @@ export const App: React.FC = () => {
             element={
               !user ? (
                 <Navigate to="/login" replace />
+              ) : !hasAccess ? (
+                <div className="min-h-screen bg-[#060709] bg-ambient-radial flex flex-col justify-center items-center p-4 relative overflow-hidden">
+                  <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    className="w-full max-w-md bg-[#151921] border border-red-500/30 rounded-2xl p-8 shadow-2xl shadow-black/80 relative z-10 text-center"
+                  >
+                    <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-5 text-red-400">
+                      <ShieldAlert className="w-8 h-8" />
+                    </div>
+
+                    <h2 className="text-xl font-bold text-white mb-2">Доступ ограничен</h2>
+                    <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+                      Ваш Discord-аккаунт <span className="text-white font-medium">@{user?.username}</span> не имеет прав Администратора и не обладает настроенными ролями доступа в системе INTERPOL BOT.
+                    </p>
+
+                    <div className="bg-[#0B0E14] border border-[#1E232F] rounded-xl p-4 text-xs text-slate-400 mb-6 text-left space-y-2">
+                      <div className="flex items-center justify-between text-slate-300 font-semibold border-b border-[#1E232F] pb-2">
+                        <span>Статус доступа</span>
+                        <span className="text-amber-400">Роли не назначены</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Для получения доступа обратитесь к руководству семьи или администратору Discord-сервера с просьбой выдать вам соответствующую роль в разделе «Уровни доступа».
+                      </p>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={checkAuth}
+                        className="flex-1 py-2.5 px-4 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-pink-600/20"
+                      >
+                        Обновить статус
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="py-2.5 px-4 bg-[#1E232F] hover:bg-[#2A303F] text-slate-300 rounded-xl text-xs font-medium transition border border-slate-700/50"
+                      >
+                        Выйти
+                      </button>
+                    </div>
+                  </motion.div>
+                </div>
               ) : (
                 <div className="flex h-screen w-screen overflow-hidden bg-[#060709] bg-ambient-radial text-slate-100">
-                  <Sidebar userPermissions={user?.permissions} isBypass={user?.isBypass} />
+                  <Sidebar userPermissions={user?.permissions} />
                   <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-                    <Navbar user={user} onLogout={() => setUser(null)} />
+                    <Navbar user={user} onLogout={handleLogout} />
                     <main className="flex-1 px-4 py-6 md:px-8 md:py-8 overflow-y-auto custom-scrollbar">
                       <div className="w-full max-w-7xl mx-auto">
                         <AnimatedPageRoutes />

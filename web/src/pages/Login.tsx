@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Flame, LogIn, Sparkles, Terminal } from 'lucide-react';
+import { Flame, LogIn } from 'lucide-react';
 import api from '../api/client';
 
 interface LoginProps {
@@ -20,20 +20,6 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       }
     } catch (err: any) {
       setError('Не удалось подключиться к Discord OAuth2. Проверьте настройки .env (CLIENT_ID, DISCORD_REDIRECT_URI).');
-      setLoading(false);
-    }
-  };
-
-  const handleDevLogin = async () => {
-    try {
-      setLoading(true);
-      const res = await api.post('/auth/dev-login');
-      if (res.data?.token) {
-        localStorage.setItem('token', res.data.token);
-        onLoginSuccess(res.data.user);
-      }
-    } catch (err: any) {
-      setError('Ошибка тестового входа.');
       setLoading(false);
     }
   };
@@ -71,21 +57,6 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           >
             <LogIn className="w-5 h-5" />
             <span>Войти через Discord</span>
-          </button>
-
-          <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-[#1E232F]"></div>
-            <span className="flex-shrink mx-4 text-xs text-slate-400 uppercase tracking-wider">или</span>
-            <div className="flex-grow border-t border-[#1E232F]"></div>
-          </div>
-
-          <button
-            onClick={handleDevLogin}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-[#1E232F] hover:bg-[#2A303F] text-slate-200 font-medium py-3 px-4 rounded-xl border border-slate-700/50 transition-all duration-200 text-sm"
-          >
-            <Terminal className="w-4 h-4 text-emerald-400" />
-            <span>Локальный вход (Dev / Тест без Discord OAuth)</span>
           </button>
         </div>
 

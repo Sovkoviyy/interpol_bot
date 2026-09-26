@@ -104,4 +104,92 @@ serverSetupRouter.post('/bindings', requireAuth, requirePermission('manageSettin
   }
 });
 
+/**
+ * POST /api/setup/role-bindings
+ * Update role bindings for the guild
+ */
+serverSetupRouter.post('/role-bindings', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    if (!guildId) {
+      return res.status(400).json({ error: 'Сервер Discord не выбран' });
+    }
+
+    const { roleBindings } = req.body;
+    if (!roleBindings) {
+      return res.status(400).json({ error: 'Передайте объект roleBindings' });
+    }
+
+    await ServerSetupService.updateRoleBindings(guildId, roleBindings);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/setup/create-role
+ * Create a new role in Discord server
+ */
+serverSetupRouter.post('/create-role', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    if (!guildId) {
+      return res.status(400).json({ error: 'Сервер Discord не выбран' });
+    }
+
+    const { name, color, hoist } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Укажите название роли' });
+    }
+
+    const created = await ServerSetupService.createRole(guildId, { name, color, hoist });
+    res.json({ success: true, role: created });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/setup/create-channel
+ * Create a new channel or category in Discord server
+ */
+serverSetupRouter.post('/create-channel', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    if (!guildId) {
+      return res.status(400).json({ error: 'Сервер Discord не выбран' });
+    }
+
+    const { name, type, parentId, topic } = req.body;
+    if (!name || type === undefined) {
+      return res.status(400).json({ error: 'Укажите название и тип канала' });
+    }
+
+    const created = await ServerSetupService.createChannel(guildId, { name, type, parentId, topic });
+    res.json({ success: true, channel: created });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/setup/auto-detect
+ * Scan existing Discord channels and roles to automatically map them
+ */
+serverSetupRouter.post('/auto-detect', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    if (!guildId) {
+      return res.status(400).json({ error: 'Сервер Discord не выбран' });
+    }
+
+    const result = await ServerSetupService.autoDetectBindings(guildId);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default serverSetupRouter;
+

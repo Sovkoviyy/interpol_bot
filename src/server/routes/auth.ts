@@ -122,36 +122,42 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
   }
 });
 
-// 3. Dev Login (kept active per user request for easy testing/staging; remove before public release)
-authRouter.post('/dev-login', async (req: Request, res: Response) => {
-  const sessionData: UserSessionData = {
-    userId: '111122223333444455',
-    username: 'Family_Leader',
-    discriminator: '0',
-    avatar: null,
-    guildId: config.discord.guildId || 'default_guild',
-    roles: ['admin_role'],
-    isBypass: true,
-    permissions: {
-      isAdmin: true,
-      manageSettings: true,
-      manageRecruiting: true,
-      manageEvents: true,
-      viewLogs: true,
-    },
-  };
-
-  const token = jwt.sign(sessionData, config.server.jwtSecret, { expiresIn: '7d' });
-  res.cookie('token', token, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
-  return res.json({ token, user: sessionData });
+// 3. Get Current User Me (with live Discord & RBAC permission sync)
+authRouter.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  try {
+    const guildId = user.guildId || config.discord.guildId;
+    if (guildId) {
+      const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+      if (guild) {
+        const member = await guild.members.fetch(user.userId).catch(() => null);
+        if (member) {
+          const roles = Array.from(member.roles.cache.keys());
+          const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator) || member.id === guild.ownerId;
+          const rolePermissions = await prisma.rolePermission.findMany({
+            where: {
+              guildId: guildId || '',
+              roleId: { in: roles },
+            },
+          });
+          user.roles = roles;
+          user.permissions = {
+            isAdmin,
+            manageSettings: isAdmin || rolePermissions.some(rp => rp.manageSettings),
+            manageRecruiting: isAdmin || rolePermissions.some(rp => rp.manageRecruiting),
+            manageEvents: isAdmin || rolePermissions.some(rp => rp.manageEvents),
+            viewLogs: isAdmin || rolePermissions.some(rp => rp.viewLogs),
+          };
+        }
+      }
+    }
+  } catch (err) {
+    // If fetching fails, fallback to session permissions
+  }
+  return res.json({ user });
 });
 
-// 4. Get Current User Me
-authRouter.get('/me', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  return res.json({ user: req.user });
-});
-
-// 5. Logout
+// 4. Logout
 authRouter.post('/logout', (req: Request, res: Response) => {
   res.clearCookie('token');
   return res.json({ success: true });

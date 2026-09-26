@@ -19,14 +19,24 @@ import {
   CalendarDays,
   GraduationCap,
   ScrollText,
-  HelpCircle,
   UserCheck,
   MessageSquare,
   ExternalLink,
-  Target
+  Target,
+  Check,
+  ChevronRight,
+  ChevronLeft,
+  ShieldAlert,
+  Plus,
+  Search,
+  Wand2,
+  Info,
+  Users
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+
+type ActiveTab = 'wizard' | 'channels' | 'roles' | 'provision';
 
 export const ServerSetup: React.FC = () => {
   const modal = useModal();
@@ -34,8 +44,8 @@ export const ServerSetup: React.FC = () => {
   const [selectedGuildId, setSelectedGuildId] = useState<string>('');
   const [state, setState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [provisioning, setProvisioning] = useState(false);
-  const [deployPanelsCheck, setDeployPanelsCheck] = useState(true);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('wizard');
+  const [wizardStep, setWizardStep] = useState<number>(1);
 
   // Form bindings state
   const [bindings, setBindings] = useState({
@@ -55,8 +65,33 @@ export const ServerSetup: React.FC = () => {
     welcomeEnabled: true,
   });
 
+  // Role bindings state
+  const [roleBindings, setRoleBindings] = useState({
+    recruiterRoleId: '',
+    recruitApprovedRoleId: '',
+    academicRoleId: '',
+    promotedRoleId: '',
+    tierCheckerRoleId: '',
+    eventPriorityRoleId: '',
+  });
+
   const [savingBindings, setSavingBindings] = useState(false);
+  const [savingRoles, setSavingRoles] = useState(false);
   const [deployingPanel, setDeployingPanel] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState(false);
+  const [deployPanelsCheck, setDeployPanelsCheck] = useState(true);
+  const [autoDetecting, setAutoDetecting] = useState(false);
+
+  // Inline Quick Create Role State
+  const [creatingRoleKey, setCreatingRoleKey] = useState<string | null>(null);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleColor, setNewRoleColor] = useState('#ec4899');
+  const [isCreatingRole, setIsCreatingRole] = useState(false);
+
+  // Inline Quick Create Channel State
+  const [creatingChannelKey, setCreatingChannelKey] = useState<string | null>(null);
+  const [newChannelName, setNewChannelName] = useState('');
+  const [isCreatingChannel, setIsCreatingChannel] = useState(false);
 
   // 1. Fetch available guilds
   const fetchGuilds = async () => {
@@ -102,6 +137,16 @@ export const ServerSetup: React.FC = () => {
           welcomeEnabled: res.data.bindings.welcomeEnabled ?? true,
         });
       }
+      if (res.data.roleBindings) {
+        setRoleBindings({
+          recruiterRoleId: res.data.roleBindings.recruiterRoleId || '',
+          recruitApprovedRoleId: res.data.roleBindings.recruitApprovedRoleId || '',
+          academicRoleId: res.data.roleBindings.academicRoleId || '',
+          promotedRoleId: res.data.roleBindings.promotedRoleId || '',
+          tierCheckerRoleId: res.data.roleBindings.tierCheckerRoleId || '',
+          eventPriorityRoleId: res.data.roleBindings.eventPriorityRoleId || '',
+        });
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -124,7 +169,184 @@ export const ServerSetup: React.FC = () => {
     setSelectedGuildId(newGuildId);
   };
 
-  // 3. One-Click Provisioning
+  // 3. Auto-Detect bindings & roles by keyword
+  const handleAutoDetect = async () => {
+    try {
+      setAutoDetecting(true);
+      const res = await api.post('/setup/auto-detect', { guildId: selectedGuildId });
+      const { rolesCount, channelsCount } = res.data;
+
+      modal.alert({
+        title: 'Авто-распознавание завершено',
+        message: `Бот просканировал сервер и успешно сопоставил:\n\n• Ролей найдено: ${rolesCount}\n• Каналов найдено: ${channelsCount}\n\nВсе совпадения автоматически сохранены!`,
+        type: 'success',
+      });
+      await fetchState(selectedGuildId);
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка распознавания',
+        message: err.response?.data?.error || 'Не удалось распознать структуру сервера',
+        type: 'error',
+      });
+    } finally {
+      setAutoDetecting(false);
+    }
+  };
+
+  // 4. Save channel bindings
+  const handleSaveBindings = async () => {
+    try {
+      setSavingBindings(true);
+      await api.post('/setup/bindings', {
+        guildId: selectedGuildId,
+        bindings,
+      });
+
+      modal.alert({
+        title: 'Успешно',
+        message: 'Привязки каналов успешно обновлены и сохранены в базе!',
+        type: 'success',
+      });
+      await fetchState(selectedGuildId);
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка сохранения',
+        message: err.response?.data?.error || 'Не удалось сохранить привязки',
+        type: 'error',
+      });
+    } finally {
+      setSavingBindings(false);
+    }
+  };
+
+  // 5. Save role bindings
+  const handleSaveRoles = async () => {
+    try {
+      setSavingRoles(true);
+      await api.post('/setup/role-bindings', {
+        guildId: selectedGuildId,
+        roleBindings,
+      });
+
+      modal.alert({
+        title: 'Успешно',
+        message: 'Привязки ролей успешно сохранены в базе данных!',
+        type: 'success',
+      });
+      await fetchState(selectedGuildId);
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка сохранения',
+        message: err.response?.data?.error || 'Не удалось сохранить роли',
+        type: 'error',
+      });
+    } finally {
+      setSavingRoles(false);
+    }
+  };
+
+  // 6. Inline Create Role in Discord
+  const handleQuickCreateRole = async (targetKey: string, defaultName: string, defaultColor: string) => {
+    try {
+      setIsCreatingRole(true);
+      const name = newRoleName.trim() || defaultName;
+      const res = await api.post('/setup/create-role', {
+        guildId: selectedGuildId,
+        name,
+        color: newRoleColor || defaultColor,
+        hoist: true,
+      });
+
+      const created = res.data.role;
+      const updatedRoles = { ...roleBindings, [targetKey]: created.id };
+      setRoleBindings(updatedRoles);
+      await api.post('/setup/role-bindings', { guildId: selectedGuildId, roleBindings: updatedRoles });
+
+      modal.alert({
+        title: 'Роль создана в Discord!',
+        message: `Роль «${created.name}» успешно создана на сервере Discord и привязана в конфигурации бота!`,
+        type: 'success',
+      });
+
+      setCreatingRoleKey(null);
+      setNewRoleName('');
+      await fetchState(selectedGuildId);
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка создания роли',
+        message: err.response?.data?.error || 'Не удалось создать роль в Discord',
+        type: 'error',
+      });
+    } finally {
+      setIsCreatingRole(false);
+    }
+  };
+
+  // 7. Inline Create Channel in Discord
+  const handleQuickCreateChannel = async (targetKey: string, defaultName: string, type: number, parentId?: string) => {
+    try {
+      setIsCreatingChannel(true);
+      const name = newChannelName.trim() || defaultName;
+      const res = await api.post('/setup/create-channel', {
+        guildId: selectedGuildId,
+        name,
+        type,
+        parentId,
+      });
+
+      const created = res.data.channel;
+      const updatedBindings = { ...bindings, [targetKey]: created.id };
+      setBindings(updatedBindings);
+      await api.post('/setup/bindings', { guildId: selectedGuildId, bindings: updatedBindings });
+
+      modal.alert({
+        title: 'Канал создан в Discord!',
+        message: `Канал «${created.name}» успешно создан на сервере Discord и привязан в конфигурации бота!`,
+        type: 'success',
+      });
+
+      setCreatingChannelKey(null);
+      setNewChannelName('');
+      await fetchState(selectedGuildId);
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка создания канала',
+        message: err.response?.data?.error || 'Не удалось создать канал в Discord',
+        type: 'error',
+      });
+    } finally {
+      setIsCreatingChannel(false);
+    }
+  };
+
+  // 8. Deploy / Re-deploy specific panel
+  const handleDeploySpecificPanel = async (panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs' | 'tier', channelId?: string) => {
+    try {
+      setDeployingPanel(panelType);
+      await api.post('/setup/deploy-panel', {
+        guildId: selectedGuildId,
+        panelType,
+        channelId,
+      });
+
+      modal.alert({
+        title: 'Панель опубликована!',
+        message: 'Сообщение бота с интерактивными кнопками успешно отправлено в целевой канал!',
+        type: 'success',
+      });
+      await fetchState(selectedGuildId);
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка отправки',
+        message: err.response?.data?.error || 'Не удалось отправить панель в канал',
+        type: 'error',
+      });
+    } finally {
+      setDeployingPanel(null);
+    }
+  };
+
+  // 9. Full One-Click Provision
   const handleProvision = () => {
     const currentGuild = guilds.find((g) => g.id === selectedGuildId);
     const guildName = currentGuild ? currentGuild.name : selectedGuildId;
@@ -138,8 +360,9 @@ export const ServerSetup: React.FC = () => {
         `• Категорию «⚔️ МЕРОПРИЯТИЯ (МП)» (#сборы-на-мп, 🔊 Сбор на МП)\n` +
         `• Категории «🎓 ACADEMY» и «📁 ACADEMY ARCHIVE»\n` +
         `• Категорию «📜 LOGS» со всеми 8 лог-каналами аудита\n` +
+        `• Категорию «🎯 ЗАЯВКИ НА ТИР»\n` +
         (deployPanelsCheck ? `• Авто-отправку всех интерактивных сообщений с кнопками\n\n` : `\n`) +
-        `Если каналы с такими именами уже существуют, бот аккуратно переиспользует их без дублирования.`,
+        `Если каналы с такими именами уже существуют, бот переиспользует их.`,
       type: 'pink',
       confirmText: 'Да, создать структуру',
       onConfirm: async () => {
@@ -158,7 +381,7 @@ export const ServerSetup: React.FC = () => {
               `• Создано/найдено категорий: ${resData?.categoriesCreated?.length || 0}\n` +
               `• Создано/найдено каналов: ${resData?.channelsCreated?.length || 0}\n` +
               `• Опубликовано панелей с кнопками: ${resData?.panelsDeployed?.join(', ') || 'нет'}\n\n` +
-              `Все ID каналов автоматически сохранены в базу данных.`,
+              `Все ID каналов сохранены в базу данных.`,
             type: 'success',
           });
 
@@ -176,88 +399,103 @@ export const ServerSetup: React.FC = () => {
     });
   };
 
-  // 4. Save custom channel bindings
-  const handleSaveBindings = async () => {
-    try {
-      setSavingBindings(true);
-      await api.post('/setup/bindings', {
-        guildId: selectedGuildId,
-        bindings,
-      });
-
-      modal.alert({
-        title: 'Успешно',
-        message: 'Привязки каналов успешно обновлены и сохранены в базе!',
-        type: 'success',
-      });
-      fetchState(selectedGuildId);
-    } catch (err: any) {
-      modal.alert({
-        title: 'Ошибка сохранения',
-        message: err.response?.data?.error || 'Не удалось сохранить привязки',
-        type: 'error',
-      });
-    } finally {
-      setSavingBindings(false);
-    }
-  };
-
-  // 5. Deploy / Re-deploy specific panel
-  const handleDeploySpecificPanel = async (panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs' | 'voice-tracker' | 'tier', channelId?: string) => {
-    try {
-      setDeployingPanel(panelType);
-      await api.post('/setup/deploy-panel', {
-        guildId: selectedGuildId,
-        panelType,
-        channelId,
-      });
-
-      modal.alert({
-        title: 'Панель отправлена',
-        message: 'Сообщение от бота с интерактивными кнопками успешно опубликовано в канале!',
-        type: 'success',
-      });
-      fetchState(selectedGuildId);
-    } catch (err: any) {
-      modal.alert({
-        title: 'Ошибка отправки',
-        message: err.response?.data?.error || 'Не удалось отправить панель в канал',
-        type: 'error',
-      });
-    } finally {
-      setDeployingPanel(null);
-    }
-  };
-
   const currentGuild = guilds.find((g) => g.id === selectedGuildId);
   const textChannels = (state?.channels || []).filter((c: any) => c.type === 0 || c.type === 'GUILD_TEXT');
   const voiceChannels = (state?.channels || []).filter((c: any) => c.type === 2 || c.type === 'GUILD_VOICE');
   const categories = (state?.channels || []).filter((c: any) => c.type === 4 || c.type === 'GUILD_CATEGORY');
   const roles = state?.roles || [];
+  const botPerms = state?.botPermissions;
+
+  // Calculate readiness percentage
+  const totalChecks = 10;
+  let passedChecks = 0;
+  if (botPerms?.hasAdministrator || (botPerms?.manageRoles && botPerms?.manageChannels)) passedChecks++;
+  if (roleBindings.recruiterRoleId) passedChecks++;
+  if (roleBindings.academicRoleId) passedChecks++;
+  if (roleBindings.promotedRoleId) passedChecks++;
+  if (bindings.staticBindingChannelId) passedChecks++;
+  if (bindings.leaveRequestChannelId) passedChecks++;
+  if (bindings.recruitmentApplyChannelId) passedChecks++;
+  if (bindings.academyCategoryId) passedChecks++;
+  if (bindings.eventAnnounceChannelId) passedChecks++;
+  if (state?.bindings?.messageLogsChannelId) passedChecks++;
+  const readinessPercent = Math.round((passedChecks / totalChecks) * 100);
+
+  // Required Roles Specification List
+  const requiredRolesList = [
+    {
+      key: 'recruiterRoleId',
+      name: 'Рекрутер',
+      defaultName: '👔 Рекрутер',
+      defaultColor: '#3b82f6',
+      badge: 'Рекрутинг',
+      desc: 'Доступ к управлению тикетами набора, проверке анкет и начислению выплат за приглашенных участников.',
+    },
+    {
+      key: 'recruitApprovedRoleId',
+      name: 'Одобренный рекрут / Участник',
+      defaultName: '👥 Участник',
+      defaultColor: '#10b981',
+      badge: 'Семья',
+      desc: 'Роль, автоматически выдаваемая игроку сразу после того, как рекрутер одобрил его анкету.',
+    },
+    {
+      key: 'academicRoleId',
+      name: 'Академик (1 ранг семьи)',
+      defaultName: '🎓 Академик [1]',
+      defaultColor: '#f59e0b',
+      badge: 'Академия',
+      desc: 'Начальный ранг новичка в семье. Бот следит за прогрессом курсанта и открывает каналы сдачи теории/практики.',
+    },
+    {
+      key: 'promotedRoleId',
+      name: 'Основной состав (2 ранг семьи)',
+      defaultName: '⭐ Основной состав [2]',
+      defaultColor: '#ec4899',
+      badge: 'Повышение',
+      desc: 'Полноправный член семьи. Автоматически выдается ботом при успешном завершении и сдаче Академии.',
+    },
+    {
+      key: 'tierCheckerRoleId',
+      name: 'Проверяющий стрельбу (Тир-инспектор)',
+      defaultName: '🎯 Проверяющий тиров',
+      defaultColor: '#8b5cf6',
+      badge: 'Тир система',
+      desc: 'Экзаменатор стрельбы. Получает уведомления в Discord и принимает зачеты по тирам (Tier 1-4).',
+    },
+    {
+      key: 'eventPriorityRoleId',
+      name: 'Приоритет на МП (Капт/Бизвар состав)',
+      defaultName: '⚔️ Капт Состав',
+      defaultColor: '#ef4444',
+      badge: 'Мероприятия',
+      desc: 'Игроки с этой ролью первыми попадают в основу при лимитированных сборах на дропы, капты и бизвары.',
+    },
+  ];
 
   return (
     <div className="space-y-6 w-full">
       {/* Header & Server Selector */}
-      <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-6 backdrop-blur-sm space-y-4">
+      <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl p-6 backdrop-blur-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
-              <FolderTree className="w-6 h-6 text-pink-500" />
-              Инициализация сервера & Настройка каналов
+              <Wand2 className="w-6 h-6 text-pink-500" />
+              Первоначальная настройка бота на сервере
             </h1>
-            <p className="text-sm text-gray-400 mt-1">
-              Автоматическое создание категорий, каналов и сообщений бота для тестового или рабочего сервера
+            <p className="text-sm text-slate-400 mt-1">
+              Пошаговый мастер сопоставления каналов, создания ролей и проверки прав для готового сервера
             </p>
           </div>
 
           {/* Server Selector Dropdown */}
-          <div className="flex items-center gap-3 bg-dark-800/80 border border-dark-700 p-2 rounded-xl">
+          <div className="flex items-center gap-3 bg-[#151921] border border-[#1E232F] p-2 rounded-xl">
             <Server className="w-4 h-4 text-pink-400 shrink-0 ml-1" />
-            <div className="text-xs text-gray-400 shrink-0">Выбранный сервер:</div>
+            <div className="text-xs text-slate-400 shrink-0">Выбранный сервер:</div>
             <select
               value={selectedGuildId}
               onChange={(e) => handleGuildChange(e.target.value)}
-              className="bg-dark-900 text-white font-medium text-xs px-3 py-1.5 rounded-lg border border-dark-700 focus:outline-none focus:border-pink-500 transition-colors"
+              className="bg-[#0B0E14] text-white font-medium text-xs px-3 py-1.5 rounded-lg border border-[#1E232F] focus:outline-none focus:border-pink-500 transition-colors"
             >
               {guilds.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -270,7 +508,7 @@ export const ServerSetup: React.FC = () => {
 
         {/* Selected Guild Overview Card */}
         {currentGuild && (
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-dark-800/40 border border-dark-800 rounded-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl">
             <div className="flex items-center gap-3">
               {currentGuild.icon ? (
                 <img
@@ -286,577 +524,1123 @@ export const ServerSetup: React.FC = () => {
               <div>
                 <div className="text-sm font-bold text-white flex items-center gap-2">
                   {currentGuild.name}
-                  <span className="text-[11px] font-mono text-gray-500 font-normal">ID: {currentGuild.id}</span>
+                  <span className="text-[11px] font-mono text-slate-500 font-normal">ID: {currentGuild.id}</span>
                 </div>
-                <div className="text-xs text-gray-400">
-                  Участников: <span className="text-slate-200 font-medium">{currentGuild.memberCount}</span> •
-                  Каналов на сервере: <span className="text-slate-200 font-medium">{state?.channels?.length || 0}</span>
+                <div className="text-xs text-slate-400">
+                  Участников в Discord: <span className="text-slate-200 font-medium">{currentGuild.memberCount}</span> •
+                  Каналов: <span className="text-slate-200 font-medium">{state?.channels?.length || 0}</span> •
+                  Ролей: <span className="text-slate-200 font-medium">{roles.length}</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {currentGuild.hasAdmin ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Права Администратора активны
+            <div className="flex items-center gap-3">
+              {/* Readiness Progress pill */}
+              <div className="flex items-center gap-2 bg-[#0B0E14] border border-[#1E232F] px-3 py-1.5 rounded-xl">
+                <span className="text-xs text-slate-400">Готовность к запуску:</span>
+                <div className="w-20 bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-pink-500 to-emerald-400 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${readinessPercent}%` }}
+                  ></div>
+                </div>
+                <span className="text-xs font-bold text-pink-400 font-mono">{readinessPercent}%</span>
+              </div>
+
+              {botPerms?.hasAdministrator ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <ShieldCheck className="w-4 h-4" />
+                  Администратор
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  Рекомендуется выдать роль с правами Администратора
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <AlertTriangle className="w-4 h-4" />
+                  Нет роли Администратора
                 </span>
               )}
+
+              <button
+                onClick={handleAutoDetect}
+                disabled={autoDetecting || loading}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl text-xs font-semibold transition shadow-md shadow-pink-500/20 disabled:opacity-50"
+                title="Автоматически найти существующие роли и каналы по названиям"
+              >
+                <Search className={`w-3.5 h-3.5 ${autoDetecting ? 'animate-spin' : ''}`} />
+                {autoDetecting ? 'Сканирование...' : 'Авто-распознать всё'}
+              </button>
             </div>
           </div>
         )}
-      </div>
 
-      {/* One-Click Provisioning Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-pink-950/30 via-dark-900 to-dark-900 border border-pink-500/30 rounded-2xl p-6 backdrop-blur-sm shadow-xl">
-        <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-pink-500/20 text-pink-400 border border-pink-500/30">
-              <Sparkles className="w-3.5 h-3.5" />
-              Быстрый старт для тестового сервера
-            </div>
-            <h2 className="text-lg font-bold text-white">
-              Создать всю структуру каналов, категорий и сообщений в 1 клик
-            </h2>
-            <p className="text-xs text-gray-300 leading-relaxed">
-              Бот автоматически сформирует готовый сервер для семьи: создаст категории информации, набора,
-              МП, академии и аудита, настроит права доступа, пропишет ID каналов в базу и опубликует рабочие интерактивные сообщения с кнопками.
-            </p>
-            <div className="pt-2 flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="deployPanels"
-                checked={deployPanelsCheck}
-                onChange={(e) => setDeployPanelsCheck(e.target.checked)}
-                className="w-4 h-4 rounded text-pink-600 focus:ring-pink-500 bg-dark-800 border-dark-700 cursor-pointer"
-              />
-              <label htmlFor="deployPanels" className="text-xs text-gray-300 cursor-pointer">
-                Сразу отправить интерактивные сообщения бота в каналы (привязка статика, отпуска, набор)
-              </label>
-            </div>
-          </div>
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-2 border-b border-[#1E232F] pt-2">
+          <button
+            onClick={() => setActiveTab('wizard')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 ${
+              activeTab === 'wizard'
+                ? 'border-pink-500 text-pink-400 bg-pink-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#151921]'
+            }`}
+          >
+            <Wand2 className="w-4 h-4" />
+            <span>Мастер первоначальной настройки</span>
+            <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-pink-500/20 text-pink-300 font-mono">
+              Шаг {wizardStep}/5
+            </span>
+          </button>
 
           <button
-            onClick={handleProvision}
-            disabled={provisioning || loading}
-            className="flex items-center justify-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-pink-600 via-rose-500 to-pink-500 hover:from-pink-500 hover:to-rose-400 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-pink-500/25 shrink-0 disabled:opacity-50"
+            onClick={() => setActiveTab('roles')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 ${
+              activeTab === 'roles'
+                ? 'border-pink-500 text-pink-400 bg-pink-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#151921]'
+            }`}
           >
-            <Sparkles className={`w-4 h-4 ${provisioning ? 'animate-spin' : ''}`} />
-            {provisioning ? 'Создание структуры...' : '🚀 Создать структуру сервера в 1 клик'}
+            <Users className="w-4 h-4" />
+            <span>Роли семьи</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('channels')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 ${
+              activeTab === 'channels'
+                ? 'border-pink-500 text-pink-400 bg-pink-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#151921]'
+            }`}
+          >
+            <FolderTree className="w-4 h-4" />
+            <span>Каналы и Категории</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('provision')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all border-b-2 ${
+              activeTab === 'provision'
+                ? 'border-pink-500 text-pink-400 bg-pink-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#151921]'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Авто-развертывание (Вайп/С нуля)</span>
           </button>
         </div>
       </div>
 
-      {/* Module Channels Management & Re-deploy Cards */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <FolderPlus className="w-5 h-5 text-pink-500" />
-              Привязка каналов и управление сообщениями
-            </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Вы можете переназначить каналы для любого функционала и переотправить нужные сообщения бота по кнопке
-            </p>
-          </div>
-          <button
-            onClick={handleSaveBindings}
-            disabled={savingBindings || loading}
-            className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-pink-500/20 disabled:opacity-50"
-          >
-            <Save className="w-3.5 h-3.5" />
-            {savingBindings ? 'Сохранение...' : 'Сохранить все привязки'}
-          </button>
-        </div>
+      {/* TAB 1: INITIAL SETUP WIZARD */}
+      {activeTab === 'wizard' && (
+        <div className="space-y-6">
+          {/* Stepper Header */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            {[
+              { num: 1, title: 'Роли в Discord', icon: Users },
+              { num: 2, title: 'Каналы сервера', icon: FolderTree },
+              { num: 3, title: 'Права и Иерархия', icon: ShieldCheck },
+              { num: 4, title: 'Панели бота', icon: Send },
+              { num: 5, title: 'Итог и Запуск', icon: CheckCircle2 },
+            ].map((step) => {
+              const Icon = step.icon;
+              const isCurrent = wizardStep === step.num;
+              const isDone = wizardStep > step.num;
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Card 1: Static Binding */}
-          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
-                  <IdCard className="w-4 h-4" />
-                </div>
+              return (
+                <button
+                  key={step.num}
+                  onClick={() => setWizardStep(step.num)}
+                  className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
+                    isCurrent
+                      ? 'bg-pink-500/10 border-pink-500/40 text-pink-400 shadow-md shadow-pink-500/10'
+                      : isDone
+                      ? 'bg-[#151921]/80 border-emerald-500/30 text-emerald-400'
+                      : 'bg-[#0B0E14] border-[#1E232F] text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs ${
+                      isCurrent
+                        ? 'bg-pink-500 text-white shadow'
+                        : isDone
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {isDone ? <Check className="w-4 h-4" /> : step.num}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-500 block uppercase font-mono font-bold">
+                      Шаг {step.num}
+                    </span>
+                    <span className="text-xs font-semibold block truncate text-slate-200">
+                      {step.title}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* STEP 1: DISCORD ROLES SETUP */}
+          {wizardStep === 1 && (
+            <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl p-6 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#1E232F] pb-5">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Привязка Static ID</h3>
-                  <p className="text-[11px] text-gray-400">Кнопка «🆔 Привязать статик»</p>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-pink-500" />
+                    Шаг 1: Настройка ролей семьи в Discord
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Так как бот ставится на уже существующий сервер, сопоставьте свои существующие роли или создайте недостающие прямо отсюда в 1 клик.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleAutoDetect}
+                    disabled={autoDetecting}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[#151921] hover:bg-[#1E232F] text-slate-200 border border-slate-700 rounded-xl text-xs font-medium transition"
+                  >
+                    <Search className="w-3.5 h-3.5 text-pink-400" />
+                    Авто-поиск по названию
+                  </button>
+                  <button
+                    onClick={handleSaveRoles}
+                    disabled={savingRoles}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-semibold transition shadow-md shadow-pink-600/20"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {savingRoles ? 'Сохранение...' : 'Сохранить роли'}
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => handleDeploySpecificPanel('static', bindings.staticBindingChannelId)}
-                disabled={deployingPanel === 'static' || !bindings.staticBindingChannelId}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-pink-500/20 text-pink-400 border border-dark-700 hover:border-pink-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                title="Отправить панель в выбранный канал"
-              >
-                <Send className="w-3 h-3" />
-                {deployingPanel === 'static' ? 'Отправка...' : 'Отправить панель'}
-              </button>
-            </div>
 
+              {/* Roles Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {requiredRolesList.map((item) => {
+                  const currentRoleId = (roleBindings as any)[item.key];
+                  const matchedRole = roles.find((r: any) => r.id === currentRoleId);
+                  const isConfigured = Boolean(currentRoleId);
+
+                  return (
+                    <div
+                      key={item.key}
+                      className={`p-4 rounded-xl border transition-all space-y-3 ${
+                        isConfigured
+                          ? 'bg-[#151921]/60 border-pink-500/30'
+                          : 'bg-[#151921]/30 border-[#1E232F]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white">{item.name}</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                              {item.badge}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                            {item.desc}
+                          </p>
+                        </div>
+                        <span
+                          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                            isConfigured
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          }`}
+                        >
+                          {isConfigured ? '✓' : '!'}
+                        </span>
+                      </div>
+
+                      {/* Dropdown & Quick Create */}
+                      <div className="space-y-2 pt-1">
+                        <label className="block text-[11px] font-medium text-slate-300">
+                          Выберите существующую роль сервера:
+                        </label>
+                        <select
+                          value={currentRoleId || ''}
+                          onChange={(e) =>
+                            setRoleBindings({ ...roleBindings, [item.key]: e.target.value })
+                          }
+                          className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
+                        >
+                          <option value="">Не привязана (выберите роль)...</option>
+                          {roles.map((r: any) => (
+                            <option key={r.id} value={r.id}>
+                              @{r.name} (ID: {r.id})
+                            </option>
+                          ))}
+                        </select>
+
+                        {/* Inline Create Form / Trigger */}
+                        {creatingRoleKey === item.key ? (
+                          <div className="p-3 bg-[#0B0E14] border border-pink-500/30 rounded-xl space-y-2 animate-fadeIn">
+                            <div className="text-[11px] font-semibold text-pink-400">
+                              Создание роли в Discord:
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder={item.defaultName}
+                                value={newRoleName}
+                                onChange={(e) => setNewRoleName(e.target.value)}
+                                className="flex-1 bg-[#151921] border border-[#1E232F] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-pink-500"
+                              />
+                              <input
+                                type="color"
+                                value={newRoleColor}
+                                onChange={(e) => setNewRoleColor(e.target.value)}
+                                className="w-9 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
+                                title="Цвет роли"
+                              />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-1">
+                              <button
+                                onClick={() => setCreatingRoleKey(null)}
+                                className="px-2.5 py-1 text-[11px] text-slate-400 hover:text-white"
+                              >
+                                Отмена
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleQuickCreateRole(item.key, item.defaultName, item.defaultColor)
+                                }
+                                disabled={isCreatingRole}
+                                className="px-3 py-1 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-[11px] font-semibold transition"
+                              >
+                                {isCreatingRole ? 'Создание...' : 'Создать в Discord'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setCreatingRoleKey(item.key);
+                              setNewRoleName(item.defaultName);
+                              setNewRoleColor(item.defaultColor);
+                            }}
+                            className="inline-flex items-center gap-1.5 text-[11px] text-pink-400 hover:text-pink-300 font-medium transition"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Нет такой роли? Создать в 1 клик ({item.defaultName})
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Wizard Footer Nav */}
+              <div className="flex justify-between items-center pt-4 border-t border-[#1E232F]">
+                <span className="text-xs text-slate-400">
+                  Сохраните роли перед переходом к следующему шагу.
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      handleSaveRoles();
+                      setWizardStep(2);
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-pink-600/25"
+                  >
+                    <span>Далее: Каналы сервера</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: CHANNELS SETUP */}
+          {wizardStep === 2 && (
+            <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl p-6 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#1E232F] pb-5">
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <FolderTree className="w-5 h-5 text-pink-500" />
+                    Шаг 2: Назначение каналов и категорий
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Укажите, в какие каналы вашего Discord-сервера бот будет отправлять интерактивные сообщения, куда пересылать логи и где создавать тикеты.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleAutoDetect}
+                    disabled={autoDetecting}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[#151921] hover:bg-[#1E232F] text-slate-200 border border-slate-700 rounded-xl text-xs font-medium transition"
+                  >
+                    <Search className="w-3.5 h-3.5 text-pink-400" />
+                    Авто-поиск каналов
+                  </button>
+                  <button
+                    onClick={handleSaveBindings}
+                    disabled={savingBindings}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-semibold transition shadow-md shadow-pink-600/20"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {savingBindings ? 'Сохранение...' : 'Сохранить каналы'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Channel Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. Static Binding */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <IdCard className="w-4 h-4 text-pink-400" />
+                      <span className="text-xs font-bold text-white">Канал привязки Static ID</span>
+                    </div>
+                    <span className="text-[10px] text-pink-400 font-mono">#привязка-статика</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Здесь бот разместит кнопку «🆔 Привязать статик», через которую игроки вводят ник и статический ID персонажа.
+                  </p>
+                  <select
+                    value={bindings.staticBindingChannelId}
+                    onChange={(e) => setBindings({ ...bindings, staticBindingChannelId: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  >
+                    <option value="">Не выбран (выберите текстовый канал)...</option>
+                    {textChannels.map((ch: any) => (
+                      <option key={ch.id} value={ch.id}>
+                        #{ch.name} (ID: {ch.id})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleQuickCreateChannel('staticBindingChannelId', 'привязка-статика', 0)}
+                    className="inline-flex items-center gap-1 text-[11px] text-pink-400 hover:text-pink-300 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Создать канал #привязка-статика в 1 клик
+                  </button>
+                </div>
+
+                {/* 2. Leave Channel */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CalendarOff className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs font-bold text-white">Канал отпусков и неактива</span>
+                    </div>
+                    <span className="text-[10px] text-amber-400 font-mono">#отпуска-неактив</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Канал с кнопкой «🏖️ Подать на отпуск» для фиксации дат отсутствия членов семьи.
+                  </p>
+                  <select
+                    value={bindings.leaveRequestChannelId}
+                    onChange={(e) => setBindings({ ...bindings, leaveRequestChannelId: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  >
+                    <option value="">Не выбран (выберите текстовый канал)...</option>
+                    {textChannels.map((ch: any) => (
+                      <option key={ch.id} value={ch.id}>
+                        #{ch.name} (ID: {ch.id})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleQuickCreateChannel('leaveRequestChannelId', 'отпуска-неактив', 0)}
+                    className="inline-flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Создать канал #отпуска-неактив в 1 клик
+                  </button>
+                </div>
+
+                {/* 3. Recruitment Apply Channel */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <UserPlus className="w-4 h-4 text-blue-400" />
+                      <span className="text-xs font-bold text-white">Канал подачи заявок в семью</span>
+                    </div>
+                    <span className="text-[10px] text-blue-400 font-mono">#подать-заявку</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Канал, видимый гостям сервера с кнопкой «📝 Подать заявку в семью».
+                  </p>
+                  <select
+                    value={bindings.recruitmentApplyChannelId}
+                    onChange={(e) => setBindings({ ...bindings, recruitmentApplyChannelId: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  >
+                    <option value="">Не выбран (выберите текстовый канал)...</option>
+                    {textChannels.map((ch: any) => (
+                      <option key={ch.id} value={ch.id}>
+                        #{ch.name} (ID: {ch.id})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleQuickCreateChannel('recruitmentApplyChannelId', 'подать-заявку', 0)}
+                    className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Создать канал #подать-заявку в 1 клик
+                  </button>
+                </div>
+
+                {/* 4. Recruitment Tickets Category */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-blue-400" />
+                      <span className="text-xs font-bold text-white">Категория тикетов набора</span>
+                    </div>
+                    <span className="text-[10px] text-blue-400 font-mono">📥 НАБОР В СЕМЬЮ</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Категория Discord, внутри которой бот автоматически создает приватные каналы тикетов кандидатов.
+                  </p>
+                  <select
+                    value={bindings.recruitmentReviewChannelId}
+                    onChange={(e) => setBindings({ ...bindings, recruitmentReviewChannelId: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  >
+                    <option value="">Не выбрана (выберите категорию)...</option>
+                    {categories.map((cat: any) => (
+                      <option key={cat.id} value={cat.id}>
+                        📁 {cat.name} (ID: {cat.id})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleQuickCreateChannel('recruitmentReviewChannelId', '📥 НАБОР В СЕМЬЮ', 4)}
+                    className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Создать категорию набора в 1 клик
+                  </button>
+                </div>
+
+                {/* 5. Academy Category */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-fuchsia-400" />
+                      <span className="text-xs font-bold text-white">Категория тикетов Академии</span>
+                    </div>
+                    <span className="text-[10px] text-fuchsia-400 font-mono">🎓 ACADEMY</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Категория для тикетов сдачи экзаменов новичков (1 ранг) перед менторами.
+                  </p>
+                  <select
+                    value={bindings.academyCategoryId}
+                    onChange={(e) => setBindings({ ...bindings, academyCategoryId: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  >
+                    <option value="">Не выбрана (выберите категорию)...</option>
+                    {categories.map((cat: any) => (
+                      <option key={cat.id} value={cat.id}>
+                        📁 {cat.name} (ID: {cat.id})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleQuickCreateChannel('academyCategoryId', '🎓 ACADEMY', 4)}
+                    className="inline-flex items-center gap-1 text-[11px] text-fuchsia-400 hover:text-fuchsia-300 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Создать категорию Академии в 1 клик
+                  </button>
+                </div>
+
+                {/* 6. Events Announce Channel */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-rose-400" />
+                      <span className="text-xs font-bold text-white">Канал сборов на Мероприятия (МП)</span>
+                    </div>
+                    <span className="text-[10px] text-rose-400 font-mono">#сборы-на-мп</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Канал, куда бот публикует карточки сборов с таймером и кнопками «✅ Буду / ❌ Не смогу».
+                  </p>
+                  <select
+                    value={bindings.eventAnnounceChannelId}
+                    onChange={(e) => setBindings({ ...bindings, eventAnnounceChannelId: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  >
+                    <option value="">Не выбран (выберите текстовый канал)...</option>
+                    {textChannels.map((ch: any) => (
+                      <option key={ch.id} value={ch.id}>
+                        #{ch.name} (ID: {ch.id})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleQuickCreateChannel('eventAnnounceChannelId', 'сборы-на-мп', 0)}
+                    className="inline-flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Создать канал #сборы-на-мп в 1 клик
+                  </button>
+                </div>
+              </div>
+
+              {/* Wizard Footer Nav */}
+              <div className="flex justify-between items-center pt-4 border-t border-[#1E232F]">
+                <button
+                  onClick={() => setWizardStep(1)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-[#151921] hover:bg-[#1E232F] text-slate-300 rounded-xl text-xs font-medium transition"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Назад: Роли семьи</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleSaveBindings();
+                    setWizardStep(3);
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-pink-600/25"
+                >
+                  <span>Далее: Права и Иерархия</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: BOT PERMISSIONS & HIERARCHY CHECK */}
+          {wizardStep === 3 && (
+            <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl p-6 space-y-6">
+              <div className="border-b border-[#1E232F] pb-5">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  Шаг 3: Диагностика прав и иерархии ролей бота
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Discord требует строгого соблюдения прав и позиции роли бота в списке ролей сервера.
+                </p>
+              </div>
+
+              {/* Bot Hierarchy Warning Box */}
+              <div className="p-4 rounded-xl bg-pink-500/10 border border-pink-500/30 space-y-2">
+                <div className="flex items-center gap-2 text-pink-400 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  КРИТИЧЕСКИ ВАЖНО: Иерархия ролей в Discord
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  В Discord бот <strong>не может выдавать или забирать роли</strong>, которые находятся <strong>выше</strong> его собственной наивысшей роли в списке ролей сервера!
+                </p>
+                <div className="p-3 bg-[#0B0E14]/80 rounded-lg text-xs font-mono text-slate-300 space-y-1 border border-pink-500/20">
+                  <div>1. Откройте в Discord: <strong>Настройки сервера ➔ Роли</strong></div>
+                  <div>2. Зажмите мышкой роль бота (<strong>{botPerms?.botHighestRoleName || 'INTERPOL BOT'}</strong>)</div>
+                  <div>3. Перетащите её <strong>ВЫШЕ</strong> всех ролей семьи: «Рекрутер», «Академик», «Основной состав», «Капт состав»</div>
+                  <div className="text-emerald-400 font-semibold pt-1">
+                    ✓ Текущая высшая роль бота: «{botPerms?.botHighestRoleName || 'Bot'}» (позиция {botPerms?.botRolePosition || 0})
+                  </div>
+                </div>
+              </div>
+
+              {/* Permissions Checklist */}
+              <div className="space-y-3">
+                <div className="text-xs font-bold text-white uppercase tracking-wider text-slate-400">
+                  Чеклист прав бота на сервере
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    {
+                      name: 'Права Администратора (Administrator)',
+                      desc: 'Рекомендуется для 100% стабильной работы всех модулей',
+                      ok: botPerms?.hasAdministrator,
+                    },
+                    {
+                      name: 'Управление ролями (Manage Roles)',
+                      desc: 'Необходимо для выдачи Академика, 2 ранга и ролей ЧС',
+                      ok: botPerms?.manageRoles || botPerms?.hasAdministrator,
+                    },
+                    {
+                      name: 'Управление каналами (Manage Channels)',
+                      desc: 'Необходимо для авто-создания тикетов набора и академии',
+                      ok: botPerms?.manageChannels || botPerms?.hasAdministrator,
+                    },
+                    {
+                      name: 'Управление никнеймами (Manage Nicknames)',
+                      desc: 'Необходимо для авто-смены ников по статическому ID',
+                      ok: botPerms?.manageNicknames || botPerms?.hasAdministrator,
+                    },
+                    {
+                      name: 'Отправка сообщений (Send Messages)',
+                      desc: 'Базовое право отправки сообщений в каналы',
+                      ok: botPerms?.sendMessages || botPerms?.hasAdministrator,
+                    },
+                    {
+                      name: 'Встраивание ссылок (Embed Links)',
+                      desc: 'Необходимо для красивых Embed карточек и панелей',
+                      ok: botPerms?.embedLinks || botPerms?.hasAdministrator,
+                    },
+                  ].map((perm, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3.5 rounded-xl bg-[#151921]/60 border border-[#1E232F] flex items-start justify-between gap-3"
+                    >
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold text-white block">{perm.name}</span>
+                        <span className="text-[11px] text-slate-400 block">{perm.desc}</span>
+                      </div>
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${
+                          perm.ok
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        }`}
+                      >
+                        {perm.ok ? '✓ Активно' : '✕ Отсутствует'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Wizard Footer Nav */}
+              <div className="flex justify-between items-center pt-4 border-t border-[#1E232F]">
+                <button
+                  onClick={() => setWizardStep(2)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-[#151921] hover:bg-[#1E232F] text-slate-300 rounded-xl text-xs font-medium transition"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Назад: Каналы сервера</span>
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => fetchState(selectedGuildId)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[#151921] hover:bg-[#1E232F] text-slate-300 rounded-xl text-xs font-medium transition"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Перепроверить права
+                  </button>
+                  <button
+                    onClick={() => setWizardStep(4)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-pink-600/25"
+                  >
+                    <span>Далее: Развертывание панелей</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: DEPLOY INTERACTIVE PANELS */}
+          {wizardStep === 4 && (
+            <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl p-6 space-y-6">
+              <div className="border-b border-[#1E232F] pb-5">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Send className="w-5 h-5 text-pink-500" />
+                  Шаг 4: Публикация интерактивных панелей бота в каналах
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Отправьте готовые красивые Embed сообщения с кнопками в привязанные каналы вашего сервера.
+                </p>
+              </div>
+
+              {/* Panels Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Panel 1 */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <IdCard className="w-4 h-4 text-pink-400" />
+                      <span className="text-xs font-bold text-white">Панель привязки Static ID</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Канал: {bindings.staticBindingChannelId ? `#${textChannels.find((c: any) => c.id === bindings.staticBindingChannelId)?.name || bindings.staticBindingChannelId}` : 'не привязан'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeploySpecificPanel('static', bindings.staticBindingChannelId)}
+                    disabled={deployingPanel === 'static' || !bindings.staticBindingChannelId}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-semibold transition disabled:opacity-40 shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    {deployingPanel === 'static' ? 'Отправка...' : 'Отправить в канал'}
+                  </button>
+                </div>
+
+                {/* Panel 2 */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <CalendarOff className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs font-bold text-white">Панель подачи заявок на отпуск</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Канал: {bindings.leaveRequestChannelId ? `#${textChannels.find((c: any) => c.id === bindings.leaveRequestChannelId)?.name || bindings.leaveRequestChannelId}` : 'не привязан'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeploySpecificPanel('leave', bindings.leaveRequestChannelId)}
+                    disabled={deployingPanel === 'leave' || !bindings.leaveRequestChannelId}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition disabled:opacity-40 shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    {deployingPanel === 'leave' ? 'Отправка...' : 'Отправить в канал'}
+                  </button>
+                </div>
+
+                {/* Panel 3 */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <UserPlus className="w-4 h-4 text-blue-400" />
+                      <span className="text-xs font-bold text-white">Панель набора в семью</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Канал: {bindings.recruitmentApplyChannelId ? `#${textChannels.find((c: any) => c.id === bindings.recruitmentApplyChannelId)?.name || bindings.recruitmentApplyChannelId}` : 'не привязан'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeploySpecificPanel('recruit', bindings.recruitmentApplyChannelId)}
+                    disabled={deployingPanel === 'recruit' || !bindings.recruitmentApplyChannelId}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition disabled:opacity-40 shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    {deployingPanel === 'recruit' ? 'Отправка...' : 'Отправить в канал'}
+                  </button>
+                </div>
+
+                {/* Panel 4 */}
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Target className="w-4 h-4 text-fuchsia-400" />
+                      <span className="text-xs font-bold text-white">Панель подачи заявок на тир</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Канал: {bindings.tierApplyChannelId ? `#${textChannels.find((c: any) => c.id === bindings.tierApplyChannelId)?.name || bindings.tierApplyChannelId}` : 'не привязан'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeploySpecificPanel('tier', bindings.tierApplyChannelId)}
+                    disabled={deployingPanel === 'tier' || !bindings.tierApplyChannelId}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white rounded-xl text-xs font-semibold transition disabled:opacity-40 shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    {deployingPanel === 'tier' ? 'Отправка...' : 'Отправить в канал'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Wizard Footer Nav */}
+              <div className="flex justify-between items-center pt-4 border-t border-[#1E232F]">
+                <button
+                  onClick={() => setWizardStep(3)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-[#151921] hover:bg-[#1E232F] text-slate-300 rounded-xl text-xs font-medium transition"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Назад: Права бота</span>
+                </button>
+                <button
+                  onClick={() => setWizardStep(5)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-pink-600/25"
+                >
+                  <span>Далее: Завершение и Итог</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 5: FINAL READINESS & LAUNCH */}
+          {wizardStep === 5 && (
+            <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl p-6 space-y-6">
+              <div className="text-center max-w-xl mx-auto space-y-3 py-4">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-pink-600 via-rose-500 to-emerald-400 flex items-center justify-center mx-auto shadow-xl shadow-pink-500/20">
+                  <CheckCircle2 className="w-8 h-8 text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-white">
+                  {readinessPercent >= 70 ? 'Сервер готов к работе!' : 'Настройка почти завершена'}
+                </h2>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Бот INTERPOL BOT подключен к серверу «{currentGuild?.name}». Проверьте статус готовности ключевых модулей ниже:
+                </p>
+
+                <div className="inline-flex items-center gap-2 bg-[#151921] border border-[#1E232F] px-4 py-2 rounded-xl">
+                  <span className="text-xs text-slate-300">Общий показатель готовности:</span>
+                  <span className="text-base font-bold text-pink-400 font-mono">{readinessPercent}%</span>
+                </div>
+              </div>
+
+              {/* Status Checklist Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">Роли семьи</span>
+                    <span className="text-xs font-mono text-pink-400">
+                      {roleBindings.recruiterRoleId && roleBindings.academicRoleId ? '✓ Настроены' : '! Не все'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Рекрутер, Академик 1 ранг и Основной состав 2 ранг привязаны в системе.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">Каналы модулей</span>
+                    <span className="text-xs font-mono text-pink-400">
+                      {bindings.staticBindingChannelId && bindings.recruitmentApplyChannelId ? '✓ Настроены' : '! Не все'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Привязка статика, отпуска, набор и сборы на мероприятия распределены по каналам.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">Права бота</span>
+                    <span className="text-xs font-mono text-emerald-400">
+                      {botPerms?.hasAdministrator ? '✓ Администратор' : '✓ Базовые'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Иерархия ролей и доступ к отправке сообщений проверены.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap justify-center gap-4 pt-4 border-t border-[#1E232F]">
+                <a
+                  href="/members"
+                  className="px-6 py-3 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-pink-600/25 flex items-center gap-2"
+                >
+                  <Users className="w-4 h-4" />
+                  Перейти к списку участников сервера
+                </a>
+                <a
+                  href="/messages"
+                  className="px-6 py-3 bg-[#151921] hover:bg-[#1E232F] text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-2"
+                >
+                  <MessageSquare className="w-4 h-4 text-pink-400" />
+                  Кастомизировать тексты сообщений бота
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: DETAILED ROLES TAB */}
+      {activeTab === 'roles' && (
+        <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-[#1E232F] pb-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал для привязки статика</label>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-pink-500" />
+                Все роли семьи в Discord
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Управление ролями для автоматических повышений, набора, академии и тиров
+              </p>
+            </div>
+            <button
+              onClick={handleSaveRoles}
+              disabled={savingRoles}
+              className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-semibold transition shadow-md shadow-pink-600/20 disabled:opacity-50"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {savingRoles ? 'Сохранение...' : 'Сохранить все роли'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {requiredRolesList.map((item) => {
+              const currentRoleId = (roleBindings as any)[item.key];
+              return (
+                <div key={item.key} className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">{item.name}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                      {item.badge}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">{item.desc}</p>
+                  <select
+                    value={currentRoleId || ''}
+                    onChange={(e) => setRoleBindings({ ...roleBindings, [item.key]: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  >
+                    <option value="">Не привязана (выберите роль)...</option>
+                    {roles.map((r: any) => (
+                      <option key={r.id} value={r.id}>
+                        @{r.name} (ID: {r.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: CHANNELS & CATEGORIES FULL VIEW */}
+      {activeTab === 'channels' && (
+        <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-[#1E232F] pb-4">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <FolderTree className="w-5 h-5 text-pink-500" />
+                Все каналы и категории сервера
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Детальная привязка каналов для всех подсистем бота
+              </p>
+            </div>
+            <button
+              onClick={handleSaveBindings}
+              disabled={savingBindings}
+              className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-semibold transition shadow-md shadow-pink-600/20 disabled:opacity-50"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {savingBindings ? 'Сохранение...' : 'Сохранить привязки'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Card 1: Static Binding */}
+            <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">Привязка Static ID</span>
+                <button
+                  onClick={() => handleDeploySpecificPanel('static', bindings.staticBindingChannelId)}
+                  disabled={!bindings.staticBindingChannelId}
+                  className="text-[11px] text-pink-400 hover:text-pink-300 font-medium"
+                >
+                  Отправить панель
+                </button>
+              </div>
               <select
                 value={bindings.staticBindingChannelId}
                 onChange={(e) => setBindings({ ...bindings, staticBindingChannelId: e.target.value })}
-                className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
+                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
               >
-                <option value="">Не выбран (выберите канал)...</option>
+                <option value="">Не выбран...</option>
                 {textChannels.map((ch: any) => (
-                  <option key={ch.id} value={ch.id}>
-                    #{ch.name} (ID: {ch.id})
-                  </option>
+                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
                 ))}
               </select>
             </div>
-          </div>
 
-          {/* Card 2: Leave & Absence */}
-          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                  <CalendarOff className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Заявки на отпуск / АФК</h3>
-                  <p className="text-[11px] text-gray-400">Кнопка «🏖️ Подать на отпуск»</p>
-                </div>
+            {/* Card 2: Leaves */}
+            <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">Заявки на отпуск</span>
+                <button
+                  onClick={() => handleDeploySpecificPanel('leave', bindings.leaveRequestChannelId)}
+                  disabled={!bindings.leaveRequestChannelId}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 font-medium"
+                >
+                  Отправить панель
+                </button>
               </div>
-              <button
-                onClick={() => handleDeploySpecificPanel('leave', bindings.leaveRequestChannelId)}
-                disabled={deployingPanel === 'leave' || !bindings.leaveRequestChannelId}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-amber-500/20 text-amber-400 border border-dark-700 hover:border-amber-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                title="Отправить панель в выбранный канал"
-              >
-                <Send className="w-3 h-3" />
-                {deployingPanel === 'leave' ? 'Отправка...' : 'Отправить панель'}
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал для оформления отпусков</label>
               <select
                 value={bindings.leaveRequestChannelId}
                 onChange={(e) => setBindings({ ...bindings, leaveRequestChannelId: e.target.value })}
-                className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
+                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
               >
-                <option value="">Не выбран (выберите канал)...</option>
+                <option value="">Не выбран...</option>
                 {textChannels.map((ch: any) => (
-                  <option key={ch.id} value={ch.id}>
-                    #{ch.name} (ID: {ch.id})
-                  </option>
+                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Card 3: Recruitment */}
+            <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">Канал подачи анкет набора</span>
+                <button
+                  onClick={() => handleDeploySpecificPanel('recruit', bindings.recruitmentApplyChannelId)}
+                  disabled={!bindings.recruitmentApplyChannelId}
+                  className="text-[11px] text-blue-400 hover:text-blue-300 font-medium"
+                >
+                  Отправить панель
+                </button>
+              </div>
+              <select
+                value={bindings.recruitmentApplyChannelId}
+                onChange={(e) => setBindings({ ...bindings, recruitmentApplyChannelId: e.target.value })}
+                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+              >
+                <option value="">Не выбран...</option>
+                {textChannels.map((ch: any) => (
+                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Card 4: Welcome */}
+            <div className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">Канал приветствий (Welcome)</span>
+                <button
+                  onClick={() => handleDeploySpecificPanel('welcome', bindings.welcomeChannelId)}
+                  disabled={!bindings.welcomeChannelId}
+                  className="text-[11px] text-pink-400 hover:text-pink-300 font-medium"
+                >
+                  Тест отправка
+                </button>
+              </div>
+              <select
+                value={bindings.welcomeChannelId}
+                onChange={(e) => setBindings({ ...bindings, welcomeChannelId: e.target.value })}
+                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+              >
+                <option value="">Не выбран...</option>
+                {textChannels.map((ch: any) => (
+                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
                 ))}
               </select>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Card 3: Recruitment */}
-          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                  <UserPlus className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Набор в семью (Рекрутинг)</h3>
-                  <p className="text-[11px] text-gray-400">Кнопка «📝 Подать заявку в семью»</p>
-                </div>
+      {/* TAB 4: QUICK PROVISIONING (FOR EMPTY SERVERS) */}
+      {activeTab === 'provision' && (
+        <div className="relative overflow-hidden bg-gradient-to-br from-pink-950/30 via-[#0B0E14] to-[#0B0E14] border border-pink-500/30 rounded-2xl p-6 backdrop-blur-sm shadow-xl">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-2 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-pink-500/20 text-pink-400 border border-pink-500/30">
+                <Sparkles className="w-3.5 h-3.5" />
+                Авто-развертывание с нуля
               </div>
-              <button
-                onClick={() => handleDeploySpecificPanel('recruit', bindings.recruitmentApplyChannelId)}
-                disabled={deployingPanel === 'recruit' || !bindings.recruitmentApplyChannelId}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-blue-500/20 text-blue-400 border border-dark-700 hover:border-blue-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                title="Отправить панель в канал набора"
-              >
-                <Send className="w-3 h-3" />
-                {deployingPanel === 'recruit' ? 'Отправка...' : 'Отправить панель'}
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал с кнопкой подачи заявки</label>
-                <select
-                  value={bindings.recruitmentApplyChannelId}
-                  onChange={(e) => setBindings({ ...bindings, recruitmentApplyChannelId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбран (выберите канал)...</option>
-                  {textChannels.map((ch: any) => (
-                    <option key={ch.id} value={ch.id}>
-                      #{ch.name} (ID: {ch.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал для логов и проверки анкет (#заявки-лог)</label>
-                <select
-                  value={bindings.recruitmentReviewChannelId}
-                  onChange={(e) => setBindings({ ...bindings, recruitmentReviewChannelId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбран (выберите канал)...</option>
-                  {textChannels.map((ch: any) => (
-                    <option key={ch.id} value={ch.id}>
-                      #{ch.name} (ID: {ch.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Events & Voice */}
-          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-                  <CalendarDays className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Сборы на мероприятия (МП)</h3>
-                  <p className="text-[11px] text-gray-400">Пульт управления МП и войс канал сбора</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleDeploySpecificPanel('voice-tracker', bindings.eventAnnounceChannelId)}
-                disabled={deployingPanel === 'voice-tracker' || !bindings.eventAnnounceChannelId}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-rose-500/20 text-rose-400 border border-dark-700 hover:border-rose-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                title="Отправить пульт управления МП в выбранный канал"
-              >
-                <Send className="w-3 h-3" />
-                {deployingPanel === 'voice-tracker' ? 'Отправка...' : 'Отправить пульт МП'}
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Текстовый канал анонсов МП</label>
-                <select
-                  value={bindings.eventAnnounceChannelId}
-                  onChange={(e) => setBindings({ ...bindings, eventAnnounceChannelId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбран (выберите канал)...</option>
-                  {textChannels.map((ch: any) => (
-                    <option key={ch.id} value={ch.id}>
-                      #{ch.name} (ID: {ch.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Голосовой канал сбора (Voice Tracker)</label>
-                <select
-                  value={bindings.eventVoiceChannelId}
-                  onChange={(e) => setBindings({ ...bindings, eventVoiceChannelId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбран (выберите канал)...</option>
-                  {voiceChannels.map((ch: any) => (
-                    <option key={ch.id} value={ch.id}>
-                      🔊 {ch.name} (ID: {ch.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 5: Academy */}
-          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/20 flex items-center justify-center text-fuchsia-400">
-                <GraduationCap className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-white">Категории Академии (1-2 ранг)</h3>
-                <p className="text-[11px] text-gray-400">Категории для каналов #academ-name и архива</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Категория активных академиков</label>
-                <select
-                  value={bindings.academyCategoryId}
-                  onChange={(e) => setBindings({ ...bindings, academyCategoryId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбрана...</option>
-                  {categories.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      📁 {c.name} (ID: {c.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Категория архива завершенных каналов</label>
-                <select
-                  value={bindings.academyArchiveCategoryId}
-                  onChange={(e) => setBindings({ ...bindings, academyArchiveCategoryId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбрана...</option>
-                  {categories.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      📁 {c.name} (ID: {c.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 6: Tier System */}
-          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
-                  <Target className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Тир система (Оценка стрельбы)</h3>
-                  <p className="text-[11px] text-gray-400">Заявки на тир, закрытые тикет-каналы с 4 ветками (Капт, MCL, ВЗЗ, РП)</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleDeploySpecificPanel('tier', bindings.tierApplyChannelId)}
-                disabled={deployingPanel === 'tier' || !bindings.tierApplyChannelId}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-pink-500/20 text-pink-400 border border-dark-700 hover:border-pink-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                title="Отправить панель подачи заявок на тир в выбранный канал"
-              >
-                <Send className="w-3 h-3" />
-                {deployingPanel === 'tier' ? 'Отправка...' : 'Отправить панель тира'}
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал подачи заявок (#заявки-на-тир)</label>
-                <select
-                  value={bindings.tierApplyChannelId}
-                  onChange={(e) => setBindings({ ...bindings, tierApplyChannelId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбран (выберите канал)...</option>
-                  {textChannels.map((ch: any) => (
-                    <option key={ch.id} value={ch.id}>
-                      #{ch.name} (ID: {ch.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал чекеров для проверки (#проверка-тир)</label>
-                <select
-                  value={bindings.tierReviewChannelId}
-                  onChange={(e) => setBindings({ ...bindings, tierReviewChannelId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбран (выберите канал)...</option>
-                  {textChannels.map((ch: any) => (
-                    <option key={ch.id} value={ch.id}>
-                      #{ch.name} (ID: {ch.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Категория персональных тир-каналов</label>
-                <select
-                  value={bindings.tierCategoryId}
-                  onChange={(e) => setBindings({ ...bindings, tierCategoryId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбрана...</option>
-                  {categories.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      📁 {c.name} (ID: {c.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Роль Тир чекера (проверяющего)</label>
-                <select
-                  value={bindings.tierCheckerRoleId}
-                  onChange={(e) => setBindings({ ...bindings, tierCheckerRoleId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбрана (любая роль с доступом к проверке)...</option>
-                  {roles.map((r: any) => (
-                    <option key={r.id} value={r.id}>
-                      🛡️ {r.name} (ID: {r.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="text-[11px] text-gray-400 flex items-center justify-between pt-1">
-                <span>Просмотр всех тиров, откатов и выданных статусов</span>
-                <a href="/tier" className="text-pink-400 hover:text-pink-300 underline inline-flex items-center gap-1 font-medium">
-                  В модуль Тир система <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 7: Audit Logs & Setup */}
-          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                  <ScrollText className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Аудит сервера (8 каналов логирования)</h3>
-                  <p className="text-[11px] text-gray-400">Категория LOGS и каналы для фиксации всех событий сервера</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleDeploySpecificPanel('logs')}
-                disabled={deployingPanel === 'logs'}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-emerald-500/20 text-emerald-400 border border-dark-700 hover:border-emerald-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                title="Пересоздать / проверить каналы аудита"
-              >
-                <RefreshCw className={`w-3 h-3 ${deployingPanel === 'logs' ? 'animate-spin' : ''}`} />
-                {deployingPanel === 'logs' ? 'Проверка...' : 'Развернуть логи'}
-              </button>
-            </div>
-
-            {/* Category Status Bar */}
-            <div className="flex items-center justify-between p-2.5 bg-dark-800/60 rounded-xl border border-dark-700/60 text-xs">
-              <span className="text-gray-400 font-medium">Категория LOGS:</span>
-              <span className="font-mono text-emerald-400 font-semibold">
-                {state?.bindings?.logsCategoryId ? `📁 LOGS (ID: ${state.bindings.logsCategoryId})` : '⚪ Не создана'}
-              </span>
-            </div>
-
-            {/* All 8 Log Channels Breakdown */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              {[
-                { key: 'messageLogsChannelId', label: 'Логи сообщений', defName: 'msg-logs', icon: '💬' },
-                { key: 'memberLogsChannelId', label: 'Логи участников', defName: 'member-logs', icon: '👤' },
-                { key: 'roleLogsChannelId', label: 'Логи ролей', defName: 'role-logs', icon: '🛡️' },
-                { key: 'channelLogsChannelId', label: 'Логи каналов', defName: 'channel-logs', icon: '📁' },
-                { key: 'voiceLogsChannelId', label: 'Логи войса', defName: 'voice-logs', icon: '🔊' },
-                { key: 'inviteLogsChannelId', label: 'Логи инвайтов', defName: 'invite-logs', icon: '🔗' },
-                { key: 'botLogsChannelId', label: 'Действия бота', defName: 'bot-actions-logs', icon: '🤖' },
-                { key: 'eventLogsChannelId', label: 'Логи МП и сборов', defName: 'ивенты-лог', icon: '⚔️' },
-              ].map((log) => {
-                const chId = (state?.bindings as any)?.[log.key];
-                const channelObj = chId ? (state?.channels || []).find((c: any) => c.id === chId) : null;
-                const isConfigured = Boolean(chId);
-
-                return (
-                  <div
-                    key={log.key}
-                    className="p-2.5 bg-dark-800/40 rounded-xl border border-dark-800/80 flex items-center justify-between gap-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm shrink-0">{log.icon}</span>
-                      <div className="min-w-0">
-                        <span className="text-white font-medium block truncate text-[11px]">{log.label}</span>
-                        <span className="text-[10px] text-gray-400 font-mono block truncate">
-                          {channelObj ? `#${channelObj.name}` : chId ? `ID: ${chId}` : `#${log.defName}`}
-                        </span>
-                      </div>
-                    </div>
-
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold font-mono shrink-0 ${
-                        isConfigured
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-gray-500/10 text-gray-500 border border-gray-700/30'
-                      }`}
-                    >
-                      {isConfigured ? 'OK' : '—'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Card 7: Welcome Messages */}
-          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
-                  <UserCheck className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Приветственные сообщения (Welcome)</h3>
-                  <p className="text-[11px] text-gray-400">Авто-сообщение в канал при входе игрока на сервер</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleDeploySpecificPanel('welcome', bindings.welcomeChannelId)}
-                disabled={deployingPanel === 'welcome' || !bindings.welcomeChannelId}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-pink-500/20 text-pink-400 border border-dark-700 hover:border-pink-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                title="Отправить тестовое приветствие"
-              >
-                <Send className="w-3 h-3" />
-                {deployingPanel === 'welcome' ? 'Отправка...' : 'Тестовая отправка'}
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-dark-800/40 rounded-xl border border-dark-800">
-                <div>
-                  <span className="text-xs font-semibold text-white block">Включить отправку приветствий</span>
-                  <span className="text-[11px] text-gray-400">Бот отправляет настроенный Embed новым участникам</span>
-                </div>
+              <h2 className="text-lg font-bold text-white">
+                Создать всю структуру каналов, категорий и сообщений в 1 клик
+              </h2>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Используйте эту функцию, если вы создали пустой сервер Discord. Бот автоматически сформирует все категории (Информация, Набор, Академия, Тиры, МП, Логи), настроит каналы и отправит рабочие кнопки.
+              </p>
+              <div className="pt-2 flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={bindings.welcomeEnabled}
-                  onChange={(e) => setBindings({ ...bindings, welcomeEnabled: e.target.checked })}
-                  className="w-4 h-4 rounded text-pink-600 focus:ring-pink-500 bg-dark-800 border-dark-700 cursor-pointer"
+                  id="deployPanels"
+                  checked={deployPanelsCheck}
+                  onChange={(e) => setDeployPanelsCheck(e.target.checked)}
+                  className="w-4 h-4 rounded text-pink-600 focus:ring-pink-500 bg-[#151921] border-slate-700 cursor-pointer"
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал для приветствий</label>
-                <select
-                  value={bindings.welcomeChannelId}
-                  onChange={(e) => setBindings({ ...bindings, welcomeChannelId: e.target.value })}
-                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                >
-                  <option value="">Не выбран (выберите канал)...</option>
-                  {textChannels.map((ch: any) => (
-                    <option key={ch.id} value={ch.id}>
-                      #{ch.name} (ID: {ch.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="text-[11px] text-gray-400 flex items-center justify-between pt-1">
-                <span>Текст, цвет и переменные ({`{user}, {guild}`})</span>
-                <a href="/messages" className="text-pink-400 hover:text-pink-300 underline inline-flex items-center gap-1 font-medium">
-                  В модуль сообщений <ExternalLink className="w-3 h-3" />
-                </a>
+                <label htmlFor="deployPanels" className="text-xs text-slate-300 cursor-pointer">
+                  Сразу опубликовать интерактивные кнопки в каналы (привязка статика, отпуска, набор)
+                </label>
               </div>
             </div>
+
+            <button
+              onClick={handleProvision}
+              disabled={provisioning || loading}
+              className="flex items-center justify-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-pink-600 via-rose-500 to-pink-500 hover:from-pink-500 hover:to-rose-400 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-pink-500/25 shrink-0 disabled:opacity-50"
+            >
+              <Sparkles className={`w-4 h-4 ${provisioning ? 'animate-spin' : ''}`} />
+              {provisioning ? 'Создание структуры...' : '🚀 Создать структуру сервера в 1 клик'}
+            </button>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

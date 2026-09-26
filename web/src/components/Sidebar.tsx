@@ -19,13 +19,11 @@ import {
   IdCard,
   UserX,
   FolderTree,
-  Zap,
   AtSign,
   Target
 } from 'lucide-react';
 
 interface SidebarProps {
-  isBypass?: boolean;
   userPermissions?: {
     isAdmin: boolean;
     manageSettings: boolean;
@@ -37,7 +35,7 @@ interface SidebarProps {
   };
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ userPermissions, isBypass }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
   const isAdmin = userPermissions?.isAdmin;
 
   const categories = [
@@ -84,12 +82,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions, isBypass }) =
         { to: '/embeds', label: 'Embed Генератор', icon: Sparkles, visible: isAdmin || userPermissions?.manageSettings },
       ],
     },
-    ...(isBypass ? [{
-      title: 'Разработчик',
-      links: [
-        { to: '/test-mode', label: 'Тестовый режим & Вайп', icon: Zap, visible: true },
-      ],
-    }] : []),
   ];
 
   return (
@@ -157,18 +149,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions, isBypass }) =
 
       {/* Footer Info */}
       <div className="p-3 border-t border-[#1E232F] text-xs text-slate-400 shrink-0 space-y-2">
-        {isBypass && (
-          <NavLink
-            to="/test-mode"
-            className="flex items-center justify-between p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-[11px] shadow-lg shadow-amber-500/10 hover:bg-amber-500/20 transition-all"
-          >
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-              Тестовый режим
-            </span>
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-          </NavLink>
-        )}
 
         <div className="flex items-center justify-between">
           <span className="inline-flex items-center gap-1.5 text-[11px]">
