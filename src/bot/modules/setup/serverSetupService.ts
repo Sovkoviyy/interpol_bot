@@ -17,6 +17,7 @@ import { ProfileService } from '../profiles/profileService';
 import { LeaveService } from '../leave/leaveService';
 import { TierService } from '../tier/tierService';
 import { THEME, createThemedEmbed } from '../../utils/theme';
+import { BotMessageManager } from '../../utils/botMessageManager';
 
 export interface ProvisionResult {
   guildId: string;
@@ -315,24 +316,9 @@ export class ServerSetupService {
 
       // Recruitment apply panel
       try {
-        const recruitEmbed = createThemedEmbed({
-          color: THEME.COLORS.PRIMARY,
-          title: '👋 Путь в семью начинается здесь!',
-          description: [
-            `> Заявки в семью принимаются на сервере **${guild.name}**. Уведомление о приглашении на обзвон отправляется в созданный тикет.`,
-            '',
-            '- **Внимательно прочитайте все пункты** при подаче заявки. Если не ответили на все вопросы — **заявка отклоняется**.',
-            '- **Срок рассмотрения заявки:** от 1 до 3 дней.',
-            '',
-            '### Дополнительные правила к подаче заявки:',
-            '- Подать заявку можно только при открытом наборе. Если нет доступа к подаче — набор закрыт.',
-            '- Откаты с МП / стрельбы должны быть актуальными (при наличии запроса рекрутера).',
-            '- Любое нарушение условий или обман в анкете — **отказ и внесение в ЧС**.',
-            '',
-            '-# Нажмите на кнопку ниже, чтобы открыть форму анкеты.',
-          ].join('\n'),
-          thumbnailUrl: guild.iconURL({ size: 256 }),
-          footerText: `${guild.name} • Набор в семью`,
+        const recruitRendered = await BotMessageManager.renderMessage(guild.id, 'recruitment_announcement', {
+          guild: guild.name,
+          memberCount: guild.memberCount,
         });
 
         const recruitRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -342,7 +328,11 @@ export class ServerSetupService {
             .setStyle(ButtonStyle.Primary)
         );
 
-        await recruitApplyChannel.send({ embeds: [recruitEmbed], components: [recruitRow] });
+        await recruitApplyChannel.send({
+          content: recruitRendered.content,
+          embeds: [recruitRendered.embed],
+          components: [recruitRow],
+        });
         panelsDeployed.push('Анкета набора');
       } catch (e: any) {
         console.error('[ServerSetup] Failed to deploy recruit panel:', e.message);
@@ -350,25 +340,15 @@ export class ServerSetupService {
 
       // Welcome channel info embed
       try {
-        const welcomeEmbed = createThemedEmbed({
-          color: THEME.COLORS.PRIMARY,
-          title: `Сервер семьи ${guild.name} • Информация`,
-          description: [
-            `> Добро пожаловать в сообщество семьи **${guild.name}** на Majestic RP.`,
-            '',
-            '### Навигация и автоматизация:',
-            `- <#${staticChannel.id}> — Обязательная привязка Majestic Static ID`,
-            `- <#${leaveChannel.id}> — Оформление отпуска / неактива (до 14 дней)`,
-            `- <#${recruitApplyChannel.id}> — Электронная подача заявки в семью`,
-            `- <#${eventAnnounceChannel.id}> — Сборы на семейные мероприятия (МП)`,
-            '',
-            '-# INTERPOL • Информационный портал',
-          ].join('\n'),
-          thumbnailUrl: guild.iconURL({ size: 256 }),
-          footerText: `${guild.name} • Информационный портал`,
+        const welcomeRendered = await BotMessageManager.renderMessage(guild.id, 'welcome_channel_info', {
+          guild: guild.name,
+          memberCount: guild.memberCount,
         });
 
-        await welcomeChannel.send({ embeds: [welcomeEmbed] });
+        await welcomeChannel.send({
+          content: welcomeRendered.content,
+          embeds: [welcomeRendered.embed],
+        });
         panelsDeployed.push('Информационное приветствие');
       } catch (e: any) {
         console.error('[ServerSetup] Failed to deploy welcome embed:', e.message);
@@ -452,24 +432,9 @@ export class ServerSetupService {
         return { success: true, messageId: msg.id, channelId: channel.id };
       }
       case 'recruit': {
-        const recruitEmbed = createThemedEmbed({
-          color: THEME.COLORS.PRIMARY,
-          title: '👋 Путь в семью начинается здесь!',
-          description: [
-            `> Заявки в семью принимаются на сервере **${guild.name}**. Уведомление о приглашении на обзвон отправляется в созданный тикет.`,
-            '',
-            '- **Внимательно прочитайте все пункты** при подаче заявки. Если не ответили на все вопросы — **заявка отклоняется**.',
-            '- **Срок рассмотрения заявки:** от 1 до 3 дней.',
-            '',
-            '### Дополнительные правила к подаче заявки:',
-            '- Подать заявку можно только при открытом наборе. Если нет доступа к подаче — набор закрыт.',
-            '- Откаты с МП / стрельбы должны быть актуальными (при наличии запроса рекрутера).',
-            '- Любое нарушение условий или обман в анкете — **отказ и внесение в ЧС**.',
-            '',
-            '-# Нажмите на кнопку ниже, чтобы открыть форму анкеты.',
-          ].join('\n'),
-          thumbnailUrl: guild.iconURL({ size: 256 }),
-          footerText: `${guild.name} • Набор в семью`,
+        const rendered = await BotMessageManager.renderMessage(guildId, 'recruitment_announcement', {
+          guild: guild.name,
+          memberCount: guild.memberCount,
         });
 
         const recruitRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -479,7 +444,11 @@ export class ServerSetupService {
             .setStyle(ButtonStyle.Primary)
         );
 
-        const msg = await channel.send({ embeds: [recruitEmbed], components: [recruitRow] });
+        const msg = await channel.send({
+          content: rendered.content,
+          embeds: [rendered.embed],
+          components: [recruitRow],
+        });
         await prisma.recruitmentConfig.upsert({
           where: { guildId },
           update: { channelId: channel.id },
@@ -488,18 +457,15 @@ export class ServerSetupService {
         return { success: true, messageId: msg.id, channelId: channel.id };
       }
       case 'welcome': {
-        const welcomeEmbed = new EmbedBuilder()
-          .setColor(0xEC4899)
-          .setTitle(`👑 Сервер семьи ${guild.name} | Majestic RP`)
-          .setDescription(
-            `Добро пожаловать в Discord-сообщество семьи **${guild.name}**!\n\n` +
-            `Ознакомьтесь с правилами семьи и подайте заявку или привяжите свой статик для участия в сборах.`
-          )
-          .setThumbnail(guild.iconURL({ size: 256 }))
-          .setFooter({ text: `${guild.name} • Информационный портал` })
-          .setTimestamp();
+        const rendered = await BotMessageManager.renderMessage(guildId, 'welcome_channel_info', {
+          guild: guild.name,
+          memberCount: guild.memberCount,
+        });
 
-        const msg = await channel.send({ embeds: [welcomeEmbed] });
+        const msg = await channel.send({
+          content: rendered.content,
+          embeds: [rendered.embed],
+        });
         return { success: true, messageId: msg.id, channelId: channel.id };
       }
       case 'tier': {

@@ -15,6 +15,7 @@ import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
 import bot from '../../client';
 import { THEME, createThemedEmbed } from '../../utils/theme';
+import { BotMessageManager } from '../../utils/botMessageManager';
 
 export class EventService {
   private static async resolveGuild(interaction: { guild?: Guild | null; guildId?: string | null }): Promise<Guild | null> {
@@ -362,12 +363,14 @@ export class EventService {
         promotedUserTag = bestReserve.userTag;
 
         if (guild) {
-          const targetMember = await guild.members.fetch(bestReserve.userId).catch(() => null);
-          if (targetMember) {
-            targetMember.send({
-              content: `🔔 Место освободилось! Вы переведены из **резерва в основной состав** на мероприятие **${event.title}**!`,
-            }).catch(() => null);
-          }
+          BotMessageManager.sendDM(event.guildId, bestReserve.userId, 'event_dm_promoted', {
+            user: `<@${bestReserve.userId}>`,
+            username: promotedUserTag || bestReserve.userId,
+            eventTitle: event.title,
+            voiceChannel: event.voiceChannelId ? `<#${event.voiceChannelId}>` : '',
+            partyCode: event.partyCode || '',
+            guild: guild.name,
+          }).catch(() => null);
         }
       }
     }

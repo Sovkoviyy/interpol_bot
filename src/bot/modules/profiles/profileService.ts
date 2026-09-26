@@ -4,8 +4,19 @@ import bot from '../../client';
 import { NicknameService } from '../nicknames/nicknameService';
 import { extractFirstName } from '../../utils/nameUtils';
 import { THEME, createThemedEmbed } from '../../utils/theme';
+import { BotMessageManager } from '../../utils/botMessageManager';
 
 export class ProfileService {
+  /**
+   * Get a user profile for a guild member without creating one
+   */
+  static async getProfile(guildId: string, userId: string) {
+    return prisma.userProfile.findUnique({
+      where: { guildId_userId: { guildId, userId } },
+      include: { characters: { orderBy: { createdAt: 'asc' } } },
+    });
+  }
+
   /**
    * Get or create a user profile for a guild member
    */
@@ -112,6 +123,20 @@ export class ProfileService {
       },
       include: { characters: { orderBy: { createdAt: 'asc' } } },
     });
+
+    // Send DM confirmation to member
+    try {
+      const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+      if (guild) {
+        BotMessageManager.sendDM(guildId, userId, 'static_bound_dm', {
+          user: `<@${userId}>`,
+          username: userTag || userId,
+          staticId: cleanStatic,
+          characterName: cleanNick || 'Не указано',
+          guild: guild.name,
+        }).catch(() => null);
+      }
+    } catch {}
 
     return updatedProfile;
   }
@@ -377,22 +402,8 @@ export class ProfileService {
    * Deploy interactive button panel in a Discord channel to let members bind their static ID
    */
   static async deployStaticBindingPanel(channel: TextChannel) {
-    const embed = createThemedEmbed({
-      color: THEME.COLORS.PRIMARY,
-      title: 'Синхронизация профиля • Majestic RP',
-      description: [
-        `> Обязательная привязка игрового Static ID и имени персонажа семьи **${channel.guild.name}**.`,
-        '',
-        '### Для чего необходима привязка:',
-        '- Автоматический учет посещения мероприятий (дропы, цеха, ВЗМ, капты).',
-        '- Сдача отчетов в академии и отслеживание нормы повышения.',
-        '- Синхронизация роли и авто-форматирование никнейма в Discord.',
-        '- Личная статистика и отображение в рейтинге состава семьи.',
-        '',
-        '-# Нажмите кнопку ниже для ввода или обновления своего Static ID.',
-      ].join('\n'),
-      thumbnailUrl: channel.guild.iconURL({ size: 256 }),
-      footerText: `${channel.guild.name} • База данных состава`,
+    const rendered = await BotMessageManager.renderMessage(channel.guild.id, 'static_binding_panel', {
+      guild: channel.guild.name,
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -402,7 +413,11 @@ export class ProfileService {
         .setStyle(ButtonStyle.Primary)
     );
 
-    return await channel.send({ embeds: [embed], components: [row] });
+    return await channel.send({
+      content: rendered.content,
+      embeds: [rendered.embed],
+      components: [row],
+    });
   }
 }
 

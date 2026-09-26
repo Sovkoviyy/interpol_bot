@@ -542,6 +542,14 @@ export class RecruitmentService {
         content: `Ваша заявка успешно создана. Перейдите в канал: <#${ticketChannel.id}>`,
       }).catch(() => null);
 
+      // Send DM to candidate
+      BotMessageManager.sendDM(guild.id, interaction.user.id, 'recruitment_dm_submitted', {
+        user: `<@${interaction.user.id}>`,
+        username: interaction.user.username,
+        guild: guild.name,
+        staticId: candidateStaticId || 'Не указан',
+      }).catch(() => null);
+
       // Log to Recruitment Channel (#заявки-набор)
       const recruitLogEmbed = createThemedEmbed({
         title: `НОВАЯ ЗАЯВКА В СЕМЬЮ • ${interaction.user.tag.toUpperCase()}`,
@@ -809,16 +817,28 @@ export class RecruitmentService {
     });
 
     if (ticketChannel && ticketChannel.isTextBased()) {
+      const renderedAlert = await BotMessageManager.renderMessage(guild.id, 'recruitment_interview_alert', {
+        user: `<@${application.userId}>`,
+        username: candidateMember?.user?.username || application.userId,
+        recruiter: `<@${interaction.user.id}>`,
+        voiceChannel: `<#${voiceChannel.id}>`,
+        guild: guild.name,
+      });
+
       await (ticketChannel as TextChannel).send({
-        content: `<@${application.userId}> вас ожидают в голосовом канале`,
-        embeds: [alertEmbed],
+        content: renderedAlert.content || `<@${application.userId}> вас ожидают в голосовом канале`,
+        embeds: [renderedAlert.embed],
       }).catch(() => null);
     }
 
     // Try sending DM to candidate
     if (candidateMember) {
-      await candidateMember.send({
-        content: `🎙️ **Здравствуйте!** Рекрутер семьи на сервере **${guild.name}** приглашает вас на обзвон в закрытый канал: <#${voiceChannel.id}>. Пожалуйста, подключитесь!`,
+      BotMessageManager.sendDM(guild.id, candidateMember, 'recruitment_dm_interview', {
+        user: `<@${application.userId}>`,
+        username: candidateMember.user?.username || application.userId,
+        guild: guild.name,
+        recruiter: interaction.user.tag,
+        voiceChannel: `<#${voiceChannel.id}>`,
       }).catch(() => null);
     }
 
@@ -936,21 +956,13 @@ export class RecruitmentService {
 
     // 2. Send DM notification
     if (targetMember) {
-      const rendered = await BotMessageManager.renderMessage(guild.id, 'ticket_accepted', {
+      await BotMessageManager.sendDM(guild.id, targetMember, 'recruitment_dm_accepted', {
         user: `<@${targetMember.id}>`,
         username: targetMember.user?.username || targetMember.id,
         guild: guild.name,
         recruiter: interaction.user.tag,
         role: '@Участник',
       });
-      if (rendered.enabled) {
-        await targetMember.send({
-          content: rendered.content,
-          embeds: [rendered.embed],
-        }).catch(() => {
-          console.log(`Could not send approval DM to ${application.userId} (DMs closed)`);
-        });
-      }
     }
 
     // 3. Update DB
@@ -1068,21 +1080,13 @@ export class RecruitmentService {
 
     // 1. Send DM with rejection reason
     if (targetMember) {
-      const rendered = await BotMessageManager.renderMessage(guild.id, 'ticket_rejected', {
+      await BotMessageManager.sendDM(guild.id, targetMember, 'recruitment_dm_rejected', {
         user: `<@${targetMember.id}>`,
         username: targetMember.user?.username || targetMember.id,
         guild: guild.name,
         recruiter: interaction.user.tag,
         reason: reason,
       });
-      if (rendered.enabled) {
-        await targetMember.send({
-          content: rendered.content,
-          embeds: [rendered.embed],
-        }).catch(() => {
-          console.log(`Could not send rejection DM to ${application.userId} (DMs closed)`);
-        });
-      }
 
       // Kick member
       await targetMember.kick(`Отказ в заявке: ${reason}`).catch(e => {

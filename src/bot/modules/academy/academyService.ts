@@ -18,6 +18,7 @@ import { RecruitmentService } from '../recruitment/recruitmentService';
 import { NicknameService } from '../nicknames/nicknameService';
 import { extractFirstName, sanitizeChannelNamePart } from '../../utils/nameUtils';
 import { THEME, createThemedEmbed } from '../../utils/theme';
+import { BotMessageManager } from '../../utils/botMessageManager';
 
 export class AcademyService {
   /**
@@ -245,6 +246,15 @@ export class AcademyService {
     await prisma.academyChannel.update({
       where: { id: academyRecord.id },
       data: { pinnedMessageId: welcomeMsg?.id || null },
+    }).catch(() => null);
+
+    // Send DM notification to recruit
+    BotMessageManager.sendDM(guild.id, member, 'academy_dm_enrolled', {
+      user: `<@${member.id}>`,
+      username: member.user?.username || member.displayName,
+      guild: guild.name,
+      staticId: effectiveStatic,
+      channelId: channel.id,
     }).catch(() => null);
 
     return { channel, academyRecord };
@@ -513,6 +523,8 @@ export class AcademyService {
       }
     }
 
+    const targetGuildId = guild ? guild.id : (report.guildId || reviewer.guild.id);
+
     if (approved) {
       // Increment MP count
       const updatedChannel = await prisma.academyChannel.update({
@@ -531,17 +543,29 @@ export class AcademyService {
       const current = updatedChannel.approvedMpCount;
 
       if (channel) {
-        const approvedEmbed = createThemedEmbed({
-          title: 'ОТЧЕТ ПО МЕРОПРИЯТИЮ ОДОБРЕН',
-          color: THEME.COLORS.SUCCESS,
-          description: [
-            THEME.format.quote(`Рекрутер ${reviewer} подтвердил отчет по **${report.mpType}**.`),
-            '',
-            THEME.format.item('Текущий прогресс', THEME.format.code(`${current} / ${neededTotal} МП`)),
-          ].join('\n'),
+        const renderedApproved = await BotMessageManager.renderMessage(targetGuildId, 'academy_stage_passed', {
+          user: `<@${report.userId}>`,
+          username: report.userTag || report.userId,
+          stageName: report.mpType,
+          mentor: `${reviewer}`,
+          progress: `${current} / ${neededTotal} МП`,
+          guild: guild ? guild.name : 'INTERPOL',
         });
 
-        await channel.send({ embeds: [approvedEmbed] });
+        await channel.send({
+          content: renderedApproved.content,
+          embeds: [renderedApproved.embed],
+        });
+
+        // Send DM to cadet
+        BotMessageManager.sendDM(targetGuildId, report.userId, 'academy_dm_report_approved', {
+          user: `<@${report.userId}>`,
+          username: report.userTag || report.userId,
+          stageName: report.mpType,
+          mentor: reviewer.user.tag,
+          progress: `${current} / ${neededTotal} МП`,
+          guild: guild ? guild.name : 'INTERPOL',
+        }).catch(() => null);
 
         // Check if member reached the required amount of MPs for Rank 2 promotion!
         if (current >= neededTotal) {
@@ -568,7 +592,7 @@ export class AcademyService {
           );
 
           await channel.send({
-            content: `<@${report.userId}> норма 10 МП выполнена`,
+            content: `<@${report.userId}> норма выполнена`,
             embeds: [promotionReadyEmbed],
             components: [promoRow],
           });
@@ -578,19 +602,29 @@ export class AcademyService {
       if (channel) {
         await this.refreshStatusMessage(channel, report.academyChannelId || undefined);
 
-        const rejectEmbed = createThemedEmbed({
-          title: 'ОТЧЕТ ПО МЕРОПРИЯТИЮ ОТКЛОНЕН',
-          color: THEME.COLORS.DANGER,
-          description: [
-            THEME.format.quote(`Рекрутер ${reviewer} отклонил ваш отчет по **${report.mpType}**.`),
-            '',
-            THEME.format.item('Причина', rejectionReason || 'Не соответствует регламенту'),
-            '',
-            THEME.format.subtext('Данный отчет не засчитан в прогресс академии.'),
-          ].join('\n'),
+        const renderedReject = await BotMessageManager.renderMessage(targetGuildId, 'academy_report_rejected', {
+          user: `<@${report.userId}>`,
+          username: report.userTag || report.userId,
+          stageName: report.mpType,
+          mentor: `${reviewer}`,
+          reason: rejectionReason || 'Не соответствует регламенту',
+          guild: guild ? guild.name : 'INTERPOL',
         });
 
-        await channel.send({ embeds: [rejectEmbed] });
+        await channel.send({
+          content: renderedReject.content,
+          embeds: [renderedReject.embed],
+        });
+
+        // Send DM to cadet
+        BotMessageManager.sendDM(targetGuildId, report.userId, 'academy_dm_report_rejected', {
+          user: `<@${report.userId}>`,
+          username: report.userTag || report.userId,
+          stageName: report.mpType,
+          mentor: reviewer.user.tag,
+          reason: rejectionReason || 'Не соответствует регламенту',
+          guild: guild ? guild.name : 'INTERPOL',
+        }).catch(() => null);
       }
     }
 
@@ -658,20 +692,27 @@ export class AcademyService {
 
       // 4. Send celebration
       if (channel && channel.isTextBased()) {
-        const celebrationEmbed = createThemedEmbed({
-          title: 'АТТЕСТАЦИЯ ПРОЙДЕНА • ПРИСВОЕН 2 РАНГ',
-          color: THEME.COLORS.PRIMARY,
-          description: [
-            THEME.format.quote(`Поздравляем <@${academy.userId}> с успешным окончанием академии.`),
-            '',
-            THEME.format.item('Новый ранг', '2 ранг (Основной состав)'),
-            THEME.format.item('Аттестацию провел', `${reviewer} (\`${reviewer.user.tag}\`)`),
-            '',
-            THEME.format.subtext('Личный канал академии переносится в архив.'),
-          ].join('\n'),
+        const renderedGrad = await BotMessageManager.renderMessage(reviewer.guild.id, 'academy_graduated', {
+          user: `<@${academy.userId}>`,
+          username: academy.userTag || academy.userId,
+          mentor: `${reviewer}`,
+          newRank: '2 - Участник',
+          guild: reviewer.guild.name,
         });
 
-        await channel.send({ embeds: [celebrationEmbed] });
+        await channel.send({
+          content: renderedGrad.content,
+          embeds: [renderedGrad.embed],
+        });
+
+        // Send DM to graduate
+        BotMessageManager.sendDM(reviewer.guild.id, academy.userId, 'academy_dm_graduated', {
+          user: `<@${academy.userId}>`,
+          username: academy.userTag || academy.userId,
+          newRank: '2 ранг',
+          mentor: reviewer.user.tag,
+          guild: reviewer.guild.name,
+        }).catch(() => null);
 
         // Move to archive category if configured
         if (config.archiveCategoryId) {
@@ -697,19 +738,27 @@ export class AcademyService {
       if (channel && channel.isTextBased()) {
         await this.refreshStatusMessage(channel, academyChannelId);
 
-        const penaltyEmbed = createThemedEmbed({
-          title: 'АТТЕСТАЦИЯ ОТКЛОНЕНА • НАЗНАЧЕН ШТРАФ',
-          color: THEME.COLORS.DANGER,
-          description: [
-            THEME.format.quote(`Рекрутер ${reviewer} отклонил перевод на 2 ранг.`),
-            '',
-            THEME.format.item('Причина', rejectionReason || 'Требуется дополнительная активность'),
-            THEME.format.item('Штраф', THEME.format.code(`+${penalty} МП`)),
-            THEME.format.item('Новая норма', THEME.format.code(`${updated.approvedMpCount} / ${updated.requiredMp + updated.penaltyMp} МП`)),
-          ].join('\n'),
+        const renderedExp = await BotMessageManager.renderMessage(reviewer.guild.id, 'academy_expelled', {
+          user: `<@${academy.userId}>`,
+          username: academy.userTag || academy.userId,
+          mentor: `${reviewer}`,
+          reason: rejectionReason || 'Требуется дополнительная активность',
+          guild: reviewer.guild.name,
         });
 
-        await channel.send({ embeds: [penaltyEmbed] });
+        await channel.send({
+          content: renderedExp.content,
+          embeds: [renderedExp.embed],
+        });
+
+        // Send DM to cadet
+        BotMessageManager.sendDM(reviewer.guild.id, academy.userId, 'academy_dm_expelled', {
+          user: `<@${academy.userId}>`,
+          username: academy.userTag || academy.userId,
+          mentor: reviewer.user.tag,
+          reason: rejectionReason || 'Невыполнение учебных нормативов',
+          guild: reviewer.guild.name,
+        }).catch(() => null);
       }
     }
   }

@@ -2,6 +2,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel
 import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
 import { THEME, createThemedEmbed } from '../../utils/theme';
+import { BotMessageManager } from '../../utils/botMessageManager';
 
 export type LeaveType = 'VACATION' | 'TIMEOFF';
 
@@ -86,6 +87,16 @@ export class LeaveService {
       targetTag: userTag,
     }).catch(() => null);
 
+    // Send DM to member
+    BotMessageManager.sendDM(guildId, userId, 'leave_dm_submitted', {
+      user: `<@${userId}>`,
+      username: userTag,
+      leaveType: type === 'VACATION' ? 'Отпуск' : 'Отгул',
+      startDate: startDate.toLocaleDateString('ru-RU'),
+      endDate: endDate.toLocaleDateString('ru-RU'),
+      days: `${diffDays} дн.`,
+    }).catch(() => null);
+
     return leave;
   }
 
@@ -133,6 +144,18 @@ export class LeaveService {
       executorTag: reviewerTag,
       targetId: leave.userId,
       targetTag: leave.userTag,
+    }).catch(() => null);
+
+    // Send DM to member
+    const templateKey = approved ? 'leave_dm_approved' : 'leave_dm_rejected';
+    BotMessageManager.sendDM(leave.guildId, leave.userId, templateKey, {
+      user: `<@${leave.userId}>`,
+      username: leave.userTag || leave.userId,
+      leaveType: leave.type === 'VACATION' ? 'Отпуск' : 'Отгул',
+      startDate: leave.startDate.toLocaleDateString('ru-RU'),
+      endDate: leave.endDate.toLocaleDateString('ru-RU'),
+      admin: `<@${reviewerId}>`,
+      reason: rejectionReason || 'Не указана',
     }).catch(() => null);
 
     return updated;
@@ -241,22 +264,8 @@ export class LeaveService {
    * Deploy interactive button panel in a Discord channel to let members submit leave requests
    */
   static async deployLeavePanel(channel: TextChannel) {
-    const embed = createThemedEmbed({
-      color: THEME.COLORS.PRIMARY,
-      title: 'Оформление отпуска и неактива',
-      description: [
-        `> Официальная подача заявлений на временное освобождение от обязательных мероприятий семьи **${channel.guild.name}**.`,
-        '',
-        '### Регламент отпусков и отгулов:',
-        '- **Отпуск:** оформляется на срок от 1 до 14 календарных дней.',
-        '- **Отгул:** оформляется на короткий срок от 5 минут до 24 часов.',
-        '- Во время активного отпуска или отгула штрафы за пропуск МП не начисляются.',
-        '- При досрочном возвращении статус обновляется автоматически при посещении первого МП.',
-        '',
-        '-# Выберите формат заявления с помощью кнопок ниже.',
-      ].join('\n'),
-      thumbnailUrl: channel.guild.iconURL({ size: 256 }),
-      footerText: `${channel.guild.name} • Регламент отпусков`,
+    const rendered = await BotMessageManager.renderMessage(channel.guild.id, 'leave_request_panel', {
+      guild: channel.guild.name,
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -270,8 +279,13 @@ export class LeaveService {
         .setStyle(ButtonStyle.Secondary)
     );
 
-    return await channel.send({ embeds: [embed], components: [row] });
+    return await channel.send({
+      content: rendered.content,
+      embeds: [rendered.embed],
+      components: [row],
+    });
   }
 }
+
 
 

@@ -4,6 +4,7 @@ import prisma from '../../../database/client';
 import { EventService } from './eventService';
 import { AuditLogger } from '../logging/auditLogger';
 import { THEME, createThemedEmbed } from '../../utils/theme';
+import { BotMessageManager } from '../../utils/botMessageManager';
 
 export class EventScheduler {
   private static timer: NodeJS.Timeout | null = null;
@@ -65,14 +66,18 @@ export class EventScheduler {
         finishLines.push('');
         finishLines.push(THEME.format.subtext('Всем участникам хорошей игры. Карточка сбора удалится через 30 минут.'));
 
-        const finishEmbed = createThemedEmbed({
-          title: `СТАРТ МЕРОПРИЯТИЯ • ${event.title.toUpperCase()}`,
-          color: THEME.COLORS.SUCCESS,
-          description: finishLines.join('\n'),
-          footerText: 'INTERPOL • Старт сбора',
+        const renderedStart = await BotMessageManager.renderMessage(guild.id, 'event_started', {
+          eventTitle: event.title,
+          voiceChannel: event.voiceChannelId ? `<#${event.voiceChannelId}>` : '',
+          partyCode: event.partyCode || '',
+          confirmedCount: event.participants.length,
+          guild: guild.name,
         });
 
-        await channel.send({ embeds: [finishEmbed] });
+        await channel.send({
+          content: renderedStart.content,
+          embeds: [renderedStart.embed],
+        });
         await EventService.refreshAnnouncement(guild, event.id);
         this.sentMilestones.delete(event.id);
 
@@ -160,17 +165,37 @@ export class EventScheduler {
             reminderLines.push(THEME.format.item('Карточка сбора', `[Открыть сообщение](https://discord.com/channels/${guild.id}/${event.channelId}/${event.messageId})`));
           }
 
-          const reminderEmbed = createThemedEmbed({
-            title: `НАПОМИНАНИЕ • ${event.title.toUpperCase()}`,
-            color: targetMin <= 3 ? THEME.COLORS.DANGER : (targetMin <= 5 ? THEME.COLORS.WARNING : THEME.COLORS.PRIMARY),
-            description: reminderLines.join('\n'),
-            footerText: 'INTERPOL • Занимайте места в канале сбора',
+          const confirmedList = event.participants.filter(p => p.status === 'CONFIRMED');
+          const renderedPing = await BotMessageManager.renderMessage(guild.id, 'event_ping', {
+            eventTitle: event.title,
+            minutesLeft: targetMin,
+            eventTime: event.eventTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+            voiceChannel: event.voiceChannelId ? `<#${event.voiceChannelId}>` : '',
+            partyCode: event.partyCode || '',
+            role: pings || '',
+            confirmedCount: confirmedList.length,
+            guild: guild.name,
           });
 
           await channel.send({
-            content: pings || undefined,
-            embeds: [reminderEmbed],
+            content: renderedPing.content || pings || undefined,
+            embeds: [renderedPing.embed],
           });
+
+          // Dispatch DM reminder to confirmed participants
+          if (confirmedList.length > 0) {
+            for (const p of confirmedList) {
+              BotMessageManager.sendDM(guild.id, p.userId, 'event_dm_ping', {
+                user: `<@${p.userId}>`,
+                username: p.userTag || p.userId,
+                eventTitle: event.title,
+                minutesLeft: targetMin,
+                voiceChannel: event.voiceChannelId ? `<#${event.voiceChannelId}>` : '',
+                partyCode: event.partyCode || '',
+                guild: guild.name,
+              }).catch(() => null);
+            }
+          }
 
           await prisma.eventGathering.update({
             where: { id: event.id },

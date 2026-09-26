@@ -23,6 +23,7 @@ import { NicknameService } from '../modules/nicknames/nicknameService';
 import { TierService } from '../modules/tier/tierService';
 import prisma from '../../database/client';
 import { THEME, createThemedEmbed } from '../utils/theme';
+import { BotMessageManager } from '../utils/botMessageManager';
 
 let isInteractionHandlerRegistered = false;
 
@@ -584,19 +585,17 @@ export function registerInteractionHandler() {
                   await guild.channels.fetch(guildConfig.leaveRequestChannelId).catch(() => null)) as TextChannel | null;
                 if (leaveChannel && leaveChannel.isTextBased()) {
                   const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-                  const leaveEmbed = createThemedEmbed({
-                    title: 'ЗАЯВКА НА ОТПУСК',
-                    color: THEME.COLORS.WARNING,
-                    description: [
-                      THEME.format.quote('Новая заявка на временное освобождение от обязанностей.'),
-                      '',
-                      THEME.format.item('Участник', `${member || interaction.user} (\`${interaction.user.tag}\`)`),
-                      THEME.format.item('Тип', 'Отпуск'),
-                      THEME.format.item('Период', `с ${THEME.format.bold(startDate.toLocaleDateString('ru-RU'))} по ${THEME.format.bold(endDate.toLocaleDateString('ru-RU'))} (\`${days} дн.\`)`),
-                      THEME.format.item('Причина', reason),
-                      THEME.format.item('ID заявки', THEME.format.code(leave.id)),
-                    ].join('\n'),
-                    footerText: 'INTERPOL • Управление отпусками',
+                  const profile = await ProfileService.getProfile(targetGuildId, interaction.user.id);
+                  const rendered = await BotMessageManager.renderMessage(targetGuildId, 'leave_request', {
+                    user: `${member || interaction.user}`,
+                    username: interaction.user.username,
+                    staticId: profile?.staticId || 'Не указан',
+                    leaveType: 'Отпуск',
+                    days: `${days} дн.`,
+                    startDate: startDate.toLocaleDateString('ru-RU'),
+                    endDate: endDate.toLocaleDateString('ru-RU'),
+                    reason,
+                    guild: guild.name,
                   });
 
                   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -610,7 +609,11 @@ export function registerInteractionHandler() {
                       .setStyle(ButtonStyle.Danger)
                   );
 
-                  await leaveChannel.send({ embeds: [leaveEmbed], components: [actionRow] }).catch(() => null);
+                  await leaveChannel.send({
+                    content: rendered.content,
+                    embeds: [rendered.embed],
+                    components: [actionRow],
+                  }).catch(() => null);
                 }
               }
             }
@@ -682,20 +685,18 @@ export function registerInteractionHandler() {
                   const hours = Math.floor(durationMinutes / 60);
                   const remM = durationMinutes % 60;
                   const durText = hours > 0 ? `${hours} ч. ${remM > 0 ? `${remM} мин.` : ''}` : `${remM} мин.`;
+                  const profile = await ProfileService.getProfile(targetGuildId, interaction.user.id);
 
-                  const leaveEmbed = createThemedEmbed({
-                    title: 'ЗАЯВКА НА ОТГУЛ',
-                    color: THEME.COLORS.WARNING,
-                    description: [
-                      THEME.format.quote('Новая заявка на кратковременный отгул.'),
-                      '',
-                      THEME.format.item('Участник', `${member || interaction.user} (\`${interaction.user.tag}\`)`),
-                      THEME.format.item('Тип', 'Кратковременный отгул'),
-                      THEME.format.item('Длительность', `${THEME.format.bold(durText)} (до ${endDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})`),
-                      THEME.format.item('Причина', reason),
-                      THEME.format.item('ID заявки', THEME.format.code(leave.id)),
-                    ].join('\n'),
-                    footerText: 'INTERPOL • Управление отпусками',
+                  const rendered = await BotMessageManager.renderMessage(targetGuildId, 'leave_request', {
+                    user: `${member || interaction.user}`,
+                    username: interaction.user.username,
+                    staticId: profile?.staticId || 'Не указан',
+                    leaveType: 'Кратковременный отгул',
+                    days: durText,
+                    startDate: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+                    endDate: endDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+                    reason,
+                    guild: guild.name,
                   });
 
                   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -709,7 +710,11 @@ export function registerInteractionHandler() {
                       .setStyle(ButtonStyle.Danger)
                   );
 
-                  await leaveChannel.send({ embeds: [leaveEmbed], components: [actionRow] }).catch(() => null);
+                  await leaveChannel.send({
+                    content: rendered.content,
+                    embeds: [rendered.embed],
+                    components: [actionRow],
+                  }).catch(() => null);
                 }
               }
             }

@@ -21,6 +21,7 @@ import { ProfileService } from '../profiles/profileService';
 import bot from '../../client';
 import { THEME, createThemedEmbed } from '../../utils/theme';
 import { sanitizeChannelNamePart } from '../../utils/nameUtils';
+import { BotMessageManager } from '../../utils/botMessageManager';
 
 export const TIER_MP_TYPES = ['Капт', 'MCL', 'ВЗЗ', 'РП'] as const;
 export type TierMpType = typeof TIER_MP_TYPES[number];
@@ -181,26 +182,8 @@ export class TierService {
    * Deploy the main Tier apply message with button in #заявки-на-тир
    */
   public static async deployApplyPanel(channel: TextChannel, guild: Guild): Promise<string> {
-    const embed = createThemedEmbed({
-      title: '🎯 ЗАЯВКИ НА ТИР • ОЦЕНКА СТРЕЛЬБЫ',
-      color: THEME.COLORS.PRIMARY,
-      description: [
-        THEME.format.quote(`Добро пожаловать в систему подачи заявок на получение тира семьи **${guild.name}**!`),
-        '',
-        '### Порядок подачи:',
-        '1. Нажмите на кнопку **«Подать заявку на тир»** ниже.',
-        '2. Бот создаст для вас персональный закрытый канал с 4 ветками мероприятий:',
-        '   • **Капт** — откаты со стрельбы на каптах',
-        '   • **MCL** — откаты с турнирных матчей MCL',
-        '   • **ВЗЗ** — откаты с Войны за Заводы / Бизнесы',
-        '   • **РП** — откаты со стрельбы и файтов на RP-ситуациях',
-        '3. Отправьте откаты в соответствующие ветки с помощью встроенной формы.',
-        '4. Тир-чекеры оценят стрельбу, оставят развернутый комментарий и присвоят тир.',
-        '',
-        '-# Нажмите кнопку ниже для создания личного канала заявки.',
-      ].join('\n'),
-      thumbnailUrl: typeof guild.iconURL === 'function' ? guild.iconURL({ size: 256 }) : undefined,
-      footerText: `${guild.name} • Tier System`,
+    const rendered = await BotMessageManager.renderMessage(guild.id, 'tier_apply_panel', {
+      guild: guild.name,
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -211,7 +194,11 @@ export class TierService {
         .setEmoji('🎯')
     );
 
-    const msg = await channel.send({ embeds: [embed], components: [row] });
+    const msg = await channel.send({
+      content: rendered.content,
+      embeds: [rendered.embed],
+      components: [row],
+    });
 
     await prisma.tierConfig.update({
       where: { guildId: guild.id },
@@ -343,42 +330,25 @@ export class TierService {
       });
 
       // Send Intro Message in the ticket channel
-      const introEmbed = createThemedEmbed({
-        title: `🎯 ЗАЯВКА НА ТИР • ${interaction.user.username.toUpperCase()}`,
-        color: THEME.COLORS.PRIMARY,
-        description: [
-          THEME.format.quote(`Канал создан для кандидата <@${interaction.user.id}>.`),
-          '',
-          '### Инструкция по отправке откатов:',
-          'Ниже бот опубликовал 4 сообщения по категориям мероприятий:',
-          '1. **Капт** — ветка для откатов со стрельбы на каптах.',
-          '2. **MCL** — ветка для турнирных откатов MCL.',
-          '3. **ВЗЗ** — ветка для откатов с Войны за Заводы.',
-          '4. **РП** — ветка для RP-файтов и ситуаций.',
-          '',
-          'Перейдите в нужную ветку под каждым сообщением, нажмите кнопку **«Сдать откат»** и укажите ссылку на видео.',
-          'Тир-чекеры проверят ваши записи и ответят прямо в ветках с комментариями.',
-        ].join('\n'),
+      const introRendered = await BotMessageManager.renderMessage(guild.id, 'tier_ticket_intro', {
+        user: `<@${interaction.user.id}>`,
+        username: interaction.user.username,
+        guild: guild.name,
       });
 
       await ticketChannel.send({
-        content: `<@${interaction.user.id}>`,
-        embeds: [introEmbed],
+        content: introRendered.content || `<@${interaction.user.id}>`,
+        embeds: [introRendered.embed],
       });
 
       // Send 4 distinct messages & create 4 threads for the MP types
       for (const mpType of TIER_MP_TYPES) {
-        const mpEmbed = createThemedEmbed({
-          title: `ОТКАТЫ • ${mpType.toUpperCase()}`,
-          color: THEME.COLORS.ACCENT,
-          description: [
-            THEME.format.quote(`Раздел для откатов с мероприятия **${mpType}**.`),
-            '',
-            `Для сдачи отката перейдите в прикрепленную ветку ниже и нажмите кнопку сдачи.`,
-          ].join('\n'),
+        const mpRendered = await BotMessageManager.renderMessage(guild.id, 'tier_ticket_mp_section', {
+          mpType,
+          guild: guild.name,
         });
 
-        const mpMessage = await ticketChannel.send({ embeds: [mpEmbed] });
+        const mpMessage = await ticketChannel.send({ embeds: [mpRendered.embed] });
 
         // Start thread on this message
         const thread = await mpMessage.startThread({
@@ -413,6 +383,14 @@ export class TierService {
           components: [submitRow],
         });
       }
+
+      // Send DM notification to candidate
+      BotMessageManager.sendDM(guild.id, interaction.user.id, 'tier_dm_created', {
+        user: `<@${interaction.user.id}>`,
+        username: interaction.user.username,
+        guild: guild.name,
+        channelId: ticketChannel.id,
+      }).catch(() => null);
 
       // Log action to #бот-лог
       await AuditLogger.recordEntry({
@@ -767,29 +745,37 @@ export class TierService {
       const targetChannel = (guild.channels.cache.get(targetChannelId) ||
         await guild.channels.fetch(targetChannelId).catch(() => null)) as any;
 
-      if (targetChannel && typeof targetChannel.send === 'function') {
-        const candidateNotificationEmbed = createThemedEmbed({
-          title: `🎯 ОТВЕТ ТИР-ЧЕКЕРА • ${submission.mpType.toUpperCase()}`,
-          color: THEME.COLORS.SUCCESS,
-          description: [
-            THEME.format.quote(`Проверяющий <@${interaction.user.id}> рассмотрел ваш откат с мероприятия **${submission.mpType}**!`),
-            '',
-            assignedTier ? THEME.format.item('Вердикт / Присвоенный тир', `**${assignedTier}**`) : '',
-            THEME.format.item('Комментарий проверяющего', reviewerComment),
-            THEME.format.item('Ссылка на ваш откат', `[Перейти к видеозаписи](${submission.clipUrl})`),
-            '',
-            THEME.format.item('Статус', '`✅ Просмотрен`'),
-            '',
-            THEME.format.subtext('Вы можете продолжать отправлять откаты с других мероприятий в соответствующие ветки.'),
-          ].filter(Boolean).join('\n'),
-          footerText: 'INTERPOL • Tier System',
-        });
+      const templateKey = assignedTier ? 'tier_approved' : 'tier_rejected';
+      const rendered = await BotMessageManager.renderMessage(guild.id, templateKey, {
+        user: `<@${submission.userId}>`,
+        username: submission.userTag || submission.userId,
+        tierName: assignedTier || 'Без тира',
+        mpType: submission.mpType,
+        checker: `<@${interaction.user.id}>`,
+        comment: reviewerComment,
+        reason: reviewerComment,
+        guild: guild.name,
+      });
 
+      if (targetChannel && typeof targetChannel.send === 'function') {
         await targetChannel.send({
-          content: `<@${submission.userId}>`,
-          embeds: [candidateNotificationEmbed],
+          content: rendered.content || `<@${submission.userId}>`,
+          embeds: [rendered.embed],
         }).catch(() => null);
       }
+
+      // Send DM to candidate
+      const dmKey = assignedTier ? 'tier_dm_approved' : 'tier_dm_rejected';
+      BotMessageManager.sendDM(guild.id, submission.userId, dmKey, {
+        user: `<@${submission.userId}>`,
+        username: submission.userTag || submission.userId,
+        tierName: assignedTier || 'Без тира',
+        mpType: submission.mpType,
+        checker: `<@${interaction.user.id}>`,
+        comment: reviewerComment,
+        reason: reviewerComment,
+        guild: guild.name,
+      }).catch(() => null);
 
       // 3. Log to AuditLogger in #бот-лог
       await AuditLogger.recordEntry({

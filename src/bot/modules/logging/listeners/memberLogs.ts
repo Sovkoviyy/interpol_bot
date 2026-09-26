@@ -60,6 +60,16 @@ export function registerMemberLogs() {
       console.error('[BotMessages] Error dispatching welcome message:', err);
     }
 
+    // Send personal Welcome DM if enabled
+    try {
+      BotMessageManager.sendDM(member.guild.id, member, 'welcome_dm', {
+        user: `<@${member.id}>`,
+        username: member.user.username,
+        guild: member.guild.name,
+        memberCount: String(member.guild.memberCount),
+      }).catch(() => null);
+    } catch {}
+
     const embed = new EmbedBuilder()
       .setColor(0x57F287) // Green
       .setTitle('📥 Новый участник присоединился')
@@ -136,6 +146,13 @@ export function registerMemberLogs() {
 
     if (isKicked) {
       await AuditLogger.sendHumanOrBotLog(member.guild, 'MEMBERS', kickExecutor, logEmbed);
+      await BotMessageManager.sendDM(member.guild.id, member.id, 'sanction_dm_kick', {
+        user: `<@${member.id}>`,
+        username: member.user?.tag || member.id,
+        moderator: kickExecutor ? `${kickExecutor.tag}` : 'Модератор',
+        reason: 'Исключение модератором с сервера',
+        guild: member.guild.name,
+      }).catch(() => null);
     } else if (member.user?.bot) {
       await AuditLogger.sendLog(member.guild, 'BOT', logEmbed);
     } else {
@@ -164,6 +181,14 @@ export function registerMemberLogs() {
       .setTimestamp();
 
     await AuditLogger.sendHumanOrBotLog(ban.guild, 'MEMBERS', banExecutor, embed);
+
+    await BotMessageManager.sendDM(ban.guild.id, ban.user.id, 'sanction_dm_ban', {
+      user: `<@${ban.user.id}>`,
+      username: ban.user.tag || ban.user.id,
+      moderator: banExecutor ? `${banExecutor.tag}` : 'Модератор',
+      reason: ban.reason || 'Не указана',
+      guild: ban.guild.name,
+    }).catch(() => null);
   });
 
   // Member Unban

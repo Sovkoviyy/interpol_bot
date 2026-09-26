@@ -7,6 +7,7 @@ import { requirePermission } from '../middlewares/rbac';
 import { RecruitmentService } from '../../bot/modules/recruitment/recruitmentService';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
 import { resolveGuildId, getDiscordGuild } from '../utils/guild';
+import { BotMessageManager } from '../../bot/utils/botMessageManager';
 
 export const recruitmentRouter = Router();
 
@@ -170,20 +171,10 @@ recruitmentRouter.post('/post-panel', requireAuth, requirePermission('manageRecr
     return res.status(400).json({ error: 'Канал не найден или не является текстовым' });
   }
 
-  const embed = new EmbedBuilder()
-    .setColor(0x3498DB)
-    .setTitle(`🦅 Набор в семью ${guild.name}`)
-    .setDescription(
-      `Приветствуем тебя на сервере семьи **${guild.name}**!\n\n` +
-      `Мы всегда рады активным, целеустремленным и адекватным игрокам.\n` +
-      `Если ты хочешь стать частью нашей команды, участвовать в дропах, цехах, каптах и других активностях — нажми кнопку ниже и заполни анкету!\n\n` +
-      `📌 **Перед подачей убедись:**\n` +
-      `• Твой Discord открыт для получения сообщений от бота;\n` +
-      `• Ты заполнил все поля анкеты честно и без обмана.`
-    )
-    .setThumbnail(guild.iconURL({ size: 256 }))
-    .setFooter({ text: `${guild.name} • Система рекрутинга` })
-    .setTimestamp();
+  const rendered = await BotMessageManager.renderMessage(guildId, 'recruitment_announcement', {
+    guild: guild.name,
+    memberCount: guild.memberCount,
+  });
 
   const button = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -193,7 +184,11 @@ recruitmentRouter.post('/post-panel', requireAuth, requirePermission('manageRecr
       .setStyle(ButtonStyle.Primary)
   );
 
-  const msg = await channel.send({ embeds: [embed], components: [button] });
+  const msg = await channel.send({
+    content: rendered.content,
+    embeds: [rendered.embed],
+    components: [button],
+  });
 
   await prisma.recruitmentConfig.update({
     where: { guildId },
