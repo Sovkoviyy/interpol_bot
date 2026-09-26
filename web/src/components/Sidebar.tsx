@@ -60,10 +60,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions, isBypass }) =
       ],
     },
     {
-      title: 'Мероприятия (МП)',
+      title: 'Мероприятия & Тиры',
       links: [
-        { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: true },
         { to: '/tier', label: 'Тир система', icon: Target, visible: true },
+        { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: true },
       ],
     },
     {

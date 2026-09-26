@@ -22,7 +22,8 @@ import {
   HelpCircle,
   UserCheck,
   MessageSquare,
-  ExternalLink
+  ExternalLink,
+  Target
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -46,6 +47,10 @@ export const ServerSetup: React.FC = () => {
     recruitmentReviewChannelId: '',
     academyCategoryId: '',
     academyArchiveCategoryId: '',
+    tierCategoryId: '',
+    tierApplyChannelId: '',
+    tierReviewChannelId: '',
+    tierCheckerRoleId: '',
     welcomeChannelId: '',
     welcomeEnabled: true,
   });
@@ -89,6 +94,10 @@ export const ServerSetup: React.FC = () => {
           recruitmentReviewChannelId: res.data.bindings.recruitmentReviewChannelId || '',
           academyCategoryId: res.data.bindings.academyCategoryId || '',
           academyArchiveCategoryId: res.data.bindings.academyArchiveCategoryId || '',
+          tierCategoryId: res.data.bindings.tierCategoryId || '',
+          tierApplyChannelId: res.data.bindings.tierApplyChannelId || '',
+          tierReviewChannelId: res.data.bindings.tierReviewChannelId || '',
+          tierCheckerRoleId: res.data.bindings.tierCheckerRoleId || '',
           welcomeChannelId: res.data.bindings.welcomeChannelId || '',
           welcomeEnabled: res.data.bindings.welcomeEnabled ?? true,
         });
@@ -194,7 +203,7 @@ export const ServerSetup: React.FC = () => {
   };
 
   // 5. Deploy / Re-deploy specific panel
-  const handleDeploySpecificPanel = async (panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs' | 'voice-tracker', channelId?: string) => {
+  const handleDeploySpecificPanel = async (panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs' | 'voice-tracker' | 'tier', channelId?: string) => {
     try {
       setDeployingPanel(panelType);
       await api.post('/setup/deploy-panel', {
@@ -224,6 +233,7 @@ export const ServerSetup: React.FC = () => {
   const textChannels = (state?.channels || []).filter((c: any) => c.type === 0 || c.type === 'GUILD_TEXT');
   const voiceChannels = (state?.channels || []).filter((c: any) => c.type === 2 || c.type === 'GUILD_VOICE');
   const categories = (state?.channels || []).filter((c: any) => c.type === 4 || c.type === 'GUILD_CATEGORY');
+  const roles = state?.roles || [];
 
   return (
     <div className="space-y-6 w-full">
@@ -610,7 +620,104 @@ export const ServerSetup: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 6: Audit Logs & Setup */}
+          {/* Card 6: Tier System */}
+          <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
+                  <Target className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Тир система (Оценка стрельбы)</h3>
+                  <p className="text-[11px] text-gray-400">Заявки на тир, закрытые тикет-каналы с 4 ветками (Капт, MCL, ВЗЗ, РП)</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleDeploySpecificPanel('tier', bindings.tierApplyChannelId)}
+                disabled={deployingPanel === 'tier' || !bindings.tierApplyChannelId}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-800 hover:bg-pink-500/20 text-pink-400 border border-dark-700 hover:border-pink-500/40 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
+                title="Отправить панель подачи заявок на тир в выбранный канал"
+              >
+                <Send className="w-3 h-3" />
+                {deployingPanel === 'tier' ? 'Отправка...' : 'Отправить панель тира'}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал подачи заявок (#заявки-на-тир)</label>
+                <select
+                  value={bindings.tierApplyChannelId}
+                  onChange={(e) => setBindings({ ...bindings, tierApplyChannelId: e.target.value })}
+                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
+                >
+                  <option value="">Не выбран (выберите канал)...</option>
+                  {textChannels.map((ch: any) => (
+                    <option key={ch.id} value={ch.id}>
+                      #{ch.name} (ID: {ch.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Канал чекеров для проверки (#проверка-тир)</label>
+                <select
+                  value={bindings.tierReviewChannelId}
+                  onChange={(e) => setBindings({ ...bindings, tierReviewChannelId: e.target.value })}
+                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
+                >
+                  <option value="">Не выбран (выберите канал)...</option>
+                  {textChannels.map((ch: any) => (
+                    <option key={ch.id} value={ch.id}>
+                      #{ch.name} (ID: {ch.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Категория персональных тир-каналов</label>
+                <select
+                  value={bindings.tierCategoryId}
+                  onChange={(e) => setBindings({ ...bindings, tierCategoryId: e.target.value })}
+                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
+                >
+                  <option value="">Не выбрана...</option>
+                  {categories.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      📁 {c.name} (ID: {c.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5">Роль Тир чекера (проверяющего)</label>
+                <select
+                  value={bindings.tierCheckerRoleId}
+                  onChange={(e) => setBindings({ ...bindings, tierCheckerRoleId: e.target.value })}
+                  className="w-full bg-dark-800/80 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
+                >
+                  <option value="">Не выбрана (любая роль с доступом к проверке)...</option>
+                  {roles.map((r: any) => (
+                    <option key={r.id} value={r.id}>
+                      🛡️ {r.name} (ID: {r.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="text-[11px] text-gray-400 flex items-center justify-between pt-1">
+                <span>Просмотр всех тиров, откатов и выданных статусов</span>
+                <a href="/tier" className="text-pink-400 hover:text-pink-300 underline inline-flex items-center gap-1 font-medium">
+                  В модуль Тир система <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 7: Audit Logs & Setup */}
           <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">

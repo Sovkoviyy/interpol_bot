@@ -15,6 +15,7 @@ import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
 import { ProfileService } from '../profiles/profileService';
 import { LeaveService } from '../leave/leaveService';
+import { TierService } from '../tier/tierService';
 import { THEME, createThemedEmbed } from '../../utils/theme';
 
 export interface ProvisionResult {
@@ -64,13 +65,14 @@ export class ServerSetupService {
     }
 
     // Load configurations from DB
-    const [guildCfg, recruitCfg, academyCfg, voiceCfg, logCfg, botMsgCfg] = await Promise.all([
+    const [guildCfg, recruitCfg, academyCfg, voiceCfg, logCfg, botMsgCfg, tierCfg] = await Promise.all([
       prisma.guildConfig.findUnique({ where: { guildId } }),
       prisma.recruitmentConfig.findUnique({ where: { guildId } }),
       prisma.academyConfig.findUnique({ where: { guildId } }),
       prisma.voiceTrackerConfig.findUnique({ where: { guildId } }),
       prisma.loggingConfig.findUnique({ where: { guildId } }),
       prisma.botMessagesConfig.findUnique({ where: { guildId } }),
+      prisma.tierConfig.findUnique({ where: { guildId } }),
     ]);
 
     const channels = guild.channels.cache.map(c => ({
@@ -79,6 +81,14 @@ export class ServerSetupService {
       type: c.type,
       parentId: c.parentId,
     }));
+
+    const roles = guild.roles.cache
+      .filter(r => r.name !== '@everyone')
+      .map(r => ({
+        id: r.id,
+        name: r.name,
+        color: r.color,
+      }));
 
     return {
       guild: {
@@ -89,6 +99,7 @@ export class ServerSetupService {
         hasAdmin: guild.members.me?.permissions.has(PermissionFlagsBits.Administrator) ?? false,
       },
       channels,
+      roles,
       bindings: {
         staticBindingChannelId: guildCfg?.staticBindingChannelId || null,
         leaveRequestChannelId: guildCfg?.leaveRequestChannelId || null,
@@ -98,6 +109,10 @@ export class ServerSetupService {
         recruitmentReviewChannelId: recruitCfg?.categoryId || null,
         academyCategoryId: academyCfg?.categoryId || null,
         academyArchiveCategoryId: academyCfg?.archiveCategoryId || null,
+        tierCategoryId: tierCfg?.categoryId || null,
+        tierApplyChannelId: tierCfg?.applyChannelId || null,
+        tierReviewChannelId: tierCfg?.reviewChannelId || null,
+        tierCheckerRoleId: tierCfg?.checkerRoleId || null,
         logsCategoryId: logCfg?.categoryId || null,
         messageLogsChannelId: logCfg?.messageLogsChannelId || null,
         memberLogsChannelId: logCfg?.memberLogsChannelId || null,
@@ -374,6 +389,16 @@ export class ServerSetupService {
       } catch (e: any) {
         console.error('[ServerSetup] Failed to deploy welcome embed:', e.message);
       }
+
+      // Tier structure & apply panel
+      try {
+        await TierService.setupTierStructure(guild);
+        categoriesCreated.push('🎯 ЗАЯВКИ НА ТИР');
+        channelsCreated.push('#заявки-на-тир', '#проверка-тир');
+        panelsDeployed.push('Тир система: #заявки-на-тир');
+      } catch (e: any) {
+        console.error('[ServerSetup] Failed to deploy tier panel:', e.message);
+      }
     }
 
     return {
@@ -402,7 +427,7 @@ export class ServerSetupService {
    */
   public static async deployPanel(
     guildId: string, 
-    panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs' | 'voice-tracker', 
+    panelType: 'static' | 'leave' | 'recruit' | 'welcome' | 'logs' | 'voice-tracker' | 'tier', 
     channelId?: string
   ) {
     const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
@@ -493,6 +518,15 @@ export class ServerSetupService {
         const msg = await channel.send({ embeds: [welcomeEmbed] });
         return { success: true, messageId: msg.id, channelId: channel.id };
       }
+      case 'tier': {
+        const msgId = await TierService.deployApplyPanel(channel, guild);
+        await prisma.tierConfig.upsert({
+          where: { guildId },
+          update: { applyChannelId: channel.id },
+          create: { guildId, applyChannelId: channel.id, enabled: true },
+        });
+        return { success: true, messageId: msgId, channelId: channel.id };
+      }
       default:
         throw new Error(`Неизвестный тип панели: ${panelType}`);
     }
@@ -510,6 +544,10 @@ export class ServerSetupService {
     recruitmentReviewChannelId?: string;
     academyCategoryId?: string;
     academyArchiveCategoryId?: string;
+    tierCategoryId?: string;
+    tierApplyChannelId?: string;
+    tierReviewChannelId?: string;
+    tierCheckerRoleId?: string;
     welcomeChannelId?: string;
     welcomeEnabled?: boolean;
   }) {
@@ -586,6 +624,31 @@ export class ServerSetupService {
           guildId,
           welcomeChannelId: bindings.welcomeChannelId || null,
           welcomeEnabled: Boolean(bindings.welcomeEnabled),
+        },
+      });
+    }
+
+    if (
+      bindings.tierCategoryId !== undefined ||
+      bindings.tierApplyChannelId !== undefined ||
+      bindings.tierReviewChannelId !== undefined ||
+      bindings.tierCheckerRoleId !== undefined
+    ) {
+      await prisma.tierConfig.upsert({
+        where: { guildId },
+        update: {
+          ...(bindings.tierCategoryId !== undefined && { categoryId: bindings.tierCategoryId || null }),
+          ...(bindings.tierApplyChannelId !== undefined && { applyChannelId: bindings.tierApplyChannelId || null }),
+          ...(bindings.tierReviewChannelId !== undefined && { reviewChannelId: bindings.tierReviewChannelId || null }),
+          ...(bindings.tierCheckerRoleId !== undefined && { checkerRoleId: bindings.tierCheckerRoleId || null }),
+        },
+        create: {
+          guildId,
+          categoryId: bindings.tierCategoryId || null,
+          applyChannelId: bindings.tierApplyChannelId || null,
+          reviewChannelId: bindings.tierReviewChannelId || null,
+          checkerRoleId: bindings.tierCheckerRoleId || null,
+          enabled: true,
         },
       });
     }

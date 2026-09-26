@@ -10,7 +10,8 @@ import {
   ToggleRight,
   Shield,
   ArrowUpRight,
-  Tag
+  Tag,
+  Target
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
@@ -180,31 +181,31 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Group 2: Мероприятия (МП) */}
+          {/* Group 2: Мероприятия & Тиры */}
           <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
             <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
-              <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
-                <CalendarDays className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                <Target className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">Мероприятия (МП)</h3>
-                <p className="text-[11px] text-slate-400">Дропы, цех, ВЗМ, учет явки и войс</p>
+                <h3 className="text-sm font-bold text-white">Мероприятия & Тир система</h3>
+                <p className="text-[11px] text-slate-400">Сборы на капты, взз, мцл и оценка стрельбы</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <Link to="/voice-tracker" className="p-3 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex flex-col justify-between group transition-all">
+              <Link to="/tier" className="p-3 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex flex-col justify-between group transition-all">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-200 group-hover:text-pink-400">Умный войс & МП</span>
+                  <span className="font-semibold text-slate-200 group-hover:text-pink-400">Тир система (Откаты)</span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
                 </div>
-                <span className="text-[11px] text-slate-400 mt-1">Авто-подсчет явки, типы МП и пульт</span>
+                <span className="text-[11px] text-slate-400 mt-1">Оценка стрельбы (Капт, MCL, ВЗЗ, РП) и выдача тиров</span>
               </Link>
               <Link to="/events" className="p-3 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex flex-col justify-between group transition-all">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-200 group-hover:text-pink-400">Сборы на МП</span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
                 </div>
-                <span className="text-[11px] text-slate-400 mt-1">Анонсы, таймеры сборов и пинги</span>
+                <span className="text-[11px] text-slate-400 mt-1">Регистрация по спискам (капты, взз, мцл)</span>
               </Link>
             </div>
           </div>
