@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { RoleSelect, DiscordRoleItem } from '../components/RoleSelect';
 
 type ActiveTab = 'wizard' | 'channels' | 'roles' | 'provision';
 
@@ -65,14 +66,14 @@ export const ServerSetup: React.FC = () => {
     welcomeEnabled: true,
   });
 
-  // Role bindings state
-  const [roleBindings, setRoleBindings] = useState({
-    recruiterRoleId: '',
-    recruitApprovedRoleId: '',
-    academicRoleId: '',
-    promotedRoleId: '',
-    tierCheckerRoleId: '',
-    eventPriorityRoleId: '',
+  // Role bindings state - array of IDs for each role type (multi-select support)
+  const [roleBindings, setRoleBindings] = useState<Record<string, string[]>>({
+    recruiterRoleId: [],
+    recruitApprovedRoleId: [],
+    academicRoleId: [],
+    promotedRoleId: [],
+    tierCheckerRoleId: [],
+    eventPriorityRoleId: [],
   });
 
   const [savingBindings, setSavingBindings] = useState(false);
@@ -112,6 +113,13 @@ export const ServerSetup: React.FC = () => {
     }
   };
 
+  // Helper to normalize role IDs into array
+  const toArray = (arr: any, single: any): string[] => {
+    if (Array.isArray(arr) && arr.length > 0) return arr.map(String);
+    if (single) return [String(single)];
+    return [];
+  };
+
   // 2. Fetch setup state for selected guild
   const fetchState = async (guildId: string) => {
     if (!guildId) return;
@@ -138,13 +146,14 @@ export const ServerSetup: React.FC = () => {
         });
       }
       if (res.data.roleBindings) {
+        const rb = res.data.roleBindings;
         setRoleBindings({
-          recruiterRoleId: res.data.roleBindings.recruiterRoleId || '',
-          recruitApprovedRoleId: res.data.roleBindings.recruitApprovedRoleId || '',
-          academicRoleId: res.data.roleBindings.academicRoleId || '',
-          promotedRoleId: res.data.roleBindings.promotedRoleId || '',
-          tierCheckerRoleId: res.data.roleBindings.tierCheckerRoleId || '',
-          eventPriorityRoleId: res.data.roleBindings.eventPriorityRoleId || '',
+          recruiterRoleId: toArray(rb.recruiterRoleIds, rb.recruiterRoleId),
+          recruitApprovedRoleId: toArray(rb.recruitApprovedRoleIds, rb.recruitApprovedRoleId),
+          academicRoleId: toArray(rb.academicRoleIds, rb.academicRoleId),
+          promotedRoleId: toArray(rb.promotedRoleIds, rb.promotedRoleId),
+          tierCheckerRoleId: toArray(rb.tierCheckerRoleIds, rb.tierCheckerRoleId),
+          eventPriorityRoleId: toArray(rb.eventPriorityRoleIds, rb.eventPriorityRoleId),
         });
       }
     } catch (err) {
@@ -225,7 +234,20 @@ export const ServerSetup: React.FC = () => {
       setSavingRoles(true);
       await api.post('/setup/role-bindings', {
         guildId: selectedGuildId,
-        roleBindings,
+        roleBindings: {
+          recruiterRoleIds: roleBindings.recruiterRoleId || [],
+          recruiterRoleId: roleBindings.recruiterRoleId?.[0] || null,
+          recruitApprovedRoleIds: roleBindings.recruitApprovedRoleId || [],
+          recruitApprovedRoleId: roleBindings.recruitApprovedRoleId?.[0] || null,
+          academicRoleIds: roleBindings.academicRoleId || [],
+          academicRoleId: roleBindings.academicRoleId?.[0] || null,
+          promotedRoleIds: roleBindings.promotedRoleId || [],
+          promotedRoleId: roleBindings.promotedRoleId?.[0] || null,
+          tierCheckerRoleIds: roleBindings.tierCheckerRoleId || [],
+          tierCheckerRoleId: roleBindings.tierCheckerRoleId?.[0] || null,
+          eventPriorityRoleIds: roleBindings.eventPriorityRoleId || [],
+          eventPriorityRoleId: roleBindings.eventPriorityRoleId?.[0] || null,
+        },
       });
 
       modal.alert({
@@ -258,13 +280,22 @@ export const ServerSetup: React.FC = () => {
       });
 
       const created = res.data.role;
-      const updatedRoles = { ...roleBindings, [targetKey]: created.id };
+      const currentList = roleBindings[targetKey] || [];
+      const updatedList = [...currentList, created.id];
+      const updatedRoles = { ...roleBindings, [targetKey]: updatedList };
       setRoleBindings(updatedRoles);
-      await api.post('/setup/role-bindings', { guildId: selectedGuildId, roleBindings: updatedRoles });
+
+      await api.post('/setup/role-bindings', {
+        guildId: selectedGuildId,
+        roleBindings: {
+          [`${targetKey}s`]: updatedList,
+          [targetKey]: updatedList[0] || null,
+        },
+      });
 
       modal.alert({
         title: 'Роль создана в Discord!',
-        message: `Роль «${created.name}» успешно создана на сервере Discord и привязана в конфигурации бота!`,
+        message: `Роль «${created.name}» успешно создана на сервере Discord и добавлена в список!`,
         type: 'success',
       });
 
@@ -403,16 +434,16 @@ export const ServerSetup: React.FC = () => {
   const textChannels = (state?.channels || []).filter((c: any) => c.type === 0 || c.type === 'GUILD_TEXT');
   const voiceChannels = (state?.channels || []).filter((c: any) => c.type === 2 || c.type === 'GUILD_VOICE');
   const categories = (state?.channels || []).filter((c: any) => c.type === 4 || c.type === 'GUILD_CATEGORY');
-  const roles = state?.roles || [];
+  const roles: DiscordRoleItem[] = state?.roles || [];
   const botPerms = state?.botPermissions;
 
   // Calculate readiness percentage
   const totalChecks = 10;
   let passedChecks = 0;
   if (botPerms?.hasAdministrator || (botPerms?.manageRoles && botPerms?.manageChannels)) passedChecks++;
-  if (roleBindings.recruiterRoleId) passedChecks++;
-  if (roleBindings.academicRoleId) passedChecks++;
-  if (roleBindings.promotedRoleId) passedChecks++;
+  if ((roleBindings.recruiterRoleId || []).length > 0) passedChecks++;
+  if ((roleBindings.academicRoleId || []).length > 0) passedChecks++;
+  if ((roleBindings.promotedRoleId || []).length > 0) passedChecks++;
   if (bindings.staticBindingChannelId) passedChecks++;
   if (bindings.leaveRequestChannelId) passedChecks++;
   if (bindings.recruitmentApplyChannelId) passedChecks++;
@@ -689,7 +720,7 @@ export const ServerSetup: React.FC = () => {
                     Шаг 1: Настройка ролей семьи в Discord
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Так как бот ставится на уже существующий сервер, сопоставьте свои существующие роли или создайте недостающие прямо отсюда в 1 клик.
+                    Так как бот ставится на уже существующий сервер, сопоставьте свои существующие роли (можно выбрать несколько для каждого назначения) или создайте недостающие прямо отсюда в 1 клик.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -715,9 +746,8 @@ export const ServerSetup: React.FC = () => {
               {/* Roles Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {requiredRolesList.map((item) => {
-                  const currentRoleId = (roleBindings as any)[item.key];
-                  const matchedRole = roles.find((r: any) => r.id === currentRoleId);
-                  const isConfigured = Boolean(currentRoleId);
+                  const currentRoleIds = roleBindings[item.key] || [];
+                  const isConfigured = currentRoleIds.length > 0;
 
                   return (
                     <div
@@ -735,6 +765,11 @@ export const ServerSetup: React.FC = () => {
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-pink-500/10 text-pink-400 border border-pink-500/20">
                               {item.badge}
                             </span>
+                            {currentRoleIds.length > 1 && (
+                              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                {currentRoleIds.length} ролей
+                              </span>
+                            )}
                           </div>
                           <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                             {item.desc}
@@ -754,26 +789,23 @@ export const ServerSetup: React.FC = () => {
                       {/* Dropdown & Quick Create */}
                       <div className="space-y-2 pt-1">
                         <label className="block text-[11px] font-medium text-slate-300">
-                          Выберите существующую роль сервера:
+                          Выберите роли из списка Discord (поиск, цвета, мульти-выбор):
                         </label>
-                        <select
-                          value={currentRoleId || ''}
-                          onChange={(e) =>
-                            setRoleBindings({ ...roleBindings, [item.key]: e.target.value })
+
+                        {/* Modern RoleSelect Component */}
+                        <RoleSelect
+                          roles={roles}
+                          value={currentRoleIds}
+                          onChange={(newIds) =>
+                            setRoleBindings({ ...roleBindings, [item.key]: newIds })
                           }
-                          className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 transition-colors"
-                        >
-                          <option value="">Не привязана (выберите роль)...</option>
-                          {roles.map((r: any) => (
-                            <option key={r.id} value={r.id}>
-                              @{r.name} (ID: {r.id})
-                            </option>
-                          ))}
-                        </select>
+                          isMulti={true}
+                          placeholder={`Выберите роли ${item.name.toLowerCase()}...`}
+                        />
 
                         {/* Inline Create Form / Trigger */}
                         {creatingRoleKey === item.key ? (
-                          <div className="p-3 bg-[#0B0E14] border border-pink-500/30 rounded-xl space-y-2 animate-fadeIn">
+                          <div className="p-3 bg-[#0B0E14] border border-pink-500/30 rounded-xl space-y-2 animate-in fade-in duration-150">
                             <div className="text-[11px] font-semibold text-pink-400">
                               Создание роли в Discord:
                             </div>
@@ -879,7 +911,7 @@ export const ServerSetup: React.FC = () => {
                     className="flex items-center gap-1.5 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-semibold transition shadow-md shadow-pink-600/20"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    {savingBindings ? 'Сохранение...' : 'Сохранить каналы'}
+                    {savingBindings ? 'Сохранить каналы...' : 'Сохранить каналы'}
                   </button>
                 </div>
               </div>
@@ -1369,7 +1401,7 @@ export const ServerSetup: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-white">Роли семьи</span>
                     <span className="text-xs font-mono text-pink-400">
-                      {roleBindings.recruiterRoleId && roleBindings.academicRoleId ? '✓ Настроены' : '! Не все'}
+                      {(roleBindings.recruiterRoleId || []).length > 0 && (roleBindings.academicRoleId || []).length > 0 ? '✓ Настроены' : '! Не все'}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
@@ -1434,7 +1466,7 @@ export const ServerSetup: React.FC = () => {
                 Все роли семьи в Discord
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Управление ролями для автоматических повышений, набора, академии и тиров
+                Управление ролями для автоматических повышений, набора, академии и тиров с поддержкой мульти-выбора
               </p>
             </div>
             <button
@@ -1449,7 +1481,7 @@ export const ServerSetup: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {requiredRolesList.map((item) => {
-              const currentRoleId = (roleBindings as any)[item.key];
+              const currentRoleIds = roleBindings[item.key] || [];
               return (
                 <div key={item.key} className="p-4 bg-[#151921]/60 border border-[#1E232F] rounded-xl space-y-3">
                   <div className="flex items-center justify-between">
@@ -1459,18 +1491,16 @@ export const ServerSetup: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400">{item.desc}</p>
-                  <select
-                    value={currentRoleId || ''}
-                    onChange={(e) => setRoleBindings({ ...roleBindings, [item.key]: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value="">Не привязана (выберите роль)...</option>
-                    {roles.map((r: any) => (
-                      <option key={r.id} value={r.id}>
-                        @{r.name} (ID: {r.id})
-                      </option>
-                    ))}
-                  </select>
+                  
+                  <RoleSelect
+                    roles={roles}
+                    value={currentRoleIds}
+                    onChange={(newIds) =>
+                      setRoleBindings({ ...roleBindings, [item.key]: newIds })
+                    }
+                    isMulti={true}
+                    placeholder={`Выберите роли ${item.name.toLowerCase()}...`}
+                  />
                 </div>
               );
             })}

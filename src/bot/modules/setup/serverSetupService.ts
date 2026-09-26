@@ -111,12 +111,30 @@ export class ServerSetupService {
       }
     }
 
+    let recruitApprovedRoles: string[] = [];
+    if (recruitCfg?.memberRoleIdsJson) {
+      try {
+        recruitApprovedRoles = JSON.parse(recruitCfg.memberRoleIdsJson);
+      } catch {
+        recruitApprovedRoles = [];
+      }
+    }
+    if (recruitApprovedRoles.length === 0 && recruitCfg?.memberRoleId) {
+      recruitApprovedRoles = [recruitCfg.memberRoleId];
+    }
+
     const roleBindings = {
+      recruiterRoleIds: recruiterRoles,
       recruiterRoleId: recruiterRoles[0] || null,
+      recruitApprovedRoleIds: recruitApprovedRoles,
       recruitApprovedRoleId: recruitCfg?.memberRoleId || null,
+      academicRoleIds: academyCfg?.academicRoleId ? [academyCfg.academicRoleId] : [],
       academicRoleId: academyCfg?.academicRoleId || null,
+      promotedRoleIds: academyCfg?.promotedRoleId ? [academyCfg.promotedRoleId] : [],
       promotedRoleId: academyCfg?.promotedRoleId || null,
+      tierCheckerRoleIds: tierCfg?.checkerRoleId ? [tierCfg.checkerRoleId] : [],
       tierCheckerRoleId: tierCfg?.checkerRoleId || null,
+      eventPriorityRoleIds: guildCfg?.eventPriorityRoleId ? [guildCfg.eventPriorityRoleId] : [],
       eventPriorityRoleId: guildCfg?.eventPriorityRoleId || null,
     };
 
@@ -686,60 +704,89 @@ export class ServerSetupService {
    * Update role bindings (Recruiter, Academy 1 rank, Promotion 2 rank, Tier checker, Event priority)
    */
   public static async updateRoleBindings(guildId: string, roleBindings: any) {
-    if (roleBindings.recruiterRoleId !== undefined || roleBindings.recruitApprovedRoleId !== undefined) {
-      const recruiterRoles = roleBindings.recruiterRoleId ? [roleBindings.recruiterRoleId] : [];
+    if (
+      roleBindings.recruiterRoleId !== undefined ||
+      roleBindings.recruiterRoleIds !== undefined ||
+      roleBindings.recruitApprovedRoleId !== undefined ||
+      roleBindings.recruitApprovedRoleIds !== undefined
+    ) {
+      const rawRecruiter = roleBindings.recruiterRoleIds ?? roleBindings.recruiterRoleId;
+      const recruiterRoles = Array.isArray(rawRecruiter) ? rawRecruiter : rawRecruiter ? [rawRecruiter] : [];
+
+      const rawApproved = roleBindings.recruitApprovedRoleIds ?? roleBindings.recruitApprovedRoleId;
+      const approvedRoles = Array.isArray(rawApproved) ? rawApproved : rawApproved ? [rawApproved] : [];
+
       await prisma.recruitmentConfig.upsert({
         where: { guildId },
         update: {
-          ...(roleBindings.recruiterRoleId !== undefined && { recruiterRoleIds: JSON.stringify(recruiterRoles) }),
-          ...(roleBindings.recruitApprovedRoleId !== undefined && { memberRoleId: roleBindings.recruitApprovedRoleId || null }),
+          recruiterRoleIds: JSON.stringify(recruiterRoles),
+          memberRoleId: approvedRoles[0] || null,
+          memberRoleIdsJson: JSON.stringify(approvedRoles),
         },
         create: {
           guildId,
           recruiterRoleIds: JSON.stringify(recruiterRoles),
-          memberRoleId: roleBindings.recruitApprovedRoleId || null,
+          memberRoleId: approvedRoles[0] || null,
+          memberRoleIdsJson: JSON.stringify(approvedRoles),
         },
       });
     }
 
-    if (roleBindings.academicRoleId !== undefined || roleBindings.promotedRoleId !== undefined) {
+    if (
+      roleBindings.academicRoleId !== undefined ||
+      roleBindings.academicRoleIds !== undefined ||
+      roleBindings.promotedRoleId !== undefined ||
+      roleBindings.promotedRoleIds !== undefined
+    ) {
+      const rawAcademic = roleBindings.academicRoleIds ?? roleBindings.academicRoleId;
+      const academicRoles = Array.isArray(rawAcademic) ? rawAcademic : rawAcademic ? [rawAcademic] : [];
+
+      const rawPromoted = roleBindings.promotedRoleIds ?? roleBindings.promotedRoleId;
+      const promotedRoles = Array.isArray(rawPromoted) ? rawPromoted : rawPromoted ? [rawPromoted] : [];
+
       await prisma.academyConfig.upsert({
         where: { guildId },
         update: {
-          ...(roleBindings.academicRoleId !== undefined && { academicRoleId: roleBindings.academicRoleId || null }),
-          ...(roleBindings.promotedRoleId !== undefined && { promotedRoleId: roleBindings.promotedRoleId || null }),
+          academicRoleId: academicRoles[0] || null,
+          promotedRoleId: promotedRoles[0] || null,
         },
         create: {
           guildId,
-          academicRoleId: roleBindings.academicRoleId || null,
-          promotedRoleId: roleBindings.promotedRoleId || null,
+          academicRoleId: academicRoles[0] || null,
+          promotedRoleId: promotedRoles[0] || null,
         },
       });
     }
 
-    if (roleBindings.tierCheckerRoleId !== undefined) {
+    if (roleBindings.tierCheckerRoleId !== undefined || roleBindings.tierCheckerRoleIds !== undefined) {
+      const rawTier = roleBindings.tierCheckerRoleIds ?? roleBindings.tierCheckerRoleId;
+      const tierRoles = Array.isArray(rawTier) ? rawTier : rawTier ? [rawTier] : [];
+
       await prisma.tierConfig.upsert({
         where: { guildId },
         update: {
-          checkerRoleId: roleBindings.tierCheckerRoleId || null,
+          checkerRoleId: tierRoles[0] || null,
         },
         create: {
           guildId,
-          checkerRoleId: roleBindings.tierCheckerRoleId || null,
+          checkerRoleId: tierRoles[0] || null,
           enabled: true,
         },
       });
     }
 
-    if (roleBindings.eventPriorityRoleId !== undefined) {
+    if (roleBindings.eventPriorityRoleId !== undefined || roleBindings.eventPriorityRoleIds !== undefined) {
+      const rawEvent = roleBindings.eventPriorityRoleIds ?? roleBindings.eventPriorityRoleId;
+      const eventRoles = Array.isArray(rawEvent) ? rawEvent : rawEvent ? [rawEvent] : [];
+
       await prisma.guildConfig.upsert({
         where: { guildId },
         update: {
-          eventPriorityRoleId: roleBindings.eventPriorityRoleId || null,
+          eventPriorityRoleId: eventRoles[0] || null,
         },
         create: {
           guildId,
-          eventPriorityRoleId: roleBindings.eventPriorityRoleId || null,
+          eventPriorityRoleId: eventRoles[0] || null,
         },
       });
     }
