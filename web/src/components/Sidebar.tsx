@@ -32,7 +32,6 @@ interface SidebarProps {
     manageEvents: boolean;
     viewLogs: boolean;
     manageAcademy?: boolean;
-    manageVoiceTracker?: boolean;
     antiNukeAlerts?: boolean;
   };
 }

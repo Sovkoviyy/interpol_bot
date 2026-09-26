@@ -65,11 +65,10 @@ export class ServerSetupService {
     }
 
     // Load configurations from DB
-    const [guildCfg, recruitCfg, academyCfg, voiceCfg, logCfg, botMsgCfg, tierCfg] = await Promise.all([
+    const [guildCfg, recruitCfg, academyCfg, logCfg, botMsgCfg, tierCfg] = await Promise.all([
       prisma.guildConfig.findUnique({ where: { guildId } }),
       prisma.recruitmentConfig.findUnique({ where: { guildId } }),
       prisma.academyConfig.findUnique({ where: { guildId } }),
-      prisma.voiceTrackerConfig.findUnique({ where: { guildId } }),
       prisma.loggingConfig.findUnique({ where: { guildId } }),
       prisma.botMessagesConfig.findUnique({ where: { guildId } }),
       prisma.tierConfig.findUnique({ where: { guildId } }),
@@ -104,7 +103,7 @@ export class ServerSetupService {
         staticBindingChannelId: guildCfg?.staticBindingChannelId || null,
         leaveRequestChannelId: guildCfg?.leaveRequestChannelId || null,
         eventAnnounceChannelId: guildCfg?.defaultEventChannelId || null,
-        eventVoiceChannelId: guildCfg?.defaultVoiceChannelId || voiceCfg?.voiceChannelId || null,
+        eventVoiceChannelId: guildCfg?.defaultVoiceChannelId || null,
         recruitmentApplyChannelId: recruitCfg?.channelId || null,
         recruitmentReviewChannelId: recruitCfg?.categoryId || null,
         academyCategoryId: academyCfg?.categoryId || null,
@@ -280,21 +279,6 @@ export class ServerSetupService {
         guildId: guild.id,
         categoryId: academyCat.id,
         archiveCategoryId: academyArchiveCat.id,
-      },
-    });
-
-    await prisma.voiceTrackerConfig.upsert({
-      where: { guildId: guild.id },
-      update: {
-        voiceChannelId: eventVoiceChannel.id,
-        controlChannelId: eventAnnounceChannel.id,
-        logChannelId: logSetup.channels.voiceLogsChannelId || logSetup.channels.botLogsChannelId,
-      },
-      create: {
-        guildId: guild.id,
-        voiceChannelId: eventVoiceChannel.id,
-        controlChannelId: eventAnnounceChannel.id,
-        logChannelId: logSetup.channels.voiceLogsChannelId || logSetup.channels.botLogsChannelId,
       },
     });
 
@@ -602,14 +586,6 @@ export class ServerSetupService {
           categoryId: bindings.academyCategoryId || null,
           archiveCategoryId: bindings.academyArchiveCategoryId || null,
         },
-      });
-    }
-
-    if (bindings.eventVoiceChannelId !== undefined) {
-      await prisma.voiceTrackerConfig.upsert({
-        where: { guildId },
-        update: { voiceChannelId: bindings.eventVoiceChannelId },
-        create: { guildId, voiceChannelId: bindings.eventVoiceChannelId },
       });
     }
 

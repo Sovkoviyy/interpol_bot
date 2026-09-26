@@ -407,42 +407,6 @@ export const BOT_MESSAGE_CATALOG: MessageTemplateDefinition[] = [
     ],
   },
 
-  // 7. Войс-трекер & МП
-  {
-    key: 'mp_started',
-    category: 'Войс-трекер',
-    name: 'Старт сессии учета МП',
-    description: 'Оповещение в канале логов о старте отслеживания голосового канала',
-    defaultTitle: '🎙️ СТАРТ СЕССИИ МП • {mpName}',
-    defaultDescription: 'Запущен трекинг активности для мероприятия **{mpName}**!\n\n**Ведущий / Ответственный:** {host}\n**Голосовой канал:** {voiceChannel}\n**Время запуска:** {startTime}\n\nВсе находящиеся в войсе участники фиксируются в базе данных.',
-    defaultColor: '#3B82F6',
-    defaultFooter: 'INTERPOL • Voice Tracker',
-    defaultContent: '',
-    placeholders: [
-      { tag: '{mpName}', description: 'Название мероприятия', sample: 'ВЗЗ' },
-      { tag: '{host}', description: 'Ведущий сессии', sample: '@Captain' },
-      { tag: '{voiceChannel}', description: 'Канал отслеживания', sample: '#Капты-1' },
-      { tag: '{startTime}', description: 'Время старта', sample: '20:00' },
-    ],
-  },
-  {
-    key: 'mp_ended',
-    category: 'Войс-трекер',
-    name: 'Итоги сессии МП',
-    description: 'Публикация финального отчета по посещаемости и времени участников',
-    defaultTitle: '📊 ИТОГИ СЕССИИ МП • {mpName}',
-    defaultDescription: 'Сессия учета мероприятия **{mpName}** успешно завершена!\n\n**Организатор:** {host}\n**Длительность:** {duration}\n**Присутствовало участников:** **{participantCount}** чел.\n\nВсем участникам автоматически начислены баллы МП в личный профиль!',
-    defaultColor: '#10B981',
-    defaultFooter: 'INTERPOL • Voice Tracker',
-    defaultContent: '',
-    placeholders: [
-      { tag: '{mpName}', description: 'Название мероприятия', sample: 'ВЗЗ' },
-      { tag: '{host}', description: 'Ведущий', sample: '@Captain' },
-      { tag: '{duration}', description: 'Длительность сессии', sample: '35 мин.' },
-      { tag: '{participantCount}', description: 'Число участников', sample: '24' },
-    ],
-  },
-
   // 8. Профили & Статики
   {
     key: 'static_bound',

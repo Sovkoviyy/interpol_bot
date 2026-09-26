@@ -51,7 +51,6 @@ model RolePermission {
   manageEvents       Boolean  @default(false)
   viewLogs           Boolean  @default(false)
   manageAcademy      Boolean  @default(false)
-  manageVoiceTracker Boolean  @default(false)
   antiNukeAlerts     Boolean  @default(false)
   manageTier         Boolean  @default(false)
   permissionsJson    String   @default("{}") // Modular & granular permissions JSON
@@ -326,53 +325,6 @@ model MpReport {
   academyChannel   AcademyChannel? @relation(fields: [academyChannelId], references: [id], onDelete: Cascade)
 }
 
-// ==========================================
-// V2 EXTENSIONS: DYNAMIC VOICE MP TRACKER
-// ==========================================
-
-model VoiceTrackerConfig {
-  guildId              String   @id
-  voiceChannelId       String?  // Tracked voice channel ID
-  defaultVoiceName     String   @default("Ожидание МП")
-  controlChannelId     String?  // Channel for staff MP start/stop control panel
-  controlMessageId     String?  // Persistent control message
-  logChannelId         String?  // Log channel for attendance summaries
-  availableMpTypesJson String   @default("[]") // Custom configured MPs (JSON array of { id, name, description, emoji })
-  updatedAt            DateTime @updatedAt
-  createdAt            DateTime @default(now())
-}
-
-model VoiceTrackerSession {
-  id               String               @id @default(cuid())
-  guildId          String
-  eventName        String               // e.g. "Дроп [16:00]"
-  voiceChannelId   String
-  startedById      String
-  startedByTag     String?
-  startedAt        DateTime             @default(now())
-  endedAt          DateTime?
-  status           String               @default("ACTIVE") // ACTIVE, COMPLETED
-  totalAttendees   Int                  @default(0)
-  peakConcurrent   Int                  @default(0)
-  attendanceJson   String               @default("[]") // [{ userId, userTag, joinTime, leaveTime, durationSeconds, isLate, leftEarly }]
-  
-  attendanceLogs   VoiceAttendanceLog[]
-}
-
-model VoiceAttendanceLog {
-  id              String              @id @default(cuid())
-  sessionId       String
-  guildId         String
-  userId          String
-  userTag         String?
-  joinedAt        DateTime
-  leftAt          DateTime?
-  durationSeconds Int                 @default(0)
-  isLate          Boolean             @default(false)
-  leftEarly       Boolean             @default(false)
-
-  session         VoiceTrackerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-}
 
 // ==========================================
 // V2 EXTENSIONS: LEAVES & AFK

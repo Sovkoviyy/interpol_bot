@@ -201,11 +201,10 @@ testModeRouter.post('/purge-all-bot-channels', async (req: AuthenticatedRequest,
     await guild.channels.fetch().catch(() => null);
 
     // 1. Collect configured channel/category IDs from DB
-    const [logCfg, academyCfg, recruitCfg, voiceCfg, guildCfg, academyChannels, applications] = await Promise.all([
+    const [logCfg, academyCfg, recruitCfg, guildCfg, academyChannels, applications] = await Promise.all([
       prisma.loggingConfig.findUnique({ where: { guildId } }),
       prisma.academyConfig.findUnique({ where: { guildId } }),
       prisma.recruitmentConfig.findUnique({ where: { guildId } }),
-      prisma.voiceTrackerConfig.findUnique({ where: { guildId } }),
       prisma.guildConfig.findUnique({ where: { guildId } }),
       prisma.academyChannel.findMany({ where: { guildId }, select: { channelId: true } }),
       prisma.recruitmentApplication.findMany({ where: { guildId }, select: { channelId: true } }),
@@ -240,11 +239,6 @@ testModeRouter.post('/purge-all-bot-channels', async (req: AuthenticatedRequest,
     }
     for (const app of applications) {
       if (app.channelId) targetChannelIds.add(app.channelId);
-    }
-
-    if (voiceCfg) {
-      if (voiceCfg.controlChannelId) targetChannelIds.add(voiceCfg.controlChannelId);
-      if (voiceCfg.logChannelId) targetChannelIds.add(voiceCfg.logChannelId);
     }
 
     if (guildCfg) {
@@ -351,13 +345,6 @@ testModeRouter.post('/purge-all-bot-channels', async (req: AuthenticatedRequest,
         data: {
           categoryId: null,
           channelId: null,
-          logChannelId: null,
-        },
-      }).catch(() => null),
-      prisma.voiceTrackerConfig.updateMany({
-        where: { guildId },
-        data: {
-          controlChannelId: null,
           logChannelId: null,
         },
       }).catch(() => null),
@@ -547,7 +534,6 @@ testModeRouter.post('/full-wipe', async (req: AuthenticatedRequest, res: Respons
     await prisma.eventParticipant.deleteMany({});
     await prisma.eventGathering.deleteMany({ where: { guildId } });
     await prisma.userProfile.deleteMany({ where: { guildId } });
-    await prisma.voiceTrackerSession.deleteMany({ where: { guildId } });
 
     await AuditLogger.recordEntry({
       guildId,

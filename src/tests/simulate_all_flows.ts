@@ -66,12 +66,6 @@ async function runSimulation() {
     create: { guildId: testGuildId, requiredMpForRankUp: 10, academicRoleId: 'role_academic', promotedRoleId: 'role_member' },
   });
 
-  await prisma.voiceTrackerConfig.upsert({
-    where: { guildId: testGuildId },
-    update: { voiceChannelId: 'vc_mp_channel', defaultVoiceName: 'Ожидание МП' },
-    create: { guildId: testGuildId, voiceChannelId: 'vc_mp_channel', defaultVoiceName: 'Ожидание МП' },
-  });
-
   await prisma.antiNukeConfig.upsert({
     where: { guildId: testGuildId },
     update: { enabled: true, alertUserIdsJson: JSON.stringify([ownerId]) },
@@ -1121,7 +1115,6 @@ async function runSimulation() {
   await prisma.guildConfig.deleteMany({ where: { guildId: testGuildId } });
   await prisma.recruitmentConfig.deleteMany({ where: { guildId: testGuildId } });
   await prisma.academyConfig.deleteMany({ where: { guildId: testGuildId } });
-  await prisma.voiceTrackerConfig.deleteMany({ where: { guildId: testGuildId } });
   await prisma.antiNukeConfig.deleteMany({ where: { guildId: testGuildId } });
   await prisma.tierSubmission.deleteMany({ where: { guildId: testGuildId } });
   await prisma.tierTicket.deleteMany({ where: { guildId: testGuildId } });

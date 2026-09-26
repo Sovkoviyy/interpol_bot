@@ -39,7 +39,6 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
     manageEvents, 
     viewLogs,
     manageAcademy,
-    manageVoiceTracker,
     antiNukeAlerts,
     modular,
     permissionsJson
@@ -60,7 +59,6 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageEvents: Boolean(manageEvents),
       viewLogs: Boolean(viewLogs),
       manageAcademy: Boolean(manageAcademy),
-      manageVoiceTracker: Boolean(manageVoiceTracker),
       antiNukeAlerts: Boolean(antiNukeAlerts),
       permissionsJson: finalJson,
     },
@@ -73,7 +71,6 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageEvents: Boolean(manageEvents),
       viewLogs: Boolean(viewLogs),
       manageAcademy: Boolean(manageAcademy),
-      manageVoiceTracker: Boolean(manageVoiceTracker),
       antiNukeAlerts: Boolean(antiNukeAlerts),
       permissionsJson: finalJson,
     },
