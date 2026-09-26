@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Flame, LogIn, Sparkles, Terminal } from 'lucide-react';
 import api from '../api/client';
 
@@ -38,13 +39,18 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#060709] flex flex-col justify-center items-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#060709] bg-ambient-radial flex flex-col justify-center items-center p-4 relative overflow-hidden">
       {/* Background glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-600/15 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-600/15 rounded-full blur-3xl pointer-events-none animate-pulse-glow"></div>
 
-      <div className="w-full max-w-md bg-[#151921] border border-[#1E232F] rounded-2xl p-8 shadow-2xl relative z-10">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.94, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-md bg-[#151921] border border-[#1E232F] hover:border-pink-500/30 rounded-2xl p-8 shadow-2xl shadow-black/80 relative z-10 transition-colors"
+      >
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-600 to-rose-500 flex items-center justify-center shadow-lg shadow-pink-600/30 mb-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-600 to-rose-500 flex items-center justify-center shadow-lg shadow-pink-600/30 mb-4 animate-float">
             <Flame className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">INTERPOL BOT</h1>
@@ -86,7 +92,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         <p className="mt-8 text-center text-xs text-slate-400">
           Доступ к разделам настраивается в соответствии с вашими ролями в Discord
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 };

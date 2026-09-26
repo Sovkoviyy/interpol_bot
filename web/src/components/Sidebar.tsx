@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, 
   UserPlus, 
@@ -125,15 +126,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions, isBypass }) =
                       key={link.to}
                       to={link.to}
                       className={({ isActive }) =>
-                        `flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 ${
+                        `relative flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150 group ${
                           isActive
-                            ? 'bg-pink-500/10 text-pink-400 border border-pink-500/30 font-semibold shadow-pink-sm'
+                            ? 'text-pink-400 font-semibold'
                             : 'text-slate-400 hover:text-slate-200 hover:bg-[#151922]'
                         }`
                       }
                     >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="truncate">{link.label}</span>
+                      {({ isActive }) => (
+                        <>
+                          {isActive && (
+                            <motion.div
+                              layoutId="activeSidebarIndicator"
+                              className="absolute inset-0 bg-pink-500/10 border border-pink-500/30 rounded-xl shadow-pink-sm"
+                              transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                            />
+                          )}
+                          <Icon className={`w-4 h-4 shrink-0 relative z-10 transition-transform duration-150 group-hover:scale-110 ${isActive ? 'text-pink-400' : 'text-slate-400 group-hover:text-pink-400'}`} />
+                          <span className="truncate relative z-10">{link.label}</span>
+                        </>
+                      )}
                     </NavLink>
                   );
                 })}

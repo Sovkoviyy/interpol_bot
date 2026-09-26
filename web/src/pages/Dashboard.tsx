@@ -92,10 +92,10 @@ export const Dashboard: React.FC = () => {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group hover:border-pink-500/40 transition-all">
+        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group card-interactive">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Участников на сервере</span>
-            <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center transition-transform group-hover:scale-110">
               <Users className="w-5 h-5" />
             </div>
           </div>
@@ -105,10 +105,10 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group hover:border-pink-500/40 transition-all">
+        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group card-interactive">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Заявки в ожидании</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center transition-transform group-hover:scale-110">
               <UserPlus className="w-5 h-5" />
             </div>
           </div>
@@ -116,15 +116,15 @@ export const Dashboard: React.FC = () => {
             <span className="text-3xl font-bold text-amber-400">{stats?.recruitment?.pending || 0}</span>
             <span className="text-xs text-slate-400">ждут рекрутера</span>
           </div>
-          <Link to="/recruitment" className="mt-3 inline-flex items-center text-xs text-pink-400 hover:text-pink-300 gap-1 font-medium">
+          <Link to="/recruitment" className="mt-3 inline-flex items-center text-xs text-pink-400 hover:text-pink-300 gap-1 font-medium group-hover:translate-x-1 transition-transform">
             Перейти к заявкам <ArrowUpRight className="w-3.5 h-3.5" />
           </Link>
         </div>
 
-        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group hover:border-pink-500/40 transition-all">
+        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group card-interactive">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Активные сборы на МП</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center transition-transform group-hover:scale-110">
               <CalendarDays className="w-5 h-5" />
             </div>
           </div>
@@ -132,7 +132,7 @@ export const Dashboard: React.FC = () => {
             <span className="text-3xl font-bold text-emerald-400">{stats?.events?.active || 0}</span>
             <span className="text-xs text-slate-400">сборов в процессе</span>
           </div>
-          <Link to="/events" className="mt-3 inline-flex items-center text-xs text-pink-400 hover:text-pink-300 gap-1 font-medium">
+          <Link to="/events" className="mt-3 inline-flex items-center text-xs text-pink-400 hover:text-pink-300 gap-1 font-medium group-hover:translate-x-1 transition-transform">
             Открыть сборы <ArrowUpRight className="w-3.5 h-3.5" />
           </Link>
         </div>

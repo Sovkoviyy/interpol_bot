@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { 
   MessageSquare, 
   Send, 
@@ -461,8 +462,16 @@ export const BotMessages: React.FC = () => {
                 </div>
 
                 {/* Expanded Editor Body */}
-                {isExpanded && (
-                  <div className="p-5 space-y-5 bg-[#0D1017]">
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-5 space-y-5 bg-[#0D1017]">
                     {/* Available Placeholders Badges */}
                     <div className="bg-[#151921] border border-[#1E232F] rounded-xl p-3.5 space-y-2">
                       <div className="flex items-center justify-between">
@@ -662,8 +671,10 @@ export const BotMessages: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
             );
           })
         )}
