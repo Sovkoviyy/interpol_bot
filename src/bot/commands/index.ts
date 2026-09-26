@@ -6,6 +6,7 @@ import { eventCommand } from './event';
 import { logsCommand } from './logs';
 import { profileCommand, setStaticCommand, topCommand, penaltyCommand } from './profile';
 import { academyCommand } from './academy';
+import { tierCommand } from './tier';
 
 export function registerCommands() {
   const commands = [
@@ -17,6 +18,7 @@ export function registerCommands() {
     topCommand,
     penaltyCommand,
     academyCommand,
+    tierCommand,
   ];
 
   for (const cmd of commands) {
@@ -41,6 +43,7 @@ export async function deploySlashCommands() {
     topCommand.data.toJSON(),
     penaltyCommand.data.toJSON(),
     academyCommand.data.toJSON(),
+    tierCommand.data.toJSON(),
   ];
 
   const rest = new REST({ version: '10' }).setToken(config.discord.token);

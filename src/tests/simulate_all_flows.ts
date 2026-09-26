@@ -8,6 +8,7 @@ import { EventService } from '../bot/modules/events/eventService';
 import { RecruitmentService } from '../bot/modules/recruitment/recruitmentService';
 import { ProfileService } from '../bot/modules/profiles/profileService';
 import { LeaveService } from '../bot/modules/leave/leaveService';
+import { TierService } from '../bot/modules/tier/tierService';
 import { AntiNukeService } from '../bot/modules/antiNuke/antiNukeService';
 import { PayrollService } from '../bot/modules/payroll/payrollService';
 import { BlacklistService } from '../bot/modules/blacklist/blacklistService';
@@ -117,11 +118,24 @@ async function runSimulation() {
   const reserveMember = createMockMember(reserveUserId, 'Reserve#0004', ['role_member']);
   const ownerMember = createMockMember(ownerId, 'Leader#0000', ['role_leader'], true);
 
-  // Channels mock map using Discord.js Collection
   const channelsMap = new Collection<string, any>();
   const addChannel = (ch: any) => {
     ch.isTextBased = () => ch.type === ChannelType.GuildText || ch.type === 0;
-    ch.send = async (_msg: any) => ({ id: `msg_${Date.now()}`, ..._msg });
+    ch.isThread = () => ch.type === ChannelType.PublicThread || ch.type === 11 || ch.id.startsWith('th_');
+    ch.send = async (_msg: any) => ({
+      id: `msg_${Date.now()}`,
+      ..._msg,
+      edit: async (_upd: any) => true,
+      startThread: async (threadData: any) => {
+        const threadCh = addChannel({
+          id: `th_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          parentId: ch.id,
+          name: threadData.name,
+          type: ChannelType.PublicThread,
+        });
+        return threadCh;
+      },
+    });
     ch.setName = async (name: string) => { ch.name = name; return ch; };
     ch.messages = {
       fetch: async () => new Collection(),
@@ -143,6 +157,7 @@ async function runSimulation() {
     id: testGuildId,
     name: 'Interpol Test Family',
     ownerId,
+    iconURL: () => 'https://example.com/icon.png',
     roles: {
       everyone: { id: 'role_everyone' },
       cache: new Collection([
@@ -152,6 +167,11 @@ async function runSimulation() {
         ['role_leader', { id: 'role_leader', name: 'Leader', hexColor: '#e74c3c', position: 10 }],
       ]),
       fetch: async (id: string) => mockGuildObj.roles.cache.get(id),
+      create: async (data: any) => {
+        const newRole = { id: `role_${Date.now()}`, ...data };
+        mockGuildObj.roles.cache.set(newRole.id, newRole);
+        return newRole;
+      },
     },
     channels: {
       cache: channelsMap,
@@ -871,9 +891,130 @@ async function runSimulation() {
   pass(`Button academy_promote_confirm_${academyChannelRecord.id} successfully promoted academician to Rank 2`);
 
   // =========================================================================
-  // 7. FLOW: RECRUITER PAYROLL
+  // 7. FLOW: TIER SYSTEM (tier_request_channel_btn -> 4 threads -> submit clip -> review)
   // =========================================================================
-  step('7. FLOW: Recruiter Payroll Calculation');
+  step('7. FLOW: Tier System (Request Channel, 4 Threads: Капт/MCL/ВЗЗ/РП, Clip Submission & Checker Review)');
+
+  // 7a. Setup structure
+  const tierSetup = await TierService.setupTierStructure(mockGuildObj);
+  console.assert(tierSetup.applyChannelId !== undefined, 'Tier apply channel created');
+  pass('Tier structure setup successfully in Discord');
+
+  // 7b. Candidate clicks tier_request_channel_btn
+  const tierRequestBtn: any = {
+    customId: 'tier_request_channel_btn',
+    isButton: () => true,
+    isModalSubmit: () => false,
+    isStringSelectMenu: () => false,
+    isChatInputCommand: () => false,
+    isRepliable: () => true,
+    member: regularMember,
+    user: regularMember.user,
+    guild: mockGuildObj,
+    guildId: testGuildId,
+    channelId: tierSetup.applyChannelId,
+  };
+  await dispatchInteraction(tierRequestBtn);
+  const tierTicket = await prisma.tierTicket.findFirst({
+    where: { guildId: testGuildId, userId: memberId, status: 'OPEN' },
+  });
+  console.assert(tierTicket !== null, 'Tier ticket must be created in DB');
+  pass(`Button tier_request_channel_btn created ticket channel #${tierTicket?.channelId} with 4 MP threads`);
+
+  // 7c. Candidate clicks tier_clip_btn_Капт_${tierTicket.id}
+  const tierClipBtn: any = {
+    customId: `tier_clip_btn_${encodeURIComponent('Капт')}_${tierTicket!.id}`,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    isStringSelectMenu: () => false,
+    isChatInputCommand: () => false,
+    isRepliable: () => true,
+    member: regularMember,
+    user: regularMember.user,
+    guild: mockGuildObj,
+    guildId: testGuildId,
+    channelId: tierTicket!.channelId,
+  };
+  const clipBtnRes = await dispatchInteraction(tierClipBtn);
+  console.assert(clipBtnRes.modalShown !== undefined, 'Clip modal must be shown');
+  pass('Button tier_clip_btn displayed clip submission modal');
+
+  // 7d. Candidate submits clip modal
+  const tierClipModal: any = {
+    customId: `tier_clip_modal_${encodeURIComponent('Капт')}_${tierTicket!.id}`,
+    isButton: () => false,
+    isModalSubmit: () => true,
+    isStringSelectMenu: () => false,
+    isChatInputCommand: () => false,
+    isRepliable: () => true,
+    member: regularMember,
+    user: regularMember.user,
+    guild: mockGuildObj,
+    guildId: testGuildId,
+    channelId: tierTicket!.channelId,
+    fields: {
+      getTextInputValue: (field: string) => {
+        if (field === 'clip_url') return 'https://youtu.be/test_capt_clip';
+        if (field === 'clip_comment') return '3 килла на мосту, таймкод 01:25';
+        return '';
+      },
+    },
+  };
+  await dispatchInteraction(tierClipModal);
+  const submission = await prisma.tierSubmission.findFirst({
+    where: { ticketId: tierTicket!.id, mpType: 'Капт' },
+  });
+  console.assert(submission !== null, 'Tier submission must be created');
+  console.assert(submission?.status === 'PENDING', 'Submission status must be PENDING');
+  pass(`Modal tier_clip_modal submitted clip for Капт (ID: ${submission?.id}) and dispatched to #проверка-тир`);
+
+  // 7e. Checker reviews submission
+  const reviewBtn: any = {
+    customId: `tier_review_btn_${submission!.id}`,
+    isButton: () => true,
+    isModalSubmit: () => false,
+    isStringSelectMenu: () => false,
+    isChatInputCommand: () => false,
+    isRepliable: () => true,
+    member: ownerMember,
+    user: ownerMember.user,
+    guild: mockGuildObj,
+    guildId: testGuildId,
+    channelId: tierSetup.reviewChannelId,
+  };
+  const reviewBtnRes = await dispatchInteraction(reviewBtn);
+  console.assert(reviewBtnRes.modalShown !== undefined, 'Review modal must be shown');
+
+  const reviewModal: any = {
+    customId: `tier_review_modal_${submission!.id}`,
+    isButton: () => false,
+    isModalSubmit: () => true,
+    isStringSelectMenu: () => false,
+    isChatInputCommand: () => false,
+    isRepliable: () => true,
+    member: ownerMember,
+    user: ownerMember.user,
+    guild: mockGuildObj,
+    guildId: testGuildId,
+    channelId: tierSetup.reviewChannelId,
+    fields: {
+      getTextInputValue: (field: string) => {
+        if (field === 'reviewer_comment') return 'Отличный прицел и тайминги. Принят в основу.';
+        if (field === 'assigned_tier') return 'Tier 1';
+        return '';
+      },
+    },
+  };
+  await dispatchInteraction(reviewModal);
+  const reviewedSub = await prisma.tierSubmission.findUnique({ where: { id: submission!.id } });
+  console.assert(reviewedSub?.status === 'REVIEWED', 'Submission status must be REVIEWED');
+  console.assert(reviewedSub?.reviewerComment?.includes('Tier 1'), 'Reviewer comment must be saved');
+  pass(`Modal tier_review_modal marked submission as REVIEWED and delivered verdict to candidate thread`);
+
+  // =========================================================================
+  // 8. FLOW: RECRUITER PAYROLL
+  // =========================================================================
+  step('8. FLOW: Recruiter Payroll Calculation');
   const payroll = await PayrollService.calculatePayroll(
     testGuildId,
     new Date(Date.now() - 24 * 3600 * 1000),
@@ -982,6 +1123,9 @@ async function runSimulation() {
   await prisma.academyConfig.deleteMany({ where: { guildId: testGuildId } });
   await prisma.voiceTrackerConfig.deleteMany({ where: { guildId: testGuildId } });
   await prisma.antiNukeConfig.deleteMany({ where: { guildId: testGuildId } });
+  await prisma.tierSubmission.deleteMany({ where: { guildId: testGuildId } });
+  await prisma.tierTicket.deleteMany({ where: { guildId: testGuildId } });
+  await prisma.tierConfig.deleteMany({ where: { guildId: testGuildId } });
   bot.guilds.cache.delete(testGuildId);
   pass('Test data cleaned up successfully');
 

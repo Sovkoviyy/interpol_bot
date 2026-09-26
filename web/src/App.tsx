@@ -22,6 +22,7 @@ import { Profiles } from './pages/Profiles';
 import { ServerSetup } from './pages/ServerSetup';
 import { TestMode } from './pages/TestMode';
 import { Nicknames } from './pages/Nicknames';
+import { Tier } from './pages/Tier';
 import { ModalProvider } from './context/ModalContext';
 
 export const App: React.FC = () => {
@@ -90,6 +91,7 @@ export const App: React.FC = () => {
                           <Route path="/academy" element={<Academy />} />
                           <Route path="/recruitment" element={<Recruitment />} />
                           <Route path="/events" element={<Events />} />
+                          <Route path="/tier" element={<Tier />} />
                           <Route path="/leaves" element={<Leaves />} />
                           <Route path="/payroll" element={<RecruiterPayroll />} />
                           <Route path="/anti-nuke" element={<AntiNuke />} />

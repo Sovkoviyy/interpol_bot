@@ -19,7 +19,8 @@ import {
   UserX,
   FolderTree,
   Zap,
-  AtSign
+  AtSign,
+  Target
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -62,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions, isBypass }) =
       title: 'Мероприятия (МП)',
       links: [
         { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: true },
+        { to: '/tier', label: 'Тир система', icon: Target, visible: true },
       ],
     },
     {

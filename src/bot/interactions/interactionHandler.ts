@@ -20,6 +20,7 @@ import { AcademyService } from '../modules/academy/academyService';
 import { ProfileService } from '../modules/profiles/profileService';
 import { LeaveService } from '../modules/leave/leaveService';
 import { NicknameService } from '../modules/nicknames/nicknameService';
+import { TierService } from '../modules/tier/tierService';
 import prisma from '../../database/client';
 import { THEME, createThemedEmbed } from '../utils/theme';
 
@@ -264,6 +265,27 @@ export function registerInteractionHandler() {
         if (customId.startsWith('event_manage_')) {
           const eventId = customId.replace('event_manage_', '');
           await EventService.promptManagement(interaction, eventId);
+          return;
+        }
+
+        // --- Tier System Buttons ---
+        if (customId === 'tier_request_channel_btn') {
+          await TierService.handleRequestChannel(interaction);
+          return;
+        }
+
+        if (customId.startsWith('tier_clip_btn_')) {
+          const raw = customId.replace('tier_clip_btn_', '');
+          const lastUnderscore = raw.lastIndexOf('_');
+          const mpType = decodeURIComponent(raw.substring(0, lastUnderscore));
+          const ticketId = raw.substring(lastUnderscore + 1);
+          await TierService.handleSubmitClipButton(interaction, mpType, ticketId);
+          return;
+        }
+
+        if (customId.startsWith('tier_review_btn_')) {
+          const submissionId = customId.replace('tier_review_btn_', '');
+          await TierService.handleReviewButton(interaction, submissionId);
           return;
         }
 
@@ -698,6 +720,22 @@ export function registerInteractionHandler() {
           } catch (err: any) {
             await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
           }
+          return;
+        }
+
+        // --- Tier System Modals ---
+        if (customId.startsWith('tier_clip_modal_')) {
+          const raw = customId.replace('tier_clip_modal_', '');
+          const lastUnderscore = raw.lastIndexOf('_');
+          const mpType = decodeURIComponent(raw.substring(0, lastUnderscore));
+          const ticketId = raw.substring(lastUnderscore + 1);
+          await TierService.handleClipModalSubmit(interaction, mpType, ticketId);
+          return;
+        }
+
+        if (customId.startsWith('tier_review_modal_')) {
+          const submissionId = customId.replace('tier_review_modal_', '');
+          await TierService.handleReviewModalSubmit(interaction, submissionId);
           return;
         }
       }

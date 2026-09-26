@@ -53,6 +53,7 @@ model RolePermission {
   manageAcademy      Boolean  @default(false)
   manageVoiceTracker Boolean  @default(false)
   antiNukeAlerts     Boolean  @default(false)
+  manageTier         Boolean  @default(false)
   permissionsJson    String   @default("{}") // Modular & granular permissions JSON
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -535,5 +536,58 @@ model NicknameConfig {
   createdAt      DateTime @default(now())
 }
 
+// ==========================================
+// TIER SYSTEM
+// ==========================================
 
+model TierConfig {
+  guildId          String   @id
+  categoryId       String?  // Category "Заявки на тир"
+  applyChannelId   String?  // Channel "заявки-на-тир"
+  applyMessageId   String?  // Announcement message with button to create tier ticket
+  reviewChannelId  String?  // Private channel for checkers "проверка-тир"
+  checkerRoleId    String?  // Role ID for Tier Checkers
+  enabled          Boolean  @default(true)
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+}
 
+model TierTicket {
+  id          String   @id @default(cuid())
+  guildId     String
+  userId      String
+  userTag     String?
+  channelId   String   @unique // Ticket channel ID
+  status      String   @default("OPEN") // OPEN, CLOSED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  submissions TierSubmission[]
+
+  @@index([guildId, userId])
+}
+
+model TierSubmission {
+  id              String   @id @default(cuid())
+  ticketId        String
+  ticket          TierTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  guildId         String
+  userId          String
+  userTag         String?
+  channelId       String   // Ticket channel
+  threadId        String?  // Thread where submission was made (e.g. Капт thread)
+  mpType          String   // "Капт", "MCL", "ВЗЗ", "РП"
+  clipUrl         String
+  comment         String?
+  status          String   @default("PENDING") // PENDING, REVIEWED
+  reviewMessageId String?  // Message in #проверка-тир
+  reviewerId      String?
+  reviewerTag     String?
+  reviewerComment String?
+  reviewedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([guildId, userId])
+  @@index([guildId, status])
+}
