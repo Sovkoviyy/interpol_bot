@@ -62,10 +62,11 @@ if (!runCommand('npx prisma generate')) {
 const webDir = path.join(ROOT_DIR, 'web');
 const webDist = path.join(webDir, 'dist', 'index.html');
 const webModules = path.join(webDir, 'node_modules');
+const webTypesReact = path.join(webModules, '@types', 'react');
 
-if (!fs.existsSync(webModules)) {
+if (!fs.existsSync(webModules) || !fs.existsSync(webTypesReact)) {
   console.log('\n📦 Установка зависимостей веб-панели...');
-  if (!runCommand('npm install', webDir)) {
+  if (!runCommand('npm install --include=dev', webDir)) {
     console.error('❌ Ошибка установки зависимостей веб-панели.');
     process.exit(1);
   }
