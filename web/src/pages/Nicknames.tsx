@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { CustomSelect } from '../components/CustomSelect';
 
 interface DiscordRole {
   id: string;
@@ -604,19 +605,15 @@ export const Nicknames: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                   Выберите Discord роль *
                 </label>
-                <select
+                <CustomSelect
+                  options={roles.map((r) => ({
+                    value: r.id,
+                    label: `@${r.name}`,
+                  }))}
                   value={modalRole}
-                  onChange={(e) => setModalRole(e.target.value)}
-                  className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-pink-500/50"
-                  required
-                >
-                  <option value="">Выберите роль...</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      @{r.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setModalRole(val)}
+                  placeholder="Выберите роль..."
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -9,7 +9,6 @@ import { RecruitmentService } from '../bot/modules/recruitment/recruitmentServic
 import { ProfileService } from '../bot/modules/profiles/profileService';
 import { LeaveService } from '../bot/modules/leave/leaveService';
 import { TierService } from '../bot/modules/tier/tierService';
-import { AntiNukeService } from '../bot/modules/antiNuke/antiNukeService';
 import { PayrollService } from '../bot/modules/payroll/payrollService';
 import { BlacklistService } from '../bot/modules/blacklist/blacklistService';
 import { AuditLogger } from '../bot/modules/logging/auditLogger';
@@ -1018,25 +1017,6 @@ async function runSimulation() {
   console.assert(recruiterPayroll !== undefined, 'Recruiter must appear in payroll');
   console.assert(recruiterPayroll!.totalPayout > 0, 'Total payout must be calculated');
   pass(`Payroll successfully calculated: Total=${payroll.currencySymbol}${recruiterPayroll?.totalPayout}`);
-
-  // =========================================================================
-  // 8. FLOW: ANTI-NUKE SECURITY
-  // =========================================================================
-  step('8. FLOW: Anti-Nuke (Unauthorized Bot Addition Defense & Snapshots)');
-  const fakeBotMember = createMockMember(botId, 'MaliciousBot#0000', [], false, true);
-  fakeBotMember.guild = mockGuildObj;
-  fakeBotMember.kickable = true;
-  let kicked = false;
-  fakeBotMember.kick = async () => { kicked = true; return true; };
-  await AntiNukeService.handleBotAdd(fakeBotMember);
-  console.assert(kicked, 'Unauthorized bot must be kicked');
-  pass('Anti-Nuke intercepted and kicked unauthorized bot');
-
-  const snapshot = await AntiNukeService.createSnapshot(mockGuildObj, 'Security Snapshot');
-  console.assert(snapshot.guildId === testGuildId, 'Snapshot guild match');
-  const snapshots = await AntiNukeService.listSnapshots(testGuildId);
-  console.assert(snapshots.length > 0, 'Snapshots listed');
-  pass('Anti-Nuke channel snapshot created and listed');
 
   // =========================================================================
   // 9. FLOW: AUDIT LOGGING & /logs SLASH COMMAND

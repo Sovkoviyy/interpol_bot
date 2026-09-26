@@ -36,6 +36,8 @@ import {
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
 import { RoleSelect, DiscordRoleItem } from '../components/RoleSelect';
+import { ChannelSelect } from '../components/ChannelSelect';
+import { CustomSelect } from '../components/CustomSelect';
 
 type ActiveTab = 'wizard' | 'channels' | 'roles' | 'provision';
 
@@ -523,17 +525,17 @@ export const ServerSetup: React.FC = () => {
           <div className="flex items-center gap-3 bg-[#151921] border border-[#1E232F] p-2 rounded-xl">
             <Server className="w-4 h-4 text-pink-400 shrink-0 ml-1" />
             <div className="text-xs text-slate-400 shrink-0">Выбранный сервер:</div>
-            <select
+            <CustomSelect
+              options={guilds.map((g) => ({
+                value: g.id,
+                label: g.name,
+                sublabel: `${g.memberCount} участников`,
+              }))}
               value={selectedGuildId}
-              onChange={(e) => handleGuildChange(e.target.value)}
-              className="bg-[#0B0E14] text-white font-medium text-xs px-3 py-1.5 rounded-lg border border-[#1E232F] focus:outline-none focus:border-pink-500 transition-colors"
-            >
-              {guilds.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name} ({g.memberCount} участников)
-                </option>
-              ))}
-            </select>
+              onChange={(val) => handleGuildChange(val)}
+              placeholder="Выберите сервер..."
+              className="w-64"
+            />
           </div>
         </div>
 
@@ -930,18 +932,13 @@ export const ServerSetup: React.FC = () => {
                   <p className="text-[11px] text-slate-400">
                     Здесь бот разместит кнопку «🆔 Привязать статик», через которую игроки вводят ник и статический ID персонажа.
                   </p>
-                  <select
+                  <ChannelSelect
+                    channels={state?.channels || []}
+                    channelType="text"
                     value={bindings.staticBindingChannelId}
-                    onChange={(e) => setBindings({ ...bindings, staticBindingChannelId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value="">Не выбран (выберите текстовый канал)...</option>
-                    {textChannels.map((ch: any) => (
-                      <option key={ch.id} value={ch.id}>
-                        #{ch.name} (ID: {ch.id})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setBindings({ ...bindings, staticBindingChannelId: val })}
+                    placeholder="Выберите текстовый канал..."
+                  />
                   <button
                     onClick={() => handleQuickCreateChannel('staticBindingChannelId', 'привязка-статика', 0)}
                     className="inline-flex items-center gap-1 text-[11px] text-pink-400 hover:text-pink-300 font-medium"
@@ -962,18 +959,13 @@ export const ServerSetup: React.FC = () => {
                   <p className="text-[11px] text-slate-400">
                     Канал с кнопкой «🏖️ Подать на отпуск» для фиксации дат отсутствия членов семьи.
                   </p>
-                  <select
+                  <ChannelSelect
+                    channels={state?.channels || []}
+                    channelType="text"
                     value={bindings.leaveRequestChannelId}
-                    onChange={(e) => setBindings({ ...bindings, leaveRequestChannelId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value="">Не выбран (выберите текстовый канал)...</option>
-                    {textChannels.map((ch: any) => (
-                      <option key={ch.id} value={ch.id}>
-                        #{ch.name} (ID: {ch.id})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setBindings({ ...bindings, leaveRequestChannelId: val })}
+                    placeholder="Выберите текстовый канал..."
+                  />
                   <button
                     onClick={() => handleQuickCreateChannel('leaveRequestChannelId', 'отпуска-неактив', 0)}
                     className="inline-flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 font-medium"
@@ -994,18 +986,13 @@ export const ServerSetup: React.FC = () => {
                   <p className="text-[11px] text-slate-400">
                     Канал, видимый гостям сервера с кнопкой «📝 Подать заявку в семью».
                   </p>
-                  <select
+                  <ChannelSelect
+                    channels={state?.channels || []}
+                    channelType="text"
                     value={bindings.recruitmentApplyChannelId}
-                    onChange={(e) => setBindings({ ...bindings, recruitmentApplyChannelId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value="">Не выбран (выберите текстовый канал)...</option>
-                    {textChannels.map((ch: any) => (
-                      <option key={ch.id} value={ch.id}>
-                        #{ch.name} (ID: {ch.id})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setBindings({ ...bindings, recruitmentApplyChannelId: val })}
+                    placeholder="Выберите текстовый канал..."
+                  />
                   <button
                     onClick={() => handleQuickCreateChannel('recruitmentApplyChannelId', 'подать-заявку', 0)}
                     className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 font-medium"
@@ -1026,18 +1013,13 @@ export const ServerSetup: React.FC = () => {
                   <p className="text-[11px] text-slate-400">
                     Категория Discord, внутри которой бот автоматически создает приватные каналы тикетов кандидатов.
                   </p>
-                  <select
+                  <ChannelSelect
+                    channels={state?.channels || []}
+                    channelType="category"
                     value={bindings.recruitmentReviewChannelId}
-                    onChange={(e) => setBindings({ ...bindings, recruitmentReviewChannelId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value="">Не выбрана (выберите категорию)...</option>
-                    {categories.map((cat: any) => (
-                      <option key={cat.id} value={cat.id}>
-                        📁 {cat.name} (ID: {cat.id})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setBindings({ ...bindings, recruitmentReviewChannelId: val })}
+                    placeholder="Выберите категорию..."
+                  />
                   <button
                     onClick={() => handleQuickCreateChannel('recruitmentReviewChannelId', '📥 НАБОР В СЕМЬЮ', 4)}
                     className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 font-medium"
@@ -1058,18 +1040,13 @@ export const ServerSetup: React.FC = () => {
                   <p className="text-[11px] text-slate-400">
                     Категория для тикетов сдачи экзаменов новичков (1 ранг) перед менторами.
                   </p>
-                  <select
+                  <ChannelSelect
+                    channels={state?.channels || []}
+                    channelType="category"
                     value={bindings.academyCategoryId}
-                    onChange={(e) => setBindings({ ...bindings, academyCategoryId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value="">Не выбрана (выберите категорию)...</option>
-                    {categories.map((cat: any) => (
-                      <option key={cat.id} value={cat.id}>
-                        📁 {cat.name} (ID: {cat.id})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setBindings({ ...bindings, academyCategoryId: val })}
+                    placeholder="Выберите категорию..."
+                  />
                   <button
                     onClick={() => handleQuickCreateChannel('academyCategoryId', '🎓 ACADEMY', 4)}
                     className="inline-flex items-center gap-1 text-[11px] text-fuchsia-400 hover:text-fuchsia-300 font-medium"
@@ -1090,18 +1067,13 @@ export const ServerSetup: React.FC = () => {
                   <p className="text-[11px] text-slate-400">
                     Канал, куда бот публикует карточки сборов с таймером и кнопками «✅ Буду / ❌ Не смогу».
                   </p>
-                  <select
+                  <ChannelSelect
+                    channels={state?.channels || []}
+                    channelType="text"
                     value={bindings.eventAnnounceChannelId}
-                    onChange={(e) => setBindings({ ...bindings, eventAnnounceChannelId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value="">Не выбран (выберите текстовый канал)...</option>
-                    {textChannels.map((ch: any) => (
-                      <option key={ch.id} value={ch.id}>
-                        #{ch.name} (ID: {ch.id})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setBindings({ ...bindings, eventAnnounceChannelId: val })}
+                    placeholder="Выберите текстовый канал..."
+                  />
                   <button
                     onClick={() => handleQuickCreateChannel('eventAnnounceChannelId', 'сборы-на-мп', 0)}
                     className="inline-flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-medium"
@@ -1544,16 +1516,13 @@ export const ServerSetup: React.FC = () => {
                   Отправить панель
                 </button>
               </div>
-              <select
+              <ChannelSelect
+                channels={state?.channels || []}
+                channelType="text"
                 value={bindings.staticBindingChannelId}
-                onChange={(e) => setBindings({ ...bindings, staticBindingChannelId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Не выбран...</option>
-                {textChannels.map((ch: any) => (
-                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setBindings({ ...bindings, staticBindingChannelId: val })}
+                placeholder="Выберите текстовый канал..."
+              />
             </div>
 
             {/* Card 2: Leaves */}
@@ -1568,16 +1537,13 @@ export const ServerSetup: React.FC = () => {
                   Отправить панель
                 </button>
               </div>
-              <select
+              <ChannelSelect
+                channels={state?.channels || []}
+                channelType="text"
                 value={bindings.leaveRequestChannelId}
-                onChange={(e) => setBindings({ ...bindings, leaveRequestChannelId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Не выбран...</option>
-                {textChannels.map((ch: any) => (
-                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setBindings({ ...bindings, leaveRequestChannelId: val })}
+                placeholder="Выберите текстовый канал..."
+              />
             </div>
 
             {/* Card 3: Recruitment */}
@@ -1592,16 +1558,13 @@ export const ServerSetup: React.FC = () => {
                   Отправить панель
                 </button>
               </div>
-              <select
+              <ChannelSelect
+                channels={state?.channels || []}
+                channelType="text"
                 value={bindings.recruitmentApplyChannelId}
-                onChange={(e) => setBindings({ ...bindings, recruitmentApplyChannelId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Не выбран...</option>
-                {textChannels.map((ch: any) => (
-                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setBindings({ ...bindings, recruitmentApplyChannelId: val })}
+                placeholder="Выберите текстовый канал..."
+              />
             </div>
 
             {/* Card 4: Welcome */}
@@ -1616,16 +1579,13 @@ export const ServerSetup: React.FC = () => {
                   Тест отправка
                 </button>
               </div>
-              <select
+              <ChannelSelect
+                channels={state?.channels || []}
+                channelType="text"
                 value={bindings.welcomeChannelId}
-                onChange={(e) => setBindings({ ...bindings, welcomeChannelId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Не выбран...</option>
-                {textChannels.map((ch: any) => (
-                  <option key={ch.id} value={ch.id}>#{ch.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setBindings({ ...bindings, welcomeChannelId: val })}
+                placeholder="Выберите текстовый канал..."
+              />
             </div>
           </div>
         </div>

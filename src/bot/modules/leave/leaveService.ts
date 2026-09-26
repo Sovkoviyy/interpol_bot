@@ -1,4 +1,5 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
+import bot from '../../client';
 import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
 import { THEME, createThemedEmbed } from '../../utils/theme';
@@ -132,6 +133,53 @@ export class LeaveService {
           leaveUntil: leave.endDate,
         },
       });
+
+      // Update Discord message in channel: mark approved and remove action buttons (stays in channel until expired)
+      if (leave.channelId && leave.messageId) {
+        try {
+          const guild = bot.guilds.cache.get(leave.guildId) || await bot.guilds.fetch(leave.guildId).catch(() => null);
+          if (guild) {
+            const ch = (guild.channels.cache.get(leave.channelId) || await guild.channels.fetch(leave.channelId).catch(() => null)) as TextChannel | null;
+            if (ch) {
+              const msg = await ch.messages.fetch(leave.messageId).catch(() => null);
+              if (msg && msg.embeds.length > 0) {
+                const oldEmbed = msg.embeds[0];
+                const approvedEmbed = EmbedBuilder.from(oldEmbed)
+                  .setColor(THEME.COLORS.SUCCESS)
+                  .setFooter({ text: `✅ Одобрено ${reviewerTag} • Действует до ${leave.endDate.toLocaleDateString('ru-RU')}` });
+                await msg.edit({
+                  embeds: [approvedEmbed],
+                  components: [],
+                }).catch(() => null);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Failed to update approved leave message:', e);
+        }
+      }
+    } else {
+      // REJECTED: Delete message from channel completely and send DM with reason
+      if (leave.channelId && leave.messageId) {
+        try {
+          const guild = bot.guilds.cache.get(leave.guildId) || await bot.guilds.fetch(leave.guildId).catch(() => null);
+          if (guild) {
+            const ch = (guild.channels.cache.get(leave.channelId) || await guild.channels.fetch(leave.channelId).catch(() => null)) as TextChannel | null;
+            if (ch) {
+              const msg = await ch.messages.fetch(leave.messageId).catch(() => null);
+              if (msg) {
+                await msg.delete().catch(() => null);
+              }
+            }
+          }
+          await prisma.leaveRequest.update({
+            where: { id: requestId },
+            data: { messageId: null },
+          });
+        } catch (e) {
+          console.error('Failed to delete rejected leave message:', e);
+        }
+      }
     }
 
     await AuditLogger.recordEntry({
@@ -146,7 +194,7 @@ export class LeaveService {
       targetTag: leave.userTag,
     }).catch(() => null);
 
-    // Send DM to member
+    // Send DM to member with rejection reason or approval details
     const templateKey = approved ? 'leave_dm_approved' : 'leave_dm_rejected';
     BotMessageManager.sendDM(leave.guildId, leave.userId, templateKey, {
       user: `<@${leave.userId}>`,
@@ -159,6 +207,67 @@ export class LeaveService {
     }).catch(() => null);
 
     return updated;
+  }
+
+  /**
+   * Cleanup expired approved leave messages and restore member active status
+   */
+  public static async cleanupExpiredLeaves() {
+    const now = new Date();
+    try {
+      const expired = await prisma.leaveRequest.findMany({
+        where: {
+          status: 'APPROVED',
+          endDate: { lte: now },
+          messageId: { not: null },
+        },
+      });
+
+      for (const leave of expired) {
+        try {
+          const guild = bot.guilds.cache.get(leave.guildId) || await bot.guilds.fetch(leave.guildId).catch(() => null);
+          if (guild && leave.channelId && leave.messageId) {
+            const ch = (guild.channels.cache.get(leave.channelId) || await guild.channels.fetch(leave.channelId).catch(() => null)) as TextChannel | null;
+            if (ch) {
+              const msg = await ch.messages.fetch(leave.messageId).catch(() => null);
+              if (msg) {
+                await msg.delete().catch(() => null);
+              }
+            }
+          }
+
+          // Mark messageId as null so it doesn't try to delete again
+          await prisma.leaveRequest.update({
+            where: { id: leave.id },
+            data: { messageId: null },
+          });
+
+          // Check if user has other active leaves
+          const otherActive = await prisma.leaveRequest.findFirst({
+            where: {
+              guildId: leave.guildId,
+              userId: leave.userId,
+              status: 'APPROVED',
+              endDate: { gt: now },
+            },
+          });
+
+          if (!otherActive) {
+            await prisma.userProfile.updateMany({
+              where: { guildId: leave.guildId, userId: leave.userId },
+              data: {
+                status: 'ACTIVE',
+                leaveUntil: null,
+              },
+            });
+          }
+        } catch (itemErr) {
+          console.error(`[LeaveService] Error cleaning up single leave ${leave.id}:`, itemErr);
+        }
+      }
+    } catch (err) {
+      console.error('[LeaveService] Error in cleanupExpiredLeaves:', err);
+    }
   }
 
   /**

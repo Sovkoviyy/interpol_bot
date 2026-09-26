@@ -343,6 +343,8 @@ model LeaveRequest {
   reviewerId      String?
   reviewerTag     String?
   rejectionReason String?
+  channelId       String?
+  messageId       String?
   createdAt       DateTime     @default(now())
   reviewedAt      DateTime?
 

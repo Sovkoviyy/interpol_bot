@@ -141,8 +141,9 @@ embedsRouter.post('/send', requireAuth, requirePermission('manageSettings'), asy
   }
 
   // Build Discord Embed
-  const rawColor = color?.replace('#', '') || 'EC4899';
-  const colorInt = parseInt(rawColor, 16) || 0xEC4899;
+  const rawColor = (color || 'EC4899').replace(/^#/, '');
+  const parsed = parseInt(rawColor, 16);
+  const colorInt = Number.isNaN(parsed) ? 0xEC4899 : (parsed === 0 ? 0x000001 : parsed);
 
   const embed = new EmbedBuilder().setColor(colorInt);
 

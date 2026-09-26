@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { ChannelSelect } from '../components/ChannelSelect';
 
 export const Leaves: React.FC = () => {
   const modal = useModal();
@@ -636,18 +637,13 @@ export const Leaves: React.FC = () => {
           <div className="space-y-3 pt-2">
             <div>
               <label className="block text-xs text-slate-400 mb-1 font-medium">Канал для публикации панели:</label>
-              <select
+              <ChannelSelect
+                channels={channels}
+                channelType="text"
                 value={deployChannelId}
-                onChange={(e) => setDeployChannelId(e.target.value)}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Выберите канал...</option>
-                {channels.map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    #{ch.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setDeployChannelId(val)}
+                placeholder="Выберите канал..."
+              />
             </div>
 
             <button

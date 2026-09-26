@@ -404,20 +404,27 @@ export function registerInteractionHandler() {
 
         if (customId.startsWith('leave_reject_')) {
           const leaveId = customId.replace('leave_reject_', '');
-          await interaction.deferReply();
-          try {
-            const isLeaderOrAdmin = member.permissions && typeof member.permissions.has === 'function'
-              ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
-              : false;
-            if (!isLeaderOrAdmin) {
-              await interaction.editReply({ content: '❌ Только руководство может отклонять отпуска.' });
-              return;
-            }
-            await LeaveService.reviewLeave(leaveId, member.id, member.user.tag, false, 'Отклонено руководством');
-            await interaction.editReply({ content: `❌ Заявка на отпуск отклонена руководителем ${member}.` });
-          } catch (err: any) {
-            await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
+          const isLeaderOrAdmin = member.permissions && typeof member.permissions.has === 'function'
+            ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
+            : false;
+          if (!isLeaderOrAdmin) {
+            await interaction.reply({ content: '❌ Только руководство может отклонять отпуска.', ephemeral: true });
+            return;
           }
+
+          const modal = new ModalBuilder()
+            .setCustomId(`modal_leave_reject_${leaveId}`)
+            .setTitle('Причина отклонения заявления');
+
+          const reasonInput = new TextInputBuilder()
+            .setCustomId('rejection_reason')
+            .setLabel('Укажите причину отказа')
+            .setPlaceholder('например: Нехватка состава / норма МП')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true);
+
+          modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput));
+          await interaction.showModal(modal);
           return;
         }
       }
@@ -502,6 +509,21 @@ export function registerInteractionHandler() {
         if (customId.startsWith('recruit_modal_reject_')) {
           const applicationId = customId.replace('recruit_modal_reject_', '');
           await RecruitmentService.handleRejectSubmit(interaction, applicationId);
+          return;
+        }
+
+        if (customId.startsWith('modal_leave_reject_')) {
+          await interaction.deferReply({ ephemeral: true });
+          const leaveId = customId.replace('modal_leave_reject_', '');
+          const reason = interaction.fields.getTextInputValue('rejection_reason');
+          try {
+            await LeaveService.reviewLeave(leaveId, interaction.user.id, interaction.user.tag, false, reason);
+            await interaction.editReply({ 
+              content: `✅ Заявка на отпуск отклонена. Сообщение удалено из канала, кандидату отправлено уведомление с причиной в ЛС.` 
+            });
+          } catch (err: any) {
+            await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
+          }
           return;
         }
 
@@ -609,11 +631,21 @@ export function registerInteractionHandler() {
                       .setStyle(ButtonStyle.Danger)
                   );
 
-                  await leaveChannel.send({
+                  const sentMsg = await leaveChannel.send({
                     content: rendered.content,
                     embeds: [rendered.embed],
                     components: [actionRow],
                   }).catch(() => null);
+
+                  if (sentMsg) {
+                    await prisma.leaveRequest.update({
+                      where: { id: leave.id },
+                      data: {
+                        channelId: leaveChannel.id,
+                        messageId: sentMsg.id,
+                      },
+                    }).catch(() => null);
+                  }
                 }
               }
             }
@@ -710,11 +742,21 @@ export function registerInteractionHandler() {
                       .setStyle(ButtonStyle.Danger)
                   );
 
-                  await leaveChannel.send({
+                  const sentMsg = await leaveChannel.send({
                     content: rendered.content,
                     embeds: [rendered.embed],
                     components: [actionRow],
                   }).catch(() => null);
+
+                  if (sentMsg) {
+                    await prisma.leaveRequest.update({
+                      where: { id: leave.id },
+                      data: {
+                        channelId: leaveChannel.id,
+                        messageId: sentMsg.id,
+                      },
+                    }).catch(() => null);
+                  }
                 }
               }
             }

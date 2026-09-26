@@ -7,6 +7,7 @@ import { logsCommand } from './logs';
 import { profileCommand, setStaticCommand, topCommand, penaltyCommand } from './profile';
 import { academyCommand } from './academy';
 import { tierCommand } from './tier';
+import { clearChannelCommand } from './clearChannel';
 
 export function registerCommands() {
   const commands = [
@@ -19,6 +20,7 @@ export function registerCommands() {
     penaltyCommand,
     academyCommand,
     tierCommand,
+    clearChannelCommand,
   ];
 
   for (const cmd of commands) {
@@ -44,6 +46,7 @@ export async function deploySlashCommands() {
     penaltyCommand.data.toJSON(),
     academyCommand.data.toJSON(),
     tierCommand.data.toJSON(),
+    clearChannelCommand.data.toJSON(),
   ];
 
   const rest = new REST({ version: '10' }).setToken(config.discord.token);

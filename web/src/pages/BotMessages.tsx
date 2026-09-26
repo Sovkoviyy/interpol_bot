@@ -21,11 +21,14 @@ import {
   Hash,
   Bell,
   Palette,
-  Layers
+  Layers,
+  Image as ImageIcon
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
 import { DiscordMarkdown } from '../components/DiscordMarkdown';
+import { ChannelSelect } from '../components/ChannelSelect';
+import { CustomSelect } from '../components/CustomSelect';
 
 interface PlaceholderDef {
   tag: string;
@@ -43,6 +46,7 @@ interface MessageDef {
   defaultColor: string;
   defaultFooter: string;
   defaultContent?: string;
+  defaultImageUrl?: string;
   placeholders: PlaceholderDef[];
 }
 
@@ -53,6 +57,7 @@ interface CustomSettings {
   color?: string;
   footer?: string;
   content?: string;
+  imageUrl?: string;
 }
 
 interface DiscordChannel {
@@ -62,6 +67,7 @@ interface DiscordChannel {
 }
 
 const PRESET_COLORS = [
+  { name: 'Черный (000000)', hex: '#000000' },
   { name: 'Hot Pink (Фирменный)', hex: '#EC4899' },
   { name: 'Rose Red (Внимание)', hex: '#F43F5E' },
   { name: 'Emerald (Одобрено)', hex: '#10B981' },
@@ -70,6 +76,14 @@ const PRESET_COLORS = [
   { name: 'Indigo (Отпуска)', hex: '#6366F1' },
   { name: 'Sky Blue (Войс)', hex: '#3B82F6' },
   { name: 'Deep Dark (Строгий)', hex: '#1E232F' },
+];
+
+const GIF_PRESETS = [
+  { name: '🎆 Салют', url: 'https://media.giphy.com/media/26tOZ42Mg6pbTUPHW/giphy.gif' },
+  { name: '🔥 Огонь', url: 'https://media.giphy.com/media/yr7n0u3qzO9nG/giphy.gif' },
+  { name: '👋 Привет', url: 'https://media.giphy.com/media/mG1uv28P96v25LzJ5m/giphy.gif' },
+  { name: '⚠️ Внимание', url: 'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif' },
+  { name: '🏆 Победа / GG', url: 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif' },
 ];
 
 export const BotMessages: React.FC = () => {
@@ -299,16 +313,19 @@ export const BotMessages: React.FC = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-          <select
-            value={botStatusActivity}
-            onChange={(e) => setBotStatusActivity(e.target.value)}
-            className="w-full sm:w-36 bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-          >
-            <option value="PLAYING">Играет в</option>
-            <option value="WATCHING">Смотрит</option>
-            <option value="LISTENING">Слушает</option>
-            <option value="COMPETING">Соревнуется</option>
-          </select>
+          <div className="w-full sm:w-44">
+            <CustomSelect
+              value={botStatusActivity}
+              onChange={(val) => setBotStatusActivity(val)}
+              searchable={false}
+              options={[
+                { value: 'PLAYING', label: '🎮 Играет в' },
+                { value: 'WATCHING', label: '📺 Смотрит' },
+                { value: 'LISTENING', label: '🎧 Слушает' },
+                { value: 'COMPETING', label: '🏆 Соревнуется' },
+              ]}
+            />
+          </div>
 
           <input
             type="text"
@@ -336,24 +353,15 @@ export const BotMessages: React.FC = () => {
           </div>
 
           {/* Test Channel Selector */}
-          <div className="w-full md:w-80 flex items-center gap-2 bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-1.5">
-            <Send className="w-4 h-4 text-pink-400 flex-shrink-0" />
-            <div className="flex-1">
-              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
-                Канал для тестов в Discord:
-              </div>
-              <select
-                value={testChannelId}
-                onChange={(e) => setTestChannelId(e.target.value)}
-                className="w-full bg-transparent text-xs text-white focus:outline-none cursor-pointer"
-              >
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-[#151921]">
-                    #{c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="w-full md:w-80">
+            <ChannelSelect
+              channels={channels}
+              value={testChannelId}
+              onChange={(val) => setTestChannelId(val)}
+              placeholder="Канал для тестов..."
+              channelType="text"
+              allowClear={false}
+            />
           </div>
         </div>
 
@@ -398,8 +406,10 @@ export const BotMessages: React.FC = () => {
             const currentTitle = custom.title !== undefined ? custom.title : item.defaultTitle;
             const currentDesc = custom.description !== undefined ? custom.description : item.defaultDescription;
             const currentColor = custom.color || item.defaultColor;
+            const validColor = currentColor ? (currentColor.startsWith('#') ? currentColor : `#${currentColor}`) : '#EC4899';
             const currentFooter = custom.footer !== undefined ? custom.footer : item.defaultFooter;
             const currentContent = custom.content !== undefined ? custom.content : (item.defaultContent || '');
+            const currentImage = custom.imageUrl !== undefined ? custom.imageUrl : (item.defaultImageUrl || '');
 
             const previewTitle = renderPreview(item, currentTitle);
             const previewDesc = renderPreview(item, currentDesc);
@@ -419,7 +429,7 @@ export const BotMessages: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <span
                       className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: currentColor }}
+                      style={{ backgroundColor: validColor }}
                     />
                     <div>
                       <div className="flex items-center gap-2">
@@ -571,7 +581,7 @@ export const BotMessages: React.FC = () => {
                                 type="button"
                                 onClick={() => handleCustomChange(item.key, 'color', col.hex)}
                                 className={`w-6 h-6 rounded-lg border transition-transform hover:scale-110 ${
-                                  currentColor.toUpperCase() === col.hex.toUpperCase()
+                                  validColor.toUpperCase() === col.hex.toUpperCase()
                                     ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0B0E14]'
                                     : 'border-white/10'
                                 }`}
@@ -579,12 +589,68 @@ export const BotMessages: React.FC = () => {
                                 title={col.name}
                               />
                             ))}
-                            <input
-                              type="text"
-                              value={currentColor}
-                              onChange={(e) => handleCustomChange(item.key, 'color', e.target.value)}
-                              className="w-24 bg-[#151921] border border-[#1E232F] rounded-lg px-2 py-1 text-xs text-white font-mono uppercase focus:outline-none focus:border-pink-500 ml-2"
-                            />
+                            <div className="flex items-center gap-1.5 ml-2">
+                              <input
+                                type="color"
+                                value={validColor.length === 7 ? validColor : '#000000'}
+                                onChange={(e) => handleCustomChange(item.key, 'color', e.target.value.toUpperCase())}
+                                className="w-7 h-7 rounded border border-[#1E232F] bg-transparent cursor-pointer p-0.5"
+                                title="Выбрать цвет палитрой"
+                              />
+                              <input
+                                type="text"
+                                value={currentColor}
+                                placeholder="#000000"
+                                onChange={(e) => {
+                                  let val = e.target.value.trim();
+                                  if (val && !val.startsWith('#')) {
+                                    val = '#' + val;
+                                  }
+                                  handleCustomChange(item.key, 'color', val.slice(0, 7).toUpperCase());
+                                }}
+                                className="w-24 bg-[#151921] border border-[#1E232F] rounded-lg px-2 py-1 text-xs text-white font-mono uppercase focus:outline-none focus:border-pink-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Banner / GIF Animation */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <ImageIcon className="w-3 h-3 text-pink-400" />
+                              Баннер / GIF анимация (Image URL)
+                            </span>
+                            <span className="text-[10px] text-slate-500">Прямая ссылка на GIF/PNG</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={currentImage}
+                            placeholder="https://media.giphy.com/media/.../giphy.gif"
+                            onChange={(e) => handleCustomChange(item.key, 'imageUrl', e.target.value.trim())}
+                            className="w-full bg-[#151921] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-pink-500 font-mono"
+                          />
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="text-[10px] text-slate-500">Быстрые GIF:</span>
+                            {GIF_PRESETS.map((g) => (
+                              <button
+                                key={g.name}
+                                type="button"
+                                onClick={() => handleCustomChange(item.key, 'imageUrl', g.url)}
+                                className="text-[10px] px-2 py-0.5 rounded bg-[#0B0E14] border border-[#1E232F] text-slate-400 hover:text-white hover:border-pink-500/40 transition-colors"
+                              >
+                                {g.name}
+                              </button>
+                            ))}
+                            {currentImage && (
+                              <button
+                                type="button"
+                                onClick={() => handleCustomChange(item.key, 'imageUrl', '')}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors ml-auto"
+                              >
+                                Убрать GIF
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -621,7 +687,7 @@ export const BotMessages: React.FC = () => {
                           {/* Embed card */}
                           <div
                             className="bg-[#1E1F22] rounded-lg p-3.5 border-l-4 space-y-2 text-left"
-                            style={{ borderColor: currentColor }}
+                            style={{ borderColor: validColor }}
                           >
                             {/* Title */}
                             {previewTitle && (
@@ -634,6 +700,18 @@ export const BotMessages: React.FC = () => {
                             {previewDesc && (
                               <div className="text-xs text-[#DBDEE1] leading-relaxed font-sans">
                                 <DiscordMarkdown content={previewDesc} />
+                              </div>
+                            )}
+
+                            {/* Large Image / GIF Banner */}
+                            {currentImage && (
+                              <div className="pt-2">
+                                <img
+                                  src={currentImage}
+                                  alt="Embed Banner"
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                  className="w-full max-h-56 rounded-md object-cover shadow"
+                                />
                               </div>
                             )}
 

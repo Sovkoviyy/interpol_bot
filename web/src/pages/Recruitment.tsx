@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { ChannelSelect } from '../components/ChannelSelect';
+import { CustomSelect } from '../components/CustomSelect';
 
 export const Recruitment: React.FC = () => {
   const modal = useModal();
@@ -308,44 +310,35 @@ export const Recruitment: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
                 <label className="block text-slate-400 mb-1 font-medium">Канал для объявления с кнопкой</label>
-                <select
+                <ChannelSelect
+                  channels={channels}
+                  channelType="text"
                   value={config?.channelId || ''}
-                  onChange={(e) => setConfig({ ...config, channelId: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
-                >
-                  <option value="">Выберите канал...</option>
-                  {textChannels.map((c) => (
-                    <option key={c.id} value={c.id}>#{c.name}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setConfig({ ...config, channelId: val })}
+                  placeholder="Выберите канал..."
+                />
               </div>
 
               <div>
                 <label className="block text-slate-400 mb-1 font-medium">Категория для тикетов (заявок)</label>
-                <select
+                <ChannelSelect
+                  channels={channels}
+                  channelType="category"
                   value={config?.categoryId || ''}
-                  onChange={(e) => setConfig({ ...config, categoryId: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
-                >
-                  <option value="">Выберите категорию...</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>📁 {c.name}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setConfig({ ...config, categoryId: val })}
+                  placeholder="Выберите категорию..."
+                />
               </div>
 
               <div>
                 <label className="block text-slate-400 mb-1 font-medium">Канал для транскриптов и архива</label>
-                <select
+                <ChannelSelect
+                  channels={channels}
+                  channelType="text"
                   value={config?.logChannelId || ''}
-                  onChange={(e) => setConfig({ ...config, logChannelId: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
-                >
-                  <option value="">Выберите канал транскриптов...</option>
-                  {textChannels.map((c) => (
-                    <option key={c.id} value={c.id}>#{c.name}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setConfig({ ...config, logChannelId: val })}
+                  placeholder="Выберите канал транскриптов..."
+                />
               </div>
 
               <div className="md:col-span-2">
@@ -477,18 +470,20 @@ export const Recruitment: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3 pt-4 md:pt-0">
-                      <select
+                      <CustomSelect
+                        options={[
+                          { value: 'SHORT', label: 'Короткий ответ' },
+                          { value: 'PARAGRAPH', label: 'Абзац (длинный)' },
+                        ]}
                         value={q.style}
-                        onChange={(e) => {
+                        onChange={(val) => {
                           const updated = [...config.questions];
-                          updated[idx].style = e.target.value;
+                          updated[idx].style = val;
                           setConfig({ ...config, questions: updated });
                         }}
-                        className="bg-[#151921] border border-[#1E232F] rounded-lg px-2 py-1.5 text-slate-200 text-xs"
-                      >
-                        <option value="SHORT">Короткий ответ</option>
-                        <option value="PARAGRAPH">Абзац (длинный)</option>
-                      </select>
+                        searchable={false}
+                        className="w-44"
+                      />
 
                       <label className="inline-flex items-center gap-1.5 text-slate-400 cursor-pointer">
                         <input

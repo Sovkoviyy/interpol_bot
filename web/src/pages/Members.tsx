@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { CustomSelect } from '../components/CustomSelect';
 
 interface DiscordRole {
   id: string;
@@ -454,33 +455,35 @@ export const Members: React.FC = () => {
 
           {/* Role Filter */}
           <div className="w-full md:w-56">
-            <select
+            <CustomSelect
+              options={[
+                { value: 'ALL', label: `Все роли (${roles.length})` },
+                ...roles.map((r) => ({
+                  value: r.id,
+                  label: `@${r.name}`,
+                })),
+              ]}
               value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-pink-500 cursor-pointer"
-            >
-              <option value="ALL">Все роли ({roles.length})</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  @{r.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedRole(val)}
+              placeholder="Фильтр по роли..."
+            />
           </div>
 
           {/* Sort Selector */}
           <div className="w-full md:w-56">
-            <select
+            <CustomSelect
+              options={[
+                { value: 'JOINED_DESC', label: 'Сначала новые на сервере' },
+                { value: 'JOINED_ASC', label: 'Сначала старые на сервере' },
+                { value: 'NAME_ASC', label: 'По имени (А-Я)' },
+                { value: 'STATIC_ASC', label: 'По номеру статика' },
+                { value: 'RANK_DESC', label: 'По рангу семьи (с высших)' },
+              ]}
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-pink-500 cursor-pointer"
-            >
-              <option value="JOINED_DESC">Сначала новые на сервере</option>
-              <option value="JOINED_ASC">Сначала старые на сервере</option>
-              <option value="NAME_ASC">По имени (А-Я)</option>
-              <option value="STATIC_ASC">По номеру статика</option>
-              <option value="RANK_DESC">По рангу семьи (с высших)</option>
-            </select>
+              onChange={(val) => setSortBy(val as any)}
+              searchable={false}
+              placeholder="Сортировка..."
+            />
           </div>
         </div>
 
@@ -811,17 +814,18 @@ export const Members: React.FC = () => {
                   <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
                     Ранг в семье
                   </label>
-                  <select
-                    value={profileForm.rank}
-                    onChange={(e) => setProfileForm({ ...profileForm, rank: Number(e.target.value) })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value={1}>1 • Академик</option>
-                    <option value={2}>2 • Участник</option>
-                    <option value={3}>3 • Офицер</option>
-                    <option value={4}>4 • Заместитель</option>
-                    <option value={5}>5 • Лидер</option>
-                  </select>
+                  <CustomSelect
+                    options={[
+                      { value: '1', label: '1 • Академик' },
+                      { value: '2', label: '2 • Участник' },
+                      { value: '3', label: '3 • Офицер' },
+                      { value: '4', label: '4 • Заместитель' },
+                      { value: '5', label: '5 • Лидер' },
+                    ]}
+                    value={String(profileForm.rank)}
+                    onChange={(val) => setProfileForm({ ...profileForm, rank: Number(val) })}
+                    searchable={false}
+                  />
                 </div>
 
                 {/* Status */}
@@ -829,16 +833,17 @@ export const Members: React.FC = () => {
                   <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
                     Статус активности
                   </label>
-                  <select
+                  <CustomSelect
+                    options={[
+                      { value: 'ACTIVE', label: 'Активен' },
+                      { value: 'ON_LEAVE', label: 'В отпуске' },
+                      { value: 'AFK', label: 'Неактив' },
+                      { value: 'BLACKLISTED', label: 'Черный список (ЧС)' },
+                    ]}
                     value={profileForm.status}
-                    onChange={(e) => setProfileForm({ ...profileForm, status: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  >
-                    <option value="ACTIVE">Активен</option>
-                    <option value="ON_LEAVE">В отпуске</option>
-                    <option value="AFK">Неактив</option>
-                    <option value="BLACKLISTED">Черный список (ЧС)</option>
-                  </select>
+                    onChange={(val) => setProfileForm({ ...profileForm, status: val })}
+                    searchable={false}
+                  />
                 </div>
               </div>
 

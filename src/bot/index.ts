@@ -5,7 +5,6 @@ import { registerCommands, deploySlashCommands } from './commands';
 import { registerInteractionHandler } from './interactions/interactionHandler';
 import { initializeLoggingModule } from './modules/logging';
 import { EventScheduler } from './modules/events/eventScheduler';
-import { AntiNukeService } from './modules/antiNuke/antiNukeService';
 import prisma from '../database/client';
 
 export async function startBot() {
@@ -18,13 +17,6 @@ export async function startBot() {
   registerCommands();
   registerInteractionHandler();
   initializeLoggingModule();
-
-  // Attach Anti-Nuke Channel Delete listener
-  bot.on(Events.ChannelDelete, async (channel) => {
-    if ('guild' in channel) {
-      await AntiNukeService.handleChannelDelete(channel as GuildChannel);
-    }
-  });
 
   bot.once('ready', async () => {
     console.log(`🤖 [Bot Ready] Logged in as ${bot.user?.tag} (${bot.user?.id})!`);

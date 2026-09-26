@@ -145,4 +145,84 @@ router.post('/channels/:id/promote', requirePermission('manageRecruiting'), asyn
   }
 });
 
+/**
+ * PUT /api/academy/channels/:id
+ * Edit an academy student profile
+ */
+router.put('/channels/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const { staticId, approvedMpCount, requiredMp, penaltyMp, status } = req.body;
+
+    const existing = await prisma.academyChannel.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Профиль ученика не найден' });
+
+    const updated = await prisma.academyChannel.update({
+      where: { id },
+      data: {
+        ...(staticId !== undefined ? { staticId: staticId ? String(staticId).trim() : null } : {}),
+        ...(approvedMpCount !== undefined ? { approvedMpCount: parseInt(approvedMpCount, 10) || 0 } : {}),
+        ...(requiredMp !== undefined ? { requiredMp: parseInt(requiredMp, 10) || 10 } : {}),
+        ...(penaltyMp !== undefined ? { penaltyMp: parseInt(penaltyMp, 10) || 0 } : {}),
+        ...(status ? { status } : {}),
+      },
+      include: {
+        reports: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    res.json({ channel: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/academy/channels/:id
+ * Delete an academy student profile (and its reports)
+ */
+router.delete('/channels/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const existing = await prisma.academyChannel.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Профиль ученика не найден' });
+
+    // Delete reports first
+    await prisma.mpReport.deleteMany({ where: { academyChannelId: id } }).catch(() => null);
+
+    // Delete channel from Discord if still exists
+    const guild = bot.guilds.cache.get(existing.guildId) || await bot.guilds.fetch(existing.guildId).catch(() => null);
+    if (guild && existing.channelId) {
+      const ch = guild.channels.cache.get(existing.channelId) || await guild.channels.fetch(existing.channelId).catch(() => null);
+      if (ch) {
+        await ch.delete('Удаление профиля ученика через панель управления').catch(() => null);
+      }
+    }
+
+    // Delete from DB
+    await prisma.academyChannel.delete({ where: { id } });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/academy/reports/:id
+ * Delete a specific report (fake/spam)
+ */
+router.delete('/reports/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const report = await prisma.mpReport.findUnique({ where: { id } });
+    if (!report) return res.status(404).json({ error: 'Отчет не найден' });
+
+    await prisma.mpReport.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

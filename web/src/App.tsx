@@ -16,7 +16,6 @@ import { BotMessages } from './pages/BotMessages';
 import { EmbedBuilder } from './pages/EmbedBuilder';
 import { Academy } from './pages/Academy';
 import { RecruiterPayroll } from './pages/RecruiterPayroll';
-import { AntiNuke } from './pages/AntiNuke';
 import { Blacklist } from './pages/Blacklist';
 import { Leaves } from './pages/Leaves';
 import { Profiles } from './pages/Profiles';
@@ -50,7 +49,6 @@ const AnimatedPageRoutes: React.FC = () => {
           <Route path="/tier" element={<Tier />} />
           <Route path="/leaves" element={<Leaves />} />
           <Route path="/payroll" element={<RecruiterPayroll />} />
-          <Route path="/anti-nuke" element={<AntiNuke />} />
           <Route path="/blacklist" element={<Blacklist />} />
           <Route path="/members" element={<Members />} />
           <Route path="/messages" element={<BotMessages />} />

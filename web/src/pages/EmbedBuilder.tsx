@@ -19,6 +19,8 @@ import {
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
 import { DiscordMarkdown } from '../components/DiscordMarkdown';
+import { ChannelSelect } from '../components/ChannelSelect';
+import { CustomSelect } from '../components/CustomSelect';
 
 interface EmbedField {
   id: string;
@@ -26,6 +28,15 @@ interface EmbedField {
   value: string;
   inline: boolean;
 }
+
+const EMBED_GIF_PRESETS = [
+  { name: '🎆 Салют', url: 'https://media.giphy.com/media/26tOZ42Mg6pbTUPHW/giphy.gif' },
+  { name: '🔥 Огонь', url: 'https://media.giphy.com/media/yr7n0u3qzO9nG/giphy.gif' },
+  { name: '👋 Привет', url: 'https://media.giphy.com/media/mG1uv28P96v25LzJ5m/giphy.gif' },
+  { name: '⚠️ Внимание', url: 'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif' },
+  { name: '🏆 Победа / GG', url: 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif' },
+  { name: '⚡ Неон / Кибер', url: 'https://media.giphy.com/media/3o7btQ8jDTPGDpgIxgu/giphy.gif' },
+];
 
 export const EmbedBuilder: React.FC = () => {
   const modal = useModal();
@@ -58,6 +69,7 @@ export const EmbedBuilder: React.FC = () => {
 
   // Color Swatches
   const colorPresets = [
+    { name: 'Черный (000000)', hex: '#000000' },
     { name: 'Neon Pink', hex: '#FF2A85' },
     { name: 'Hot Pink', hex: '#EC4899' },
     { name: 'Crimson', hex: '#ED4245' },
@@ -357,33 +369,31 @@ export const EmbedBuilder: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
                 <label className="block text-slate-400 mb-1 font-medium">Канал Discord *</label>
-                <select
+                <ChannelSelect
+                  channels={channels}
                   value={targetChannelId}
-                  onChange={(e) => setTargetChannelId(e.target.value)}
-                  className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:border-pink-500/50"
-                >
-                  {channels.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      #{c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setTargetChannelId(val)}
+                  placeholder="Выберите канал для отправки..."
+                  channelType="text"
+                  allowClear={false}
+                />
               </div>
 
               <div>
                 <label className="block text-slate-400 mb-1 font-medium">Загрузить шаблон</label>
-                <select
+                <CustomSelect
                   value={selectedTemplateId}
-                  onChange={(e) => handleLoadTemplate(e.target.value)}
-                  className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:border-pink-500/50"
-                >
-                  <option value="">(Новое сообщение / Без шаблона)</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      📁 {t.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => handleLoadTemplate(val)}
+                  placeholder="(Новое сообщение / Без шаблона)"
+                  options={[
+                    { value: '', label: '(Новое сообщение / Без шаблона)' },
+                    ...templates.map((t) => ({
+                      value: t.id,
+                      label: t.name,
+                      sublabel: t.targetChannelId ? `#${t.targetChannelId}` : undefined,
+                    })),
+                  ]}
+                />
               </div>
             </div>
 
@@ -593,14 +603,40 @@ export const EmbedBuilder: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Большое изображение Image (URL)</label>
+                <label className="block text-slate-400 mb-1 font-medium flex items-center justify-between">
+                  <span>Большое изображение / GIF анимация (URL)</span>
+                  <span className="text-[10px] text-pink-400 font-normal">Поддерживаются .gif, .png, .jpg</span>
+                </label>
                 <input
                   type="text"
-                  placeholder="https://.../banner.png (в нижней части)"
+                  placeholder="https://.../banner.png или .gif"
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
                   className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:border-pink-500/50"
                 />
+                {/* GIF Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-500">Быстрые GIF:</span>
+                  {EMBED_GIF_PRESETS.map((g) => (
+                    <button
+                      key={g.name}
+                      type="button"
+                      onClick={() => setImageUrl(g.url)}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-[#151922] border border-[#1E232F] text-slate-400 hover:text-white hover:border-pink-500/40 transition-colors"
+                    >
+                      {g.name}
+                    </button>
+                  ))}
+                  {imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl('')}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors ml-auto"
+                    >
+                      Очистить
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { RoleSelect } from '../components/RoleSelect';
 
 export interface PermFunction {
   key: string;
@@ -298,20 +299,15 @@ export const Roles: React.FC = () => {
 
         {/* Add Role Control */}
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <select
-            value={selectedRoleToAdd}
-            onChange={(e) => setSelectedRoleToAdd(e.target.value)}
-            className="bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-          >
-            <option value="">Выберите роль Discord для добавления...</option>
-            {roles
-              .filter(r => !permissions.some(p => p.roleId === r.id))
-              .map((r) => (
-                <option key={r.id} value={r.id}>
-                  @{r.name}
-                </option>
-              ))}
-          </select>
+          <div className="w-64">
+            <RoleSelect
+              roles={roles.filter(r => !permissions.some(p => p.roleId === r.id))}
+              value={selectedRoleToAdd}
+              onChange={(val) => setSelectedRoleToAdd(val as string)}
+              isMulti={false}
+              placeholder="Выберите роль Discord..."
+            />
+          </div>
           <button
             onClick={handleAddRole}
             disabled={!selectedRoleToAdd}

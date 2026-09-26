@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { ChannelSelect } from '../components/ChannelSelect';
+import { RoleSelect } from '../components/RoleSelect';
+import { CustomSelect } from '../components/CustomSelect';
 
 export const Events: React.FC = () => {
   const modal = useModal();
@@ -286,18 +289,13 @@ export const Events: React.FC = () => {
           <div className="space-y-4 pt-2 text-xs">
             <div>
               <label className="block text-slate-300 mb-1.5 font-semibold">Приоритетная роль Discord</label>
-              <select
+              <RoleSelect
+                roles={roles}
                 value={priorityConfig.eventPriorityRoleId}
-                onChange={(e) => setPriorityConfig({ ...priorityConfig, eventPriorityRoleId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Не установлена (только по рангу)</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    @{r.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setPriorityConfig({ ...priorityConfig, eventPriorityRoleId: val as string })}
+                isMulti={false}
+                placeholder="Не установлена (только по рангу)"
+              />
               <p className="text-[11px] text-slate-500 mt-1">
                 Участники с этой ролью всегда попадают в основной состав при записи на сбор, вытесняя в резерв участников без роли.
               </p>
@@ -661,31 +659,24 @@ export const Events: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Канал для анонса в Discord *</label>
-                  <select
-                    required
+                  <ChannelSelect
+                    channels={channels}
+                    channelType="text"
                     value={form.channelId}
-                    onChange={(e) => setForm({ ...form, channelId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <option value="">Выберите канал...</option>
-                    {textChannels.map((c) => (
-                      <option key={c.id} value={c.id}>#{c.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setForm({ ...form, channelId: val })}
+                    placeholder="Выберите канал..."
+                  />
                 </div>
 
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Голосовой канал для сбора</label>
-                  <select
+                  <ChannelSelect
+                    channels={channels}
+                    channelType="voice"
                     value={form.voiceChannelId}
-                    onChange={(e) => setForm({ ...form, voiceChannelId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <option value="">Без голосового канала</option>
-                    {voiceChannels.map((c) => (
-                      <option key={c.id} value={c.id}>🔊 {c.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setForm({ ...form, voiceChannelId: val })}
+                    placeholder="Без голосового канала"
+                  />
                 </div>
               </div>
 
@@ -703,24 +694,20 @@ export const Events: React.FC = () => {
 
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Роль для упоминания (пинг)</label>
-                  <select
-                    value={form.targetRoleId}
-                    onChange={(e) => setForm({ ...form, targetRoleId: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <optgroup label="Общие упоминания">
-                      <option value="none">Без упоминания (тихий сбор)</option>
-                      <option value="here">@here (только кто онлайн)</option>
-                      <option value="everyone">@everyone (все участники)</option>
-                    </optgroup>
-                    <optgroup label="Конкретные роли сервера">
-                      {roles.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          @{r.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
+                  <CustomSelect
+                    options={[
+                      { value: 'none', label: 'Без упоминания (тихий сбор)' },
+                      { value: 'here', label: '@here (только кто онлайн)' },
+                      { value: 'everyone', label: '@everyone (все участники)' },
+                      ...roles.map((r) => ({
+                        value: r.id,
+                        label: `@${r.name}`,
+                      })),
+                    ]}
+                    value={form.targetRoleId || 'none'}
+                    onChange={(val) => setForm({ ...form, targetRoleId: val })}
+                    placeholder="Выберите роль для пинга..."
+                  />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">
                     Бот отправит пинг выбранной роли при публикации и напоминаниях
                   </span>

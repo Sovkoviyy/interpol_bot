@@ -1087,11 +1087,6 @@ export class RecruitmentService {
         recruiter: interaction.user.tag,
         reason: reason,
       });
-
-      // Kick member
-      await targetMember.kick(`Отказ в заявке: ${reason}`).catch(e => {
-        console.error('Failed to kick member:', e);
-      });
     }
 
     // 2. Update DB
@@ -1142,7 +1137,7 @@ export class RecruitmentService {
     await AuditLogger.sendLog(guild, 'BOT', botEmbed);
 
     await interaction.editReply({
-      content: `Заявка отклонена. Пользователь кикнут. Канал будет удален через 5 секунд...`,
+      content: `Заявка отклонена. Пользователю отправлено уведомление в ЛС. Канал будет удален через 5 секунд...`,
     });
 
     setTimeout(async () => {

@@ -39,7 +39,6 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
     manageEvents, 
     viewLogs,
     manageAcademy,
-    antiNukeAlerts,
     modular,
     permissionsJson
   } = req.body;
@@ -59,7 +58,6 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageEvents: Boolean(manageEvents),
       viewLogs: Boolean(viewLogs),
       manageAcademy: Boolean(manageAcademy),
-      antiNukeAlerts: Boolean(antiNukeAlerts),
       permissionsJson: finalJson,
     },
     create: {
@@ -71,7 +69,6 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageEvents: Boolean(manageEvents),
       viewLogs: Boolean(viewLogs),
       manageAcademy: Boolean(manageAcademy),
-      antiNukeAlerts: Boolean(antiNukeAlerts),
       permissionsJson: finalJson,
     },
   });

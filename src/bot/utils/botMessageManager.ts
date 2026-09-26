@@ -25,6 +25,8 @@ export interface MessageTemplateDefinition {
   defaultColor: string;
   defaultFooter: string;
   defaultContent?: string;
+  defaultImageUrl?: string;
+  defaultThumbnailUrl?: string;
   placeholders: PlaceholderDefinition[];
 }
 
@@ -35,6 +37,8 @@ export interface CustomMessageSettings {
   color?: string;
   footer?: string;
   content?: string;
+  imageUrl?: string;
+  thumbnailUrl?: string;
 }
 
 /**
@@ -140,7 +144,7 @@ export const BOT_MESSAGE_CATALOG: MessageTemplateDefinition[] = [
     name: 'Стартовое сообщение тикета тира',
     description: 'Сообщение в приватном канале кандидата на тир с инструкцией по откатам',
     defaultTitle: '🎯 КАНАЛ СДАЧИ ОТКАТОВ НА ТИР',
-    defaultDescription: 'Канал создан для кандидата {user}.\n\n**Инструкция по отправке откатов:**\nНиже опубликованы ветки по категориям мероприятий (Капт, MCL, ВЗЗ, РП).\n\nПерейдите в нужную ветку, нажмите кнопку **«Сдать откат»** и укажите ссылку на видео.\nТир-чекеры проверят ваши записи и вынесут вердикт.',
+    defaultDescription: 'Канал создан для кандидата {user}.\n\n**Инструкция по отправке откатов:**\nНиже опубликованы ветки по категориям мероприятий (Капт, ВЗЗ / МЦЛ, Арена, РП).\n\nПерейдите в нужную ветку, нажмите кнопку **«Сдать откат»** и укажите ссылку на видео.\nТир-чекеры проверят ваши записи и вынесут вердикт.',
     defaultColor: '#EC4899',
     defaultFooter: '{guild} • Tier Verification',
     defaultContent: '{user}',
@@ -1099,28 +1103,6 @@ export const BOT_MESSAGE_CATALOG: MessageTemplateDefinition[] = [
       { tag: '{guild}', description: 'Название сервера', sample: 'INTERPOL' },
     ],
   },
-
-  // ==========================================
-  // 10. Безопасность (Anti-Nuke)
-  // ==========================================
-  {
-    key: 'antinuke_alert',
-    category: 'Безопасность',
-    name: 'Срабатывание Anti-Nuke',
-    description: 'Срочное оповещение руководства о подозрительной активности на сервере',
-    defaultTitle: '🚨 ТРЕВОГА ANTI-NUKE • {action}',
-    defaultDescription: 'Внимание руководству сервера **{guild}**!\n\nОбнаружена подозрительная активность:\n**Инициатор:** {executor}\n**Действие:** {action}\n**Цель:** {target}\n**Принятая мера:** `{punishment}`\n\nБот мгновенно изолировал нарушителя для защиты структуры сервера.',
-    defaultColor: '#EF4444',
-    defaultFooter: '{guild} • Защита сервера',
-    defaultContent: '@everyone',
-    placeholders: [
-      { tag: '{executor}', description: 'Нарушитель (<@id>)', sample: '@Attacker' },
-      { tag: '{action}', description: 'Попытка действия', sample: 'Массовое удаление ролей' },
-      { tag: '{target}', description: 'Затронутый объект', sample: 'Роль @Лидер' },
-      { tag: '{punishment}', description: 'Наказание (Снятие ролей / Бан)', sample: 'Снятие всех ролей' },
-      { tag: '{guild}', description: 'Название сервера', sample: 'INTERPOL' },
-    ],
-  },
 ];
 
 /**
@@ -1300,8 +1282,9 @@ export class BotMessageManager {
     const footer = this.replacePlaceholders(rawFooter, variables);
     const content = this.replacePlaceholders(rawContent, variables);
 
-    const cleanHex = rawColor.replace('#', '');
-    const colorInt = parseInt(cleanHex, 16) || THEME.COLORS.PRIMARY;
+    const cleanHex = rawColor.replace(/^#/, '');
+    const parsed = parseInt(cleanHex, 16);
+    const colorInt = Number.isNaN(parsed) ? THEME.COLORS.PRIMARY : (parsed === 0 ? 0x000001 : parsed);
 
     const embed = createThemedEmbed({
       title: title || undefined,
@@ -1309,6 +1292,22 @@ export class BotMessageManager {
       color: colorInt,
       footerText: footer || undefined,
     });
+
+    const rawImage = custom.imageUrl || def?.defaultImageUrl;
+    if (rawImage && rawImage.trim()) {
+      try {
+        const resolvedImage = this.replacePlaceholders(rawImage.trim(), variables);
+        embed.setImage(resolvedImage);
+      } catch {}
+    }
+
+    const rawThumb = custom.thumbnailUrl || def?.defaultThumbnailUrl;
+    if (rawThumb && rawThumb.trim()) {
+      try {
+        const resolvedThumb = this.replacePlaceholders(rawThumb.trim(), variables);
+        embed.setThumbnail(resolvedThumb);
+      } catch {}
+    }
 
     return {
       content: content.trim() ? content.trim() : undefined,

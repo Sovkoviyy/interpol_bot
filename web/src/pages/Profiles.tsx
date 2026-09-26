@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { ChannelSelect } from '../components/ChannelSelect';
+import { CustomSelect } from '../components/CustomSelect';
 
 export const Profiles: React.FC = () => {
   const modal = useModal();
@@ -511,18 +513,15 @@ export const Profiles: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <select
-            value={deployChannelId}
-            onChange={(e) => setDeployChannelId(e.target.value)}
-            className="bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-pink-500 transition-colors w-full md:w-56"
-          >
-            <option value="">Выберите канал...</option>
-            {channels.map((ch) => (
-              <option key={ch.id} value={ch.id}>
-                #{ch.name}
-              </option>
-            ))}
-          </select>
+          <div className="w-full md:w-56">
+            <ChannelSelect
+              channels={channels}
+              channelType="text"
+              value={deployChannelId}
+              onChange={(val) => setDeployChannelId(val)}
+              placeholder="Выберите канал..."
+            />
+          </div>
           <button
             onClick={handleDeployPanel}
             disabled={deploying || !deployChannelId}
@@ -577,17 +576,19 @@ export const Profiles: React.FC = () => {
 
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span>Сортировка:</span>
-              <select
+              <CustomSelect
+                options={[
+                  { value: 'mpCount', label: 'По числу МП' },
+                  { value: 'voiceSeconds', label: 'По войс-активу' },
+                  { value: 'penaltyMp', label: 'По штрафным МП' },
+                  { value: 'rank', label: 'По рангу' },
+                  { value: 'userTag', label: 'По имени' },
+                ]}
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-[#0B0E14] border border-[#1E232F] rounded-xl px-2.5 py-1.5 text-xs text-slate-200"
-              >
-                <option value="mpCount">По числу МП</option>
-                <option value="voiceSeconds">По войс-активу</option>
-                <option value="penaltyMp">По штрафным МП</option>
-                <option value="rank">По рангу</option>
-                <option value="userTag">По имени</option>
-              </select>
+                onChange={(val) => setSortBy(val)}
+                searchable={false}
+                className="w-48"
+              />
 
               <button
                 onClick={() => setOrder(order === 'desc' ? 'asc' : 'desc')}
@@ -874,17 +875,18 @@ export const Profiles: React.FC = () => {
                   Выбрать участника с сервера Discord (или ввести ID)
                 </label>
                 {guildMembers.length > 0 && (
-                  <select
-                    onChange={(e) => handleSelectGuildMember(e.target.value)}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 mb-2"
-                  >
-                    <option value="">Выберите из списка участников сервера...</option>
-                    {guildMembers.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        @{m.user?.username || m.displayName} (ID: {m.id})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mb-2">
+                    <CustomSelect
+                      options={guildMembers.map((m) => ({
+                        value: m.id,
+                        label: `@${m.user?.username || m.displayName}`,
+                        sublabel: `ID: ${m.id}`,
+                      }))}
+                      value={manualForm.userId}
+                      onChange={(val) => handleSelectGuildMember(val)}
+                      placeholder="Выберите из списка участников сервера..."
+                    />
+                  </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-2">
@@ -971,30 +973,32 @@ export const Profiles: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Ранг в семье</label>
-                  <select
-                    value={manualForm.rank}
-                    onChange={(e) => setManualForm({ ...manualForm, rank: parseInt(e.target.value, 10) || 1 })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <option value={1}>1 • Академик</option>
-                    <option value={2}>2 • Участник семьи (Мейн)</option>
-                    <option value={3}>3 • Офицер</option>
-                    <option value={4}>4 • Заместитель лидера</option>
-                    <option value={5}>5 • Лидер</option>
-                  </select>
+                  <CustomSelect
+                    options={[
+                      { value: '1', label: '1 • Академик' },
+                      { value: '2', label: '2 • Участник семьи (Мейн)' },
+                      { value: '3', label: '3 • Офицер' },
+                      { value: '4', label: '4 • Заместитель лидера' },
+                      { value: '5', label: '5 • Лидер' },
+                    ]}
+                    value={String(manualForm.rank)}
+                    onChange={(val) => setManualForm({ ...manualForm, rank: parseInt(val, 10) || 1 })}
+                    searchable={false}
+                  />
                 </div>
 
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Статус профиля</label>
-                  <select
+                  <CustomSelect
+                    options={[
+                      { value: 'ACTIVE', label: 'Активен' },
+                      { value: 'ON_LEAVE', label: 'В отпуске' },
+                      { value: 'AFK', label: 'Неактив' },
+                    ]}
                     value={manualForm.status}
-                    onChange={(e) => setManualForm({ ...manualForm, status: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <option value="ACTIVE">Активен</option>
-                    <option value="ON_LEAVE">В отпуске</option>
-                    <option value="AFK">Неактив</option>
-                  </select>
+                    onChange={(val) => setManualForm({ ...manualForm, status: val })}
+                    searchable={false}
+                  />
                 </div>
               </div>
 

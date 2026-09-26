@@ -5,6 +5,7 @@ import { EventService } from './eventService';
 import { AuditLogger } from '../logging/auditLogger';
 import { THEME, createThemedEmbed } from '../../utils/theme';
 import { BotMessageManager } from '../../utils/botMessageManager';
+import { LeaveService } from '../leave/leaveService';
 
 export class EventScheduler {
   private static timer: NodeJS.Timeout | null = null;
@@ -21,6 +22,9 @@ export class EventScheduler {
       });
       this.checkMessageCleanup().catch(err => {
         console.error('[EventScheduler] Error cleaning up event messages:', err);
+      });
+      LeaveService.cleanupExpiredLeaves().catch(err => {
+        console.error('[EventScheduler] Error cleaning up expired leaves:', err);
       });
     }, 25000);
   }

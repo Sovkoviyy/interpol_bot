@@ -12,10 +12,15 @@ import {
   ArrowUpRight,
   Clock,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Pencil,
+  Trash2,
+  X
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { ChannelSelect } from '../components/ChannelSelect';
+import { CustomSelect } from '../components/CustomSelect';
 
 export const Academy: React.FC = () => {
   const modal = useModal();
@@ -29,6 +34,15 @@ export const Academy: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [reportFilter, setReportFilter] = useState('ALL');
   const [viewingReportsMember, setViewingReportsMember] = useState<any>(null);
+
+  // Edit Student Profile State
+  const [editingStudent, setEditingStudent] = useState<any | null>(null);
+  const [studentStatic, setStudentStatic] = useState('');
+  const [studentApprovedMp, setStudentApprovedMp] = useState(0);
+  const [studentRequiredMp, setStudentRequiredMp] = useState(10);
+  const [studentPenaltyMp, setStudentPenaltyMp] = useState(0);
+  const [studentStatus, setStudentStatus] = useState('ACTIVE');
+  const [savingStudent, setSavingStudent] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -177,6 +191,96 @@ export const Academy: React.FC = () => {
     }
   };
 
+  const handleOpenEditStudent = (ch: any) => {
+    setEditingStudent(ch);
+    setStudentStatic(ch.staticId || '');
+    setStudentApprovedMp(ch.approvedMpCount || 0);
+    setStudentRequiredMp(ch.requiredMp || 10);
+    setStudentPenaltyMp(ch.penaltyMp || 0);
+    setStudentStatus(ch.status || 'ACTIVE');
+  };
+
+  const handleSaveStudent = async () => {
+    if (!editingStudent) return;
+    try {
+      setSavingStudent(true);
+      await api.put(`/academy/channels/${editingStudent.id}`, {
+        staticId: studentStatic,
+        approvedMpCount: studentApprovedMp,
+        requiredMp: studentRequiredMp,
+        penaltyMp: studentPenaltyMp,
+        status: studentStatus,
+      });
+      modal.alert({
+        title: 'Успешно',
+        message: 'Профиль ученика успешно обновлен!',
+        type: 'success',
+      });
+      setEditingStudent(null);
+      fetchData();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось обновить профиль',
+        type: 'error',
+      });
+    } finally {
+      setSavingStudent(false);
+    }
+  };
+
+  const handleDeleteStudent = async (studentId: string, studentName: string) => {
+    const confirmed = await modal.confirm({
+      title: 'Удалить профиль ученика?',
+      message: `Вы действительно хотите удалить профиль ученика ${studentName}? Это действие сотрет все связанные отчеты и удалит канал в Discord.`,
+      confirmText: 'Да, удалить профиль',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/academy/channels/${studentId}`);
+      modal.alert({
+        title: 'Удалено',
+        message: 'Профиль ученика успешно удален.',
+        type: 'success',
+      });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось удалить профиль',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string) => {
+    const confirmed = await modal.confirm({
+      title: 'Удалить этот отчет?',
+      message: 'Вы уверены, что хотите удалить этот отчет по МП? Запись будет удалена безвозвратно.',
+      confirmText: 'Удалить отчет',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/academy/reports/${reportId}`);
+      modal.alert({
+        title: 'Удалено',
+        message: 'Отчет успешно удален из системы.',
+        type: 'success',
+      });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось удалить отчет',
+        type: 'error',
+      });
+    }
+  };
+
   const categories = guildChannels.filter((c) => c.type === 4);
 
   return (
@@ -290,8 +394,25 @@ export const Academy: React.FC = () => {
                           className="flex-1 py-1.5 px-2 rounded-xl bg-[#1E232F] hover:bg-slate-700/50 text-slate-200 text-xs font-semibold border border-slate-700/40 transition-all flex items-center justify-center gap-1.5"
                         >
                           <FileText className="w-3.5 h-3.5 text-pink-400" />
-                          <span>Отчеты бойца ({ch.reports?.length || 0})</span>
+                          <span>Отчеты ({ch.reports?.length || 0})</span>
                         </button>
+
+                        <button
+                          onClick={() => handleOpenEditStudent(ch)}
+                          className="p-1.5 rounded-xl bg-[#1E232F] hover:bg-slate-700/50 text-slate-300 hover:text-white border border-slate-700/40 transition-colors"
+                          title="Редактировать профиль ученика"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteStudent(ch.id, ch.userTag || ch.userId)}
+                          className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                          title="Удалить профиль ученика"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+
                         {ch.status === 'ACTIVE' && (
                           <button
                             onClick={() => handlePromote(ch.id, false)}
@@ -399,22 +520,31 @@ export const Academy: React.FC = () => {
                           {r.reviewerTag ? `@${r.reviewerTag}` : '—'}
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          {r.status === 'PENDING' && (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleReviewReport(r.id, true)}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold hover:bg-emerald-600/30 transition-all"
-                              >
-                                Одобрить
-                              </button>
-                              <button
-                                onClick={() => handleReviewReport(r.id, false)}
-                                className="px-2.5 py-1 rounded-lg bg-rose-600/20 text-rose-300 border border-rose-500/30 text-xs font-semibold hover:bg-rose-600/30 transition-all"
-                              >
-                                Отклонить
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex items-center justify-end gap-1.5">
+                            {r.status === 'PENDING' && (
+                              <>
+                                <button
+                                  onClick={() => handleReviewReport(r.id, true)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold hover:bg-emerald-600/30 transition-all"
+                                >
+                                  Одобрить
+                                </button>
+                                <button
+                                  onClick={() => handleReviewReport(r.id, false)}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-600/20 text-rose-300 border border-rose-500/30 text-xs font-semibold hover:bg-rose-600/30 transition-all"
+                                >
+                                  Отклонить
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={() => handleDeleteReport(r.id)}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all"
+                              title="Удалить отчет"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -436,58 +566,56 @@ export const Academy: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div>
               <label className="block text-slate-400 mb-1 font-medium">Категория для активных каналов академии</label>
-              <select
+              <ChannelSelect
+                channels={guildChannels}
                 value={config?.categoryId || ''}
-                onChange={(e) => setConfig({ ...config, categoryId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Выберите категорию...</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>📁 {c.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setConfig({ ...config, categoryId: val })}
+                placeholder="Выберите категорию..."
+                channelType="category"
+              />
             </div>
 
             <div>
               <label className="block text-slate-400 mb-1 font-medium">Категория для архива (после повышения)</label>
-              <select
+              <ChannelSelect
+                channels={guildChannels}
                 value={config?.archiveCategoryId || ''}
-                onChange={(e) => setConfig({ ...config, archiveCategoryId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Выберите категорию архива...</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>📁 {c.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setConfig({ ...config, archiveCategoryId: val })}
+                placeholder="Выберите категорию архива..."
+                channelType="category"
+              />
             </div>
 
             <div>
               <label className="block text-slate-400 mb-1 font-medium">Роль 1 ранга (Академик)</label>
-              <select
+              <CustomSelect
                 value={config?.academicRoleId || ''}
-                onChange={(e) => setConfig({ ...config, academicRoleId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Выберите роль 1 ранга...</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>@{r.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setConfig({ ...config, academicRoleId: val })}
+                placeholder="Выберите роль 1 ранга..."
+                options={[
+                  { value: '', label: 'Не выбрано' },
+                  ...roles.map((r) => ({
+                    value: r.id,
+                    label: `@${r.name}`,
+                  })),
+                ]}
+              />
             </div>
 
             <div>
               <label className="block text-slate-400 mb-1 font-medium">Роль 2 ранга (Основной состав)</label>
-              <select
+              <CustomSelect
                 value={config?.promotedRoleId || ''}
-                onChange={(e) => setConfig({ ...config, promotedRoleId: e.target.value })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-pink-500"
-              >
-                <option value="">Выберите роль 2 ранга...</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>@{r.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setConfig({ ...config, promotedRoleId: val })}
+                placeholder="Выберите роль 2 ранга..."
+                options={[
+                  { value: '', label: 'Не выбрано' },
+                  ...roles.map((r) => ({
+                    value: r.id,
+                    label: `@${r.name}`,
+                  })),
+                ]}
+              />
             </div>
 
             <div>
@@ -640,6 +768,116 @@ export const Academy: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#252B3B] text-slate-300 text-xs font-semibold transition-colors"
               >
                 Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Student Profile */}
+      {editingStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-pink-400" />
+                Редактировать профиль академика
+              </h3>
+              <button
+                onClick={() => setEditingStudent(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Ученик / Discord</label>
+                <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] text-slate-200 font-semibold">
+                  {editingStudent.userTag || editingStudent.userId}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Игровой Static ID</label>
+                <input
+                  type="text"
+                  value={studentStatic}
+                  onChange={(e) => setStudentStatic(e.target.value)}
+                  placeholder="123456"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1">Сдано МП (одобрено)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={studentApprovedMp}
+                    onChange={(e) => setStudentApprovedMp(parseInt(e.target.value, 10) || 0)}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1">Требуется МП (норма)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={studentRequiredMp}
+                    onChange={(e) => setStudentRequiredMp(parseInt(e.target.value, 10) || 10)}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1">Штрафные МП</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={studentPenaltyMp}
+                    onChange={(e) => setStudentPenaltyMp(parseInt(e.target.value, 10) || 0)}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1">Статус</label>
+                  <CustomSelect
+                    options={[
+                      { value: 'ACTIVE', label: 'ACTIVE (Обучение)' },
+                      { value: 'PROMOTED', label: 'PROMOTED (Повышен)' },
+                      { value: 'ARCHIVED', label: 'ARCHIVED (Архив)' },
+                    ]}
+                    value={studentStatus}
+                    onChange={(val) => setStudentStatus(val)}
+                    searchable={false}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#1E232F]">
+              <button
+                type="button"
+                onClick={() => setEditingStudent(null)}
+                className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-slate-700/60 text-slate-300 text-xs font-semibold transition-all"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveStudent}
+                disabled={savingStudent}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-semibold shadow-lg shadow-pink-600/20 transition-all"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{savingStudent ? 'Сохранение...' : 'Сохранить'}</span>
               </button>
             </div>
           </div>

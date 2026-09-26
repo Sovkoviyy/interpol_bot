@@ -31,7 +31,6 @@ interface SidebarProps {
     manageEvents: boolean;
     viewLogs: boolean;
     manageAcademy?: boolean;
-    antiNukeAlerts?: boolean;
   };
 }
 
@@ -68,7 +67,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
     {
       title: 'Безопасность',
       links: [
-        { to: '/anti-nuke', label: 'Защита сервера', icon: ShieldAlert, visible: isAdmin || userPermissions?.antiNukeAlerts },
         { to: '/blacklist', label: 'Черный список (ЧС)', icon: UserX, visible: isAdmin || userPermissions?.manageRecruiting },
         { to: '/logs', label: 'Аудит сервера', icon: ScrollText, visible: isAdmin || userPermissions?.viewLogs },
         { to: '/roles', label: 'Уровни доступа', icon: ShieldCheck, visible: isAdmin || userPermissions?.manageSettings },

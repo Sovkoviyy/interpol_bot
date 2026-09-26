@@ -23,7 +23,7 @@ import { THEME, createThemedEmbed } from '../../utils/theme';
 import { sanitizeChannelNamePart } from '../../utils/nameUtils';
 import { BotMessageManager } from '../../utils/botMessageManager';
 
-export const TIER_MP_TYPES = ['Капт', 'MCL', 'ВЗЗ', 'РП'] as const;
+export const TIER_MP_TYPES = ['Капт', 'ВЗЗ / МЦЛ', 'Арена', 'РП'] as const;
 export type TierMpType = typeof TIER_MP_TYPES[number];
 
 export class TierService {

@@ -17,7 +17,6 @@ import academyRouter from './routes/academy';
 import leaveRouter from './routes/leave';
 import payrollRouter from './routes/payroll';
 import blacklistRouter from './routes/blacklist';
-import antiNukeRouter from './routes/antiNuke';
 import botManagementRouter from './routes/botManagement';
 import serverSetupRouter from './routes/serverSetup';
 import nicknamesRouter from './routes/nicknames';
@@ -50,7 +49,6 @@ export function createServer() {
   app.use('/api/leave', leaveRouter);
   app.use('/api/payroll', payrollRouter);
   app.use('/api/blacklist', blacklistRouter);
-  app.use('/api/anti-nuke', antiNukeRouter);
   app.use('/api/bot', botManagementRouter);
   app.use('/api/setup', serverSetupRouter);
   app.use('/api/nicknames', nicknamesRouter);

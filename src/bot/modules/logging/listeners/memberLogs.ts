@@ -11,7 +11,6 @@ import bot from '../../../client';
 import prisma from '../../../../database/client';
 import { AuditLogger } from '../auditLogger';
 import { RolePersistenceService } from '../../roles/rolePersistenceService';
-import { AntiNukeService } from '../../antiNuke/antiNukeService';
 import { buildCustomTemplateEmbed } from '../../../utils/templateEmbed';
 import { NicknameService } from '../../nicknames/nicknameService';
 import { BotMessageManager } from '../../../utils/botMessageManager';
@@ -19,11 +18,6 @@ import { BotMessageManager } from '../../../utils/botMessageManager';
 export function registerMemberLogs() {
   // Member Join
   bot.on(Events.GuildMemberAdd, async (member: GuildMember) => {
-    // If a bot is added, run Anti-Nuke security checks
-    if (member.user.bot) {
-      await AntiNukeService.handleBotAdd(member);
-    }
-
     // Restore roles if member was previously in server
     await RolePersistenceService.restoreMemberRoles(member);
 
