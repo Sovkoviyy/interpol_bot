@@ -14,6 +14,7 @@ import { RolePersistenceService } from '../../roles/rolePersistenceService';
 import { AntiNukeService } from '../../antiNuke/antiNukeService';
 import { buildCustomTemplateEmbed } from '../../../utils/templateEmbed';
 import { NicknameService } from '../../nicknames/nicknameService';
+import { BotMessageManager } from '../../../utils/botMessageManager';
 
 export function registerMemberLogs() {
   // Member Join
@@ -38,42 +39,20 @@ export function registerMemberLogs() {
         const welcomeChannel = (member.guild.channels.cache.get(msgConfig.welcomeChannelId) ||
           await member.guild.channels.fetch(msgConfig.welcomeChannelId).catch(() => null)) as TextChannel | null;
         if (welcomeChannel && welcomeChannel.isTextBased()) {
-          let customTemplate: any = null;
-          if (msgConfig.welcomeTemplateId) {
-            customTemplate = await prisma.customEmbedTemplate.findUnique({
-              where: { id: msgConfig.welcomeTemplateId },
+          const rendered = await BotMessageManager.renderMessage(member.guild.id, 'welcome', {
+            user: `<@${member.id}>`,
+            username: member.user.username,
+            guild: member.guild.name,
+            memberCount: String(member.guild.memberCount),
+            date: new Date().toLocaleDateString('ru-RU'),
+          });
+
+          if (rendered.enabled) {
+            rendered.embed.setThumbnail(member.user.displayAvatarURL({ size: 256 }));
+            await welcomeChannel.send({
+              content: rendered.content,
+              embeds: [rendered.embed],
             }).catch(() => null);
-          }
-
-          if (customTemplate) {
-            const embed = buildCustomTemplateEmbed(customTemplate, {
-              user: `<@${member.id}>`,
-              username: member.user.username,
-              guild: member.guild.name,
-              memberCount: String(member.guild.memberCount),
-            });
-            await welcomeChannel.send({ embeds: [embed] }).catch(() => null);
-          } else {
-            const rawColor = msgConfig.welcomeEmbedColor?.replace('#', '') || 'EC4899';
-            const colorInt = parseInt(rawColor, 16) || 0xEC4899;
-            const formattedTitle = (msgConfig.welcomeTitle || 'Добро пожаловать!')
-              .replace(/{user}/g, member.user.username)
-              .replace(/{guild}/g, member.guild.name)
-              .replace(/{memberCount}/g, String(member.guild.memberCount));
-            const formattedDesc = (msgConfig.welcomeMessage || '')
-              .replace(/{user}/g, `<@${member.id}>`)
-              .replace(/{guild}/g, member.guild.name)
-              .replace(/{memberCount}/g, String(member.guild.memberCount));
-
-            const welcomeEmbed = new EmbedBuilder()
-              .setColor(colorInt)
-              .setTitle(formattedTitle)
-              .setDescription(formattedDesc)
-              .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
-              .setFooter({ text: `Участник #${member.guild.memberCount}` })
-              .setTimestamp();
-
-            await welcomeChannel.send({ embeds: [welcomeEmbed] }).catch(() => null);
           }
         }
       }
@@ -124,33 +103,19 @@ export function registerMemberLogs() {
           await member.guild.channels.fetch(msgConfig.leaveChannelId).catch(() => null)) as TextChannel | null;
         if (leaveChannel && leaveChannel.isTextBased()) {
           const userTag = member.user?.tag || member.id;
-          let customTemplate: any = null;
-          if (msgConfig.leaveTemplateId) {
-            customTemplate = await prisma.customEmbedTemplate.findUnique({
-              where: { id: msgConfig.leaveTemplateId },
+          const rendered = await BotMessageManager.renderMessage(member.guild.id, 'leave', {
+            user: `**${userTag}**`,
+            username: member.user?.username || userTag,
+            guild: member.guild.name,
+            memberCount: String(member.guild.memberCount),
+            date: new Date().toLocaleDateString('ru-RU'),
+          });
+
+          if (rendered.enabled) {
+            await leaveChannel.send({
+              content: rendered.content,
+              embeds: [rendered.embed],
             }).catch(() => null);
-          }
-
-          if (customTemplate) {
-            const embed = buildCustomTemplateEmbed(customTemplate, {
-              user: `**${userTag}**`,
-              username: member.user?.username || userTag,
-              guild: member.guild.name,
-              memberCount: String(member.guild.memberCount),
-            });
-            await leaveChannel.send({ embeds: [embed] }).catch(() => null);
-          } else {
-            const formattedDesc = (msgConfig.leaveMessage || '{user} покинул наш сервер.')
-              .replace(/{user}/g, `**${userTag}**`)
-              .replace(/{guild}/g, member.guild.name)
-              .replace(/{memberCount}/g, String(member.guild.memberCount));
-
-            const leaveEmbed = new EmbedBuilder()
-              .setColor(0xED4245)
-              .setDescription(`🚪 ${formattedDesc}`)
-              .setTimestamp();
-
-            await leaveChannel.send({ embeds: [leaveEmbed] }).catch(() => null);
           }
         }
       }

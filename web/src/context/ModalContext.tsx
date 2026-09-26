@@ -38,6 +38,10 @@ export interface ModalContextType {
   confirm: (options: ConfirmOptions | string) => Promise<boolean>;
   alert: (options: AlertOptions | string) => Promise<void>;
   form: (options: FormOptions) => void;
+  success: (message: string, title?: string) => Promise<void>;
+  error: (message: string, title?: string) => Promise<void>;
+  warning: (message: string, title?: string) => Promise<void>;
+  info: (message: string, title?: string) => Promise<void>;
 }
 
 const ModalContext = createContext<ModalContextType | undefined>(undefined);
@@ -131,6 +135,22 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     });
   }, []);
 
+  const success = useCallback((message: string, title: string = 'Успешно'): Promise<void> => {
+    return alert({ message, title, type: 'success' });
+  }, [alert]);
+
+  const error = useCallback((message: string, title: string = 'Ошибка'): Promise<void> => {
+    return alert({ message, title, type: 'error' });
+  }, [alert]);
+
+  const warning = useCallback((message: string, title: string = 'Предупреждение'): Promise<void> => {
+    return alert({ message, title, type: 'warning' });
+  }, [alert]);
+
+  const info = useCallback((message: string, title: string = 'Информация'): Promise<void> => {
+    return alert({ message, title, type: 'info' });
+  }, [alert]);
+
   const handleConfirmClose = (result: boolean) => {
     if (confirmState.resolve) {
       confirmState.resolve(result);
@@ -187,7 +207,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, [confirmState.isOpen, alertState.isOpen, formState.isOpen, formState.isSubmitting]);
 
   return (
-    <ModalContext.Provider value={{ confirm, alert, form }}>
+    <ModalContext.Provider value={{ confirm, alert, form, success, error, warning, info }}>
       {children}
 
       {/* Confirmation Modal */}

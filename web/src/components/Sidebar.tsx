@@ -51,6 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions, isBypass }) =
     {
       title: 'Состав & Рекрутинг',
       links: [
+        { to: '/members', label: 'Участники сервера', icon: Users, visible: true },
         { to: '/profiles', label: 'Профили & Статики', icon: IdCard, visible: true },
         { to: '/nicknames', label: 'Авто-Ники & Бинды', icon: AtSign, visible: true },
         { to: '/academy', label: 'Академия (1-2 ранг)', icon: GraduationCap, visible: true },

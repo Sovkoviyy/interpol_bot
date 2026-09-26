@@ -26,6 +26,7 @@ import { NicknameService } from '../nicknames/nicknameService';
 import { extractFirstName, sanitizeChannelNamePart } from '../../utils/nameUtils';
 import bot from '../../client';
 import { THEME, createThemedEmbed } from '../../utils/theme';
+import { BotMessageManager } from '../../utils/botMessageManager';
 
 export class RecruitmentService {
   private static async resolveGuild(interaction: { guild?: Guild | null; guildId?: string | null }): Promise<Guild | null> {
@@ -517,18 +518,20 @@ export class RecruitmentService {
               memberCount: String(guild.memberCount),
             });
             await ticketChannel.send({ embeds: [embed] }).catch(() => null);
-          } else if (botMsgConfig.ticketGreetingDesc) {
-            const greetingTitle = botMsgConfig.ticketGreetingTitle || 'Заявка в семью INTERPOL';
-            const greetingDesc = botMsgConfig.ticketGreetingDesc
-              .replace(/{user}/g, `<@${interaction.user.id}>`)
-              .replace(/{guild}/g, guild.name);
-            
-            const greetingEmbed = createThemedEmbed({
-              title: greetingTitle.toUpperCase(),
-              description: THEME.format.quote(greetingDesc),
-              color: THEME.COLORS.PRIMARY,
+          } else {
+            const rendered = await BotMessageManager.renderMessage(guild.id, 'ticket_welcome', {
+              user: `<@${interaction.user.id}>`,
+              username: interaction.user.username,
+              guild: guild.name,
+              recruiterRole: recruiterPings,
+              staticId: candidateStaticId,
             });
-            await ticketChannel.send({ embeds: [greetingEmbed] }).catch(() => null);
+            if (rendered.enabled) {
+              await ticketChannel.send({
+                content: rendered.content,
+                embeds: [rendered.embed],
+              }).catch(() => null);
+            }
           }
         }
       } catch (err) {
@@ -933,11 +936,21 @@ export class RecruitmentService {
 
     // 2. Send DM notification
     if (targetMember) {
-      await targetMember.send({
-        content: `🎉 **Поздравляем!** Ваша заявка в семью на сервере **${guild.name}** была **одобрена** рекрутером ${interaction.user.tag}!\nВам выдана роль участника семьи. Добро пожаловать!`,
-      }).catch(() => {
-        console.log(`Could not send approval DM to ${application.userId} (DMs closed)`);
+      const rendered = await BotMessageManager.renderMessage(guild.id, 'ticket_accepted', {
+        user: `<@${targetMember.id}>`,
+        username: targetMember.user?.username || targetMember.id,
+        guild: guild.name,
+        recruiter: interaction.user.tag,
+        role: '@Участник',
       });
+      if (rendered.enabled) {
+        await targetMember.send({
+          content: rendered.content,
+          embeds: [rendered.embed],
+        }).catch(() => {
+          console.log(`Could not send approval DM to ${application.userId} (DMs closed)`);
+        });
+      }
     }
 
     // 3. Update DB
@@ -1055,11 +1068,21 @@ export class RecruitmentService {
 
     // 1. Send DM with rejection reason
     if (targetMember) {
-      await targetMember.send({
-        content: `❌ Здравствуйте. К сожалению, вы не прошли собеседование в семью на сервере **${guild.name}**.\n\n**Причина отказа:**\n${reason}`,
-      }).catch(() => {
-        console.log(`Could not send rejection DM to ${application.userId} (DMs closed)`);
+      const rendered = await BotMessageManager.renderMessage(guild.id, 'ticket_rejected', {
+        user: `<@${targetMember.id}>`,
+        username: targetMember.user?.username || targetMember.id,
+        guild: guild.name,
+        recruiter: interaction.user.tag,
+        reason: reason,
       });
+      if (rendered.enabled) {
+        await targetMember.send({
+          content: rendered.content,
+          embeds: [rendered.embed],
+        }).catch(() => {
+          console.log(`Could not send rejection DM to ${application.userId} (DMs closed)`);
+        });
+      }
 
       // Kick member
       await targetMember.kick(`Отказ в заявке: ${reason}`).catch(e => {
