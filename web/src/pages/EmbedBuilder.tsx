@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { DiscordMarkdown } from '../components/DiscordMarkdown';
 
 interface EmbedField {
   id: string;
@@ -685,9 +686,9 @@ export const EmbedBuilder: React.FC = () => {
 
                 {/* Plain Text Message content if present */}
                 {content && (
-                  <p className="text-xs text-slate-200 mb-2 leading-relaxed whitespace-pre-wrap">
-                    {content}
-                  </p>
+                  <div className="text-xs text-slate-200 mb-2 leading-relaxed">
+                    <DiscordMarkdown content={content} />
+                  </div>
                 )}
 
                 {/* Discord Embed Box */}
@@ -726,15 +727,15 @@ export const EmbedBuilder: React.FC = () => {
                     {/* Title */}
                     {title && (
                       <h4 className="text-sm font-bold text-white hover:underline cursor-pointer leading-snug">
-                        {title}
+                        <DiscordMarkdown content={title} />
                       </h4>
                     )}
 
                     {/* Description */}
                     {description && (
-                      <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
-                        {description}
-                      </p>
+                      <div className="text-xs text-slate-300 leading-relaxed font-sans">
+                        <DiscordMarkdown content={description} />
+                      </div>
                     )}
 
                     {/* Fields Grid */}
@@ -745,8 +746,12 @@ export const EmbedBuilder: React.FC = () => {
                             key={f.id} 
                             className={f.inline ? 'col-span-1' : 'col-span-full'}
                           >
-                            <p className="text-[11px] font-bold text-white">{f.name}</p>
-                            <p className="text-xs text-slate-300 whitespace-pre-wrap leading-tight">{f.value}</p>
+                            <p className="text-[11px] font-bold text-white">
+                              <DiscordMarkdown content={f.name} />
+                            </p>
+                            <div className="text-xs text-slate-300 leading-tight">
+                              <DiscordMarkdown content={f.value} />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -775,9 +780,9 @@ export const EmbedBuilder: React.FC = () => {
                             className="w-4 h-4 rounded-full object-cover"
                           />
                         )}
-                        <span>{footerText}</span>
+                        {footerText && <DiscordMarkdown content={footerText} />}
                         {footerText && includeTimestamp && <span>•</span>}
-                        {includeTimestamp && <span>Сегодня, в 20:45</span>}
+                        {includeTimestamp && <span>Сегодня в 20:45</span>}
                       </div>
                     )}
                   </div>

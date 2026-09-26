@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { DiscordMarkdown } from '../components/DiscordMarkdown';
 
 interface PlaceholderDef {
   tag: string;
@@ -613,7 +614,7 @@ export const BotMessages: React.FC = () => {
                           {/* Text content above embed */}
                           {previewContent && (
                             <div className="text-xs text-[#DBDEE1] font-sans pb-1 break-words">
-                              {previewContent}
+                              <DiscordMarkdown content={previewContent} />
                             </div>
                           )}
 
@@ -625,21 +626,21 @@ export const BotMessages: React.FC = () => {
                             {/* Title */}
                             {previewTitle && (
                               <h4 className="font-bold text-[#F2F3F5] text-sm leading-snug">
-                                {previewTitle}
+                                <DiscordMarkdown content={previewTitle} />
                               </h4>
                             )}
 
-                            {/* Description with basic newline formatting */}
+                            {/* Description with full Discord formatting */}
                             {previewDesc && (
-                              <div className="text-xs text-[#DBDEE1] whitespace-pre-line leading-relaxed font-sans">
-                                {previewDesc}
+                              <div className="text-xs text-[#DBDEE1] leading-relaxed font-sans">
+                                <DiscordMarkdown content={previewDesc} />
                               </div>
                             )}
 
                             {/* Footer */}
                             {previewFooter && (
                               <div className="text-[10px] text-[#949BA4] pt-2 border-t border-white/5 flex items-center gap-2">
-                                <span>{previewFooter}</span>
+                                <DiscordMarkdown content={previewFooter} />
                                 <span>•</span>
                                 <span>Сегодня в 21:00</span>
                               </div>
