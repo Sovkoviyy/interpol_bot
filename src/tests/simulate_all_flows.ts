@@ -1,3 +1,9 @@
+/**
+ * ⚠️ DEVELOPMENT UTILITY — NOT A PRODUCTION TEST SUITE
+ * This file is a manual simulation/verification script for development purposes.
+ * It should NOT be included in CI/CD pipelines or production builds.
+ * To run: npx tsx src/tests/simulate_all_flows.ts
+ */
 import prisma from '../database/client';
 import bot from '../bot/client';
 import { Events, ChannelType, PermissionFlagsBits, EmbedBuilder, Collection } from 'discord.js';

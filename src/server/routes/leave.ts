@@ -69,6 +69,12 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Заполните все поля заявки' });
     }
 
+    const parsedStart = new Date(startDate);
+    const parsedEnd = new Date(endDate);
+    if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format for startDate or endDate' });
+    }
+
     const leave = await LeaveService.requestLeave(
       guildId,
       userId,

@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import { AuditLogEvent } from 'discord.js';
 import bot from '../../bot/client';
 import config from '../../config';
 import prisma from '../../database/client';
@@ -167,15 +168,15 @@ logsRouter.get('/entries', requireAuth, async (req: AuthenticatedRequest, res: R
 
           // Determine action type from Discord AuditLogEvent
           const actionType = entry.action;
-          if (actionType === 10) {
+          if (actionType === AuditLogEvent.ChannelCreate) {
             actionName = 'CHANNEL_CREATE';
             category = 'CHANNELS';
             details = `Создан канал: #${(entry.target as any)?.name || entry.targetId}`;
-          } else if (actionType === 12) {
+          } else if (actionType === AuditLogEvent.ChannelDelete) {
             actionName = 'CHANNEL_DELETE';
             category = 'CHANNELS';
             details = `Удален канал: #${(entry.target as any)?.name || entry.targetId}`;
-          } else if (actionType === 11) {
+          } else if (actionType === AuditLogEvent.ChannelUpdate) {
             actionName = 'CHANNEL_UPDATE';
             category = 'CHANNELS';
             details = `Изменен канал: #${(entry.target as any)?.name || entry.targetId}`;

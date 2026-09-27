@@ -71,6 +71,19 @@ export function createServer() {
     });
   });
 
+  // API 404 handler
+  app.use('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+  });
+
+  // Global error handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error('[Server Error]', err?.stack || err);
+    const statusCode = err.statusCode || err.status || 500;
+    const message = config.isDev ? err.message : 'Internal server error';
+    res.status(statusCode).json({ error: message });
+  });
+
   return app;
 }
 

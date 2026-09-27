@@ -14,7 +14,7 @@ export type PermissionKey =
   | string;
 
 export function requirePermission(...permissions: PermissionKey[]) {
-  return (req: AuthenticatedRequest, res: any, next: any) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Unauthorized' });
     }

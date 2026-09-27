@@ -18,7 +18,8 @@ async function main() {
   console.log('========================================================');
 
   if (!config.isDev && config.server.jwtSecret.includes('default_development')) {
-    console.warn('⚠️ [SECURITY WARNING] Default JWT_SECRET is active in production mode! Set JWT_SECRET in .env for security.');
+    console.error('❌ [FATAL] Default JWT_SECRET detected in production mode! Set JWT_SECRET in .env immediately.');
+    process.exit(1);
   }
 
   // 0. Ensure Database Schema is Up-to-Date (Auto-migrates SQLite columns)

@@ -1,3 +1,9 @@
+/**
+ * ⚠️ DEVELOPMENT UTILITY — NOT A PRODUCTION TEST SUITE
+ * This file is a manual simulation/verification script for development purposes.
+ * It should NOT be included in CI/CD pipelines or production builds.
+ * To run: npx tsx src/tests/verify_logic.ts
+ */
 import { RecruitmentService } from '../bot/modules/recruitment/recruitmentService';
 import { EventService } from '../bot/modules/events/eventService';
 

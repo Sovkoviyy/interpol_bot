@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import config from '../../config';
 import prisma from '../../database/client';
@@ -57,9 +58,17 @@ authRouter.get('/login', (req: Request, res: Response) => {
     return res.status(500).json({ error: 'CLIENT_ID not configured in .env' });
   }
 
+  const state = crypto.randomBytes(16).toString('hex');
+  res.cookie('oauth_state', state, {
+    httpOnly: true,
+    secure: !config.isDev,
+    sameSite: 'lax',
+    maxAge: 10 * 60 * 1000, // 10 minutes
+  });
+
   const redirectUri = encodeURIComponent(config.discord.redirectUri);
   const scope = encodeURIComponent('identify guilds guilds.members.read');
-  const url = `https://discord.com/api/oauth2/authorize?client_id=${config.discord.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`;
+  const url = `https://discord.com/api/oauth2/authorize?client_id=${config.discord.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
 
   return res.json({ url });
 });
@@ -78,6 +87,14 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
   if (!code) {
     return res.redirect(`${redirectBase}/login?error=no_code`);
   }
+
+  const state = req.query.state as string;
+  const storedState = req.cookies?.oauth_state;
+  
+  if (!state || !storedState || state !== storedState) {
+    return res.redirect(`${redirectBase}/login?error=invalid_state`);
+  }
+  res.clearCookie('oauth_state');
 
   try {
     // Exchange code for token

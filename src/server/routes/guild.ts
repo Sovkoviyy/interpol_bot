@@ -110,7 +110,9 @@ guildRouter.get('/members', requireAuth, requirePermission('manageProfiles', 'ma
   const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
 
   if (!guild) {
-    return res.json({ members: [] });
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    return res.json({ members: [], total: 0, page, limit });
   }
 
   let membersCollection = guild.members.cache;
@@ -142,7 +144,14 @@ guildRouter.get('/members', requireAuth, requirePermission('manageProfiles', 'ma
   const botMember = guild.members.me;
   const botHighestRolePos = botMember?.roles.highest.position ?? 0;
 
-  const memberList = Array.from(membersCollection.values()).map(m => {
+  const allMembers = Array.from(membersCollection.values());
+  const total = allMembers.length;
+
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+  const paginatedMembers = allMembers.slice((page - 1) * limit, page * limit);
+
+  const memberList = paginatedMembers.map(m => {
     const roles = m.roles.cache
       .filter(r => r.name !== '@everyone')
       .sort((a, b) => b.position - a.position)
@@ -185,7 +194,7 @@ guildRouter.get('/members', requireAuth, requirePermission('manageProfiles', 'ma
     };
   });
 
-  return res.json({ members: memberList });
+  return res.json({ members: memberList, total, page, limit });
 });
 
 // Update member in-game profile (staticId, characterName, rank, status, notes)
@@ -208,6 +217,13 @@ guildRouter.put('/members/:userId/profile', requireAuth, requirePermission('mana
 
     const cleanStatic = staticId !== undefined ? (staticId ? String(staticId).trim() : null) : undefined;
     const cleanCharName = characterName !== undefined ? (characterName ? String(characterName).trim() : null) : undefined;
+
+    if (rank !== undefined) {
+      const parsedRank = parseInt(rank, 10);
+      if (isNaN(parsedRank)) {
+        return res.status(400).json({ error: 'Invalid rank: must be a number' });
+      }
+    }
 
     const existingProfile = await prisma.userProfile.findUnique({
       where: { guildId_userId: { guildId, userId } },

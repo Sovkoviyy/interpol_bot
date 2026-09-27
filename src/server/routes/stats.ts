@@ -48,26 +48,27 @@ async function getFullStatsData(guildId: string) {
     where: { guildId, status: 'REJECTED' },
   });
 
-  // Recruiter leaderboard
-  const allClosed = await prisma.recruitmentApplication.findMany({
+  // Recruiter leaderboard (using Prisma aggregation instead of loading all records)
+  const recruiterGroups = await prisma.recruitmentApplication.groupBy({
+    by: ['recruiterId', 'recruiterTag', 'status'],
     where: { guildId, status: { in: ['ACCEPTED', 'REJECTED'] }, recruiterId: { not: null } },
-    select: { recruiterId: true, recruiterTag: true, status: true },
+    _count: true,
   });
 
   const recruiterMap: Record<string, { tag: string; accepted: number; rejected: number; total: number }> = {};
-  for (const item of allClosed) {
-    if (!item.recruiterId) continue;
-    if (!recruiterMap[item.recruiterId]) {
-      recruiterMap[item.recruiterId] = {
-        tag: item.recruiterTag || item.recruiterId,
+  for (const group of recruiterGroups) {
+    if (!group.recruiterId) continue;
+    if (!recruiterMap[group.recruiterId]) {
+      recruiterMap[group.recruiterId] = {
+        tag: group.recruiterTag || group.recruiterId,
         accepted: 0,
         rejected: 0,
         total: 0,
       };
     }
-    if (item.status === 'ACCEPTED') recruiterMap[item.recruiterId].accepted++;
-    if (item.status === 'REJECTED') recruiterMap[item.recruiterId].rejected++;
-    recruiterMap[item.recruiterId].total++;
+    if (group.status === 'ACCEPTED') recruiterMap[group.recruiterId].accepted = group._count;
+    if (group.status === 'REJECTED') recruiterMap[group.recruiterId].rejected = group._count;
+    recruiterMap[group.recruiterId].total += group._count;
   }
 
   const recruiterLeaderboard = Object.values(recruiterMap).sort((a, b) => b.total - a.total);
@@ -130,6 +131,7 @@ async function getFullStatsData(guildId: string) {
 
 // In-memory cache to prevent Discord Gateway / DB overload
 const statsCache = new Map<string, { data: any; cachedAt: number }>();
+const statsPendingRequests = new Map<string, Promise<any>>();
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 async function getCachedStatsData(guildId: string, forceFresh = false) {
@@ -138,9 +140,22 @@ async function getCachedStatsData(guildId: string, forceFresh = false) {
   if (!forceFresh && cached && (now - cached.cachedAt) < CACHE_TTL_MS) {
     return cached.data;
   }
-  const data = await getFullStatsData(guildId);
-  statsCache.set(guildId, { data, cachedAt: now });
-  return data;
+
+  // Prevent cache stampede: reuse pending request if one is already in flight
+  const pending = statsPendingRequests.get(guildId);
+  if (pending) return pending;
+
+  const promise = getFullStatsData(guildId)
+    .then(data => {
+      statsCache.set(guildId, { data, cachedAt: Date.now() });
+      return data;
+    })
+    .finally(() => {
+      statsPendingRequests.delete(guildId);
+    });
+
+  statsPendingRequests.set(guildId, promise);
+  return promise;
 }
 
 // Dashboard internal stats endpoint
