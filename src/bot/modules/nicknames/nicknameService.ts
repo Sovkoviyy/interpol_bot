@@ -156,11 +156,31 @@ export class NicknameService {
    */
   public static async syncMemberNickname(
     member: GuildMember, 
-    reason: string = 'Автоматическая синхронизация ника по роли'
-  ): Promise<{ updated: boolean; oldNick?: string | null; newNick?: string; reason?: string }> {
+    reason: string = 'Автоматическая синхронизация ника по роли',
+    force: boolean = false
+  ): Promise<{ updated: boolean; oldNick?: string | null; newNick?: string; reason?: string; isLocked?: boolean }> {
     try {
       if (!this.canManageNickname(member)) {
         return { updated: false, reason: 'Недостаточно прав для смены ника (выше в иерархии ролей или владелец)' };
+      }
+
+      // Check if member has a locked manual nickname
+      if (!force) {
+        const lock = await prisma.manualNicknameLock.findUnique({
+          where: { guildId_userId: { guildId: member.guild.id, userId: member.id } },
+        });
+        if (lock) {
+          return {
+            updated: false,
+            isLocked: true,
+            reason: `Никнейм зафиксирован вручную («${lock.nickname}») и защищен от авто-смены`,
+          };
+        }
+      } else {
+        // If force sync was requested, remove the manual lock
+        await prisma.manualNicknameLock.deleteMany({
+          where: { guildId: member.guild.id, userId: member.id },
+        }).catch(() => null);
       }
 
       const targetNick = await this.computeExpectedNickname(member.guild.id, member);
@@ -216,12 +236,29 @@ export class NicknameService {
 
       await member.setNickname(cleanNick, `Установлен вручную администратором ${executorTag}`);
 
+      // Lock this nickname so auto-sync will never overwrite it
+      await prisma.manualNicknameLock.upsert({
+        where: { guildId_userId: { guildId: guild.id, userId: member.id } },
+        update: {
+          nickname: cleanNick,
+          userTag: member.user.tag,
+          lockedBy: executorTag,
+        },
+        create: {
+          guildId: guild.id,
+          userId: member.id,
+          userTag: member.user.tag,
+          nickname: cleanNick,
+          lockedBy: executorTag,
+        },
+      });
+
       await AuditLogger.recordEntry({
         guildId: guild.id,
         category: 'MEMBERS',
         action: 'NICKNAME_MANUAL_SET',
         title: 'Ручная смена никнейма',
-        description: `Администратор ${executorTag} сменил ник для ${member.user.tag}: «${oldNick}» ➔ «${cleanNick}»`,
+        description: `Администратор ${executorTag} сменил ник для ${member.user.tag}: «${oldNick}» ➔ «${cleanNick}» (зафиксирован)`,
         targetId: member.id,
         targetTag: member.user.tag,
       }).catch(() => null);
@@ -230,6 +267,16 @@ export class NicknameService {
     } catch (err: any) {
       return { success: false, error: err.message };
     }
+  }
+
+  /**
+   * Remove manual nickname lock for a user
+   */
+  public static async removeNicknameLock(guildId: string, userId: string): Promise<boolean> {
+    const res = await prisma.manualNicknameLock.deleteMany({
+      where: { guildId, userId },
+    });
+    return res.count > 0;
   }
 
   /**

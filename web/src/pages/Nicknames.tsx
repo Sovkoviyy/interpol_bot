@@ -14,7 +14,12 @@ import {
   Layers, 
   Edit3, 
   ExternalLink,
-  Info
+  Info,
+  Lock,
+  Unlock,
+  Search,
+  Copy,
+  Check
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -41,6 +46,19 @@ interface NicknameConfig {
   defaultFormat: string;
   defaultPrefix: string;
   fallbackFormat: string;
+}
+
+export interface NicknameLock {
+  id: string;
+  userId: string;
+  userTag?: string | null;
+  displayName?: string | null;
+  currentNick?: string | null;
+  avatarUrl?: string | null;
+  nickname: string;
+  lockedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const Nicknames: React.FC = () => {
@@ -73,15 +91,37 @@ export const Nicknames: React.FC = () => {
   const [testingUser, setTestingUser] = useState(false);
   const [settingManual, setSettingManual] = useState(false);
 
+  // Locked Nicknames State
+  const [locks, setLocks] = useState<NicknameLock[]>([]);
+  const [loadingLocks, setLoadingLocks] = useState(false);
+  const [locksSearch, setLocksSearch] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const fetchLocks = async () => {
+    try {
+      setLoadingLocks(true);
+      const res = await api.get('/nicknames/locks');
+      setLocks(res.data?.locks || []);
+    } catch (err) {
+      console.error('Failed to load nickname locks', err);
+    } finally {
+      setLoadingLocks(false);
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/nicknames/config');
-      if (res.data?.config) {
-        setConfig(res.data.config);
+      const [configRes, locksRes] = await Promise.all([
+        api.get('/nicknames/config'),
+        api.get('/nicknames/locks').catch(() => ({ data: { locks: [] } })),
+      ]);
+      if (configRes.data?.config) {
+        setConfig(configRes.data.config);
       }
-      setBindings(res.data?.bindings || []);
-      setRoles(res.data?.roles || []);
+      setBindings(configRes.data?.bindings || []);
+      setRoles(configRes.data?.roles || []);
+      setLocks(locksRes.data?.locks || []);
     } catch (err: any) {
       modal.alert({
         title: 'Ошибка загрузки',
@@ -226,6 +266,12 @@ export const Nicknames: React.FC = () => {
     }
   };
 
+  const handleCopyId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
   const handleSyncSingle = async () => {
     if (!testUserId.trim()) {
       modal.alert({ title: 'Укажите ID', message: 'Введите Discord ID участника', type: 'error' });
@@ -236,6 +282,27 @@ export const Nicknames: React.FC = () => {
       setTestingUser(true);
       const res = await api.post(`/nicknames/sync/${testUserId.trim()}`);
       const r = res.data?.result;
+
+      if (r?.isLocked) {
+        const force = await modal.confirm({
+          title: 'Ник зафиксирован вручную',
+          message: `${r.reason}.\n\nСнять фиксацию и принудительно синхронизировать никнейм по роли?`,
+          confirmText: 'Снять фиксацию и синхронизировать',
+          type: 'warning',
+        });
+        if (force) {
+          const forceRes = await api.post(`/nicknames/sync/${testUserId.trim()}?force=true`);
+          const fr = forceRes.data?.result;
+          modal.alert({
+            title: 'Никнейм обновлен!',
+            message: `Фиксация снята.\nНовый ник: ${fr?.newNick || 'Актуален'}`,
+            type: 'success',
+          });
+          await fetchLocks();
+        }
+        return;
+      }
+
       if (r?.updated) {
         modal.alert({
           title: 'Никнейм обновлен!',
@@ -270,11 +337,12 @@ export const Nicknames: React.FC = () => {
       setSettingManual(true);
       await api.post(`/nicknames/manual/${testUserId.trim()}`, { nickname: manualNick.trim() });
       modal.alert({
-        title: 'Никнейм установлен!',
-        message: `Участнику ${testUserId} успешно установлен ник: «${manualNick.trim()}»`,
+        title: 'Никнейм установлен и защищен!',
+        message: `Участнику ${testUserId.trim()} успешно установлен ник: «${manualNick.trim()}».\n\nБот зафиксировал этот никнейм и не будет изменять его при синхронизации ролей.`,
         type: 'success',
       });
       setManualNick('');
+      await fetchLocks();
     } catch (err: any) {
       modal.alert({
         title: 'Ошибка установки',
@@ -285,6 +353,79 @@ export const Nicknames: React.FC = () => {
       setSettingManual(false);
     }
   };
+
+  const handleRemoveLock = async (userId: string, userDisplayName?: string | null) => {
+    const confirmed = await modal.confirm({
+      title: 'Снять защиту с ника?',
+      message: `Разблокировать участника ${userDisplayName || userId}? После снятия фиксации бот снова сможет автоматически обновлять его никнейм по шаблону роли.`,
+      confirmText: 'Снять защиту',
+      type: 'warning',
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/nicknames/locks/${userId}`);
+      modal.alert({
+        title: 'Фиксация снята',
+        message: 'Участник разблокирован. Теперь для него действует авто-смена никнейма по роли.',
+        type: 'success',
+      });
+      await fetchLocks();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось снять фиксацию',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleForceSync = async (userId: string, userDisplayName?: string | null) => {
+    const confirmed = await modal.confirm({
+      title: 'Синхронизировать по роли?',
+      message: `Снять ручную защиту и синхронизировать ник для ${userDisplayName || userId} по правилам роли и статика?`,
+      confirmText: 'Синхронизировать',
+      type: 'pink',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await api.post(`/nicknames/sync/${userId}?force=true`);
+      const r = res.data?.result;
+      if (r?.updated) {
+        modal.alert({
+          title: 'Никнейм синхронизирован!',
+          message: `Ручная защита снята.\nНовый ник: «${r.newNick}» (был: «${r.oldNick || 'Стандартный'}»)`,
+          type: 'success',
+        });
+      } else {
+        modal.alert({
+          title: 'Синхронизация завершена',
+          message: r?.reason || 'Ручная защита снята, ник актуален.',
+          type: 'info',
+        });
+      }
+      await fetchLocks();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось синхронизировать',
+        type: 'error',
+      });
+    }
+  };
+
+  const filteredLocks = locks.filter((l) => {
+    if (!locksSearch.trim()) return true;
+    const q = locksSearch.toLowerCase();
+    return (
+      l.userId.includes(q) ||
+      (l.userTag && l.userTag.toLowerCase().includes(q)) ||
+      (l.displayName && l.displayName.toLowerCase().includes(q)) ||
+      l.nickname.toLowerCase().includes(q) ||
+      (l.lockedBy && l.lockedBy.toLowerCase().includes(q))
+    );
+  });
 
   // Live example computation
   const previewSample = config.defaultFormat
@@ -553,7 +694,7 @@ export const Nicknames: React.FC = () => {
           </div>
         </div>
 
-        <div className="pt-2 border-t border-[#1E232F] grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="pt-3 border-t border-[#1E232F] grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
               Или установить произвольный ник вручную
@@ -566,18 +707,165 @@ export const Nicknames: React.FC = () => {
               placeholder="1 | Richard Miller | 12345"
               maxLength={32}
             />
+            <p className="text-[11px] text-pink-400/80 mt-1 flex items-center gap-1">
+              <Lock className="w-3 h-3 shrink-0" /> Никнейм фиксируется: бот защищает его и не меняет при авто-синхронизации ролей
+            </p>
           </div>
 
           <div className="flex items-end">
             <button
               onClick={handleManualSet}
               disabled={settingManual || !testUserId.trim() || !manualNick.trim()}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-lg shadow-pink-600/20"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-lg shadow-pink-600/20"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{settingManual ? 'Установка...' : 'Установить ник'}</span>
             </button>
           </div>
+        </div>
+
+        {/* Sub-section: List of members with manual / locked nicknames */}
+        <div className="pt-4 border-t border-[#1E232F] space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center shrink-0">
+                <Lock className="w-3.5 h-3.5 text-pink-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Участники с зафиксированным ручным ником
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                    {locks.length}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Список людей, которым ник установлен вручную — бот защищает их от перезаписи
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Поиск по нику, имени или ID..."
+                  value={locksSearch}
+                  onChange={(e) => setLocksSearch(e.target.value)}
+                  className="bg-[#151922] border border-[#1E232F] rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-pink-500/50 w-56"
+                />
+              </div>
+              <button
+                onClick={fetchLocks}
+                disabled={loadingLocks}
+                className="p-2 rounded-xl bg-[#151922] border border-[#1E232F] hover:border-pink-500/40 text-slate-300 hover:text-white transition disabled:opacity-50"
+                title="Обновить список"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingLocks ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* List or Empty State */}
+          {filteredLocks.length === 0 ? (
+            <div className="p-6 rounded-xl bg-[#151922]/50 border border-[#1E232F] text-center">
+              <Lock className="w-7 h-7 text-slate-600 mx-auto mb-2 opacity-60" />
+              <p className="text-xs text-slate-400 font-medium">
+                {locks.length === 0
+                  ? 'Пока нет участников с ручным ником. Когда вы установите ник участнику через форму выше, он появится здесь и бот не будет его менять.'
+                  : 'Ничего не найдено по вашему запросу.'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-[#1E232F]">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-[#151922] border-b border-[#1E232F] text-slate-400 font-semibold">
+                    <th className="py-2.5 px-3">Участник</th>
+                    <th className="py-2.5 px-3">Зафиксированный никнейм</th>
+                    <th className="py-2.5 px-3">Кем установлен</th>
+                    <th className="py-2.5 px-3 text-right">Действия</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1E232F]/50">
+                  {filteredLocks.map((lock) => (
+                    <tr key={lock.id} className="hover:bg-[#151922]/60 transition">
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-2.5">
+                          {lock.avatarUrl ? (
+                            <img src={lock.avatarUrl} alt="" className="w-7 h-7 rounded-full bg-slate-800 shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs text-slate-400 shrink-0 font-bold">
+                              {(lock.displayName || lock.userId).substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="font-semibold text-white truncate max-w-[160px] sm:max-w-xs">
+                              {lock.displayName || lock.userTag || lock.userId}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                              <span>ID: {lock.userId}</span>
+                              <button
+                                onClick={() => handleCopyId(lock.userId)}
+                                className="text-slate-500 hover:text-pink-400 transition"
+                                title="Скопировать ID"
+                              >
+                                {copiedId === lock.userId ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-pink-500/10 border border-pink-500/30 text-pink-300 font-mono font-medium text-xs">
+                          <Lock className="w-3 h-3 text-pink-400 shrink-0" />
+                          <span>{lock.nickname}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-400 text-[11px]">
+                        <div>{lock.lockedBy || 'Администратор'}</div>
+                        <div className="text-[10px] text-slate-500">
+                          {new Date(lock.updatedAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              setTestUserId(lock.userId);
+                              setManualNick(lock.nickname);
+                              window.scrollTo({ top: 300, behavior: 'smooth' });
+                            }}
+                            className="p-1.5 rounded-lg bg-[#151922] hover:bg-slate-700/60 text-slate-300 hover:text-white transition"
+                            title="Редактировать ник"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleForceSync(lock.userId, lock.displayName)}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 transition text-[11px]"
+                            title="Снять фиксацию и синхронизировать по роли"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            <span>По роли</span>
+                          </button>
+                          <button
+                            onClick={() => handleRemoveLock(lock.userId, lock.displayName)}
+                            className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition"
+                            title="Снять защиту (разблокировать авто-смену)"
+                          >
+                            <Unlock className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

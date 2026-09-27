@@ -146,6 +146,75 @@ nicknamesRouter.delete('/bindings/:id', requirePermission('manageSettings'), asy
 });
 
 /**
+ * GET /api/nicknames/locks
+ * List all members with manual nickname locks
+ */
+nicknamesRouter.get('/locks', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const guild = await getDiscordGuild(guildId);
+
+    const locks = await prisma.manualNicknameLock.findMany({
+      where: { guildId },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const enriched = await Promise.all(
+      locks.map(async (lock) => {
+        let avatarUrl: string | null = null;
+        let displayName = lock.userTag || lock.userId;
+        let currentNick: string | null = null;
+
+        if (guild) {
+          const member = guild.members.cache.get(lock.userId) || await guild.members.fetch(lock.userId).catch(() => null);
+          if (member) {
+            displayName = member.displayName || member.user.username;
+            currentNick = member.nickname || null;
+            avatarUrl = member.user.displayAvatarURL({ size: 64 });
+          }
+        }
+
+        return {
+          id: lock.id,
+          userId: lock.userId,
+          userTag: lock.userTag,
+          displayName,
+          currentNick,
+          avatarUrl,
+          nickname: lock.nickname,
+          lockedBy: lock.lockedBy,
+          createdAt: lock.createdAt,
+          updatedAt: lock.updatedAt,
+        };
+      })
+    );
+
+    return res.json({ locks: enriched });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/nicknames/locks/:userId
+ * Remove manual nickname lock for a member
+ */
+nicknamesRouter.delete('/locks/:userId', requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const userId = req.params.userId as string;
+
+    await prisma.manualNicknameLock.deleteMany({
+      where: { guildId, userId },
+    });
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /api/nicknames/sync/:userId
  * Auto-sync a single user's nickname based on their roles and main character
  */
@@ -153,6 +222,7 @@ nicknamesRouter.post('/sync/:userId', async (req: AuthenticatedRequest, res: Res
   try {
     const guildId = resolveGuildId(req);
     const userId = req.params.userId as string;
+    const force = req.query.force === 'true' || req.body?.force === true;
 
     const guild = await getDiscordGuild(guildId);
     if (!guild) return res.status(400).json({ error: 'Сервер Discord недоступен' });
@@ -160,7 +230,11 @@ nicknamesRouter.post('/sync/:userId', async (req: AuthenticatedRequest, res: Res
     const member = await guild.members.fetch(userId).catch(() => null);
     if (!member) return res.status(404).json({ error: 'Участник не найден на сервере' });
 
-    const result = await NicknameService.syncMemberNickname(member, `Синхронизация через сайт (${req.user!.username})`);
+    const result = await NicknameService.syncMemberNickname(
+      member, 
+      `Синхронизация через сайт (${req.user!.username})`,
+      force
+    );
 
     return res.json({ success: true, result });
   } catch (err: any) {

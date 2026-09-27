@@ -490,6 +490,20 @@ model NicknameConfig {
   createdAt      DateTime @default(now())
 }
 
+model ManualNicknameLock {
+  id        String   @id @default(cuid())
+  guildId   String
+  userId    String
+  userTag   String?
+  nickname  String
+  lockedBy  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([guildId, userId])
+  @@index([guildId])
+}
+
 // ==========================================
 // TIER SYSTEM
 // ==========================================
