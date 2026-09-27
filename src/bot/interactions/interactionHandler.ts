@@ -269,6 +269,18 @@ export function registerInteractionHandler() {
           return;
         }
 
+        if (customId.startsWith('event_rebalance_')) {
+          const eventId = customId.replace('event_rebalance_', '');
+          await EventService.handleAdminRebalance(interaction, eventId);
+          return;
+        }
+
+        if (customId.startsWith('event_finish_')) {
+          const eventId = customId.replace('event_finish_', '');
+          await EventService.handleAdminFinish(interaction, eventId);
+          return;
+        }
+
         // --- Tier System Buttons ---
         if (customId === 'tier_request_channel_btn') {
           await TierService.handleRequestChannel(interaction);
@@ -794,6 +806,11 @@ export function registerInteractionHandler() {
         const member = interaction.member as GuildMember;
         if (member && !member.guild && guild) {
           (member as any).guild = guild;
+        }
+
+        if (customId.startsWith('event_admin_move_')) {
+          await EventService.handleAdminMove(interaction);
+          return;
         }
 
         if (customId.startsWith('event_admin_kick_')) {

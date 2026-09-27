@@ -11,16 +11,27 @@ import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const eventsRouter = Router();
 
-// Get event settings (priority role and min rank)
+// Get event settings (priority role, min rank, and role hierarchy)
 eventsRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const guildConfig = await prisma.guildConfig.findUnique({
       where: { guildId },
     });
+
+    let eventRoleHierarchy: any[] = [];
+    try {
+      if (guildConfig?.eventRoleHierarchyJson) {
+        eventRoleHierarchy = JSON.parse(guildConfig.eventRoleHierarchyJson);
+      }
+    } catch {
+      eventRoleHierarchy = [];
+    }
+
     return res.json({
       eventPriorityRoleId: guildConfig?.eventPriorityRoleId || '',
       eventPriorityMinRank: guildConfig?.eventPriorityMinRank || 0,
+      eventRoleHierarchy,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -31,17 +42,22 @@ eventsRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: 
 eventsRouter.post('/config', requireAuth, requirePermission('manageEvents'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
-    const { eventPriorityRoleId, eventPriorityMinRank } = req.body;
+    const { eventPriorityRoleId, eventPriorityMinRank, eventRoleHierarchy } = req.body;
+
+    const hierarchyJson = JSON.stringify(Array.isArray(eventRoleHierarchy) ? eventRoleHierarchy : []);
+
     const updated = await prisma.guildConfig.upsert({
       where: { guildId },
       update: {
         eventPriorityRoleId: eventPriorityRoleId || null,
         eventPriorityMinRank: parseInt(eventPriorityMinRank, 10) || 0,
+        eventRoleHierarchyJson: hierarchyJson,
       },
       create: {
         guildId,
         eventPriorityRoleId: eventPriorityRoleId || null,
         eventPriorityMinRank: parseInt(eventPriorityMinRank, 10) || 0,
+        eventRoleHierarchyJson: hierarchyJson,
       },
     });
     return res.json({ config: updated });
@@ -284,6 +300,46 @@ eventsRouter.post('/:id/participants/:userId/kick', requireAuth, requirePermissi
   }
 
   return res.json({ success: true, promotedUserId });
+});
+
+// Move participant between CONFIRMED (Main) and RESERVE (or swap)
+eventsRouter.post('/:id/participants/:userId/move', requireAuth, requirePermission('manageEvents'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const id = req.params.id as string;
+    const userId = req.params.userId as string;
+    const { targetStatus, swapWithUserId } = req.body; // 'CONFIRMED' | 'RESERVE'
+
+    if (targetStatus !== 'CONFIRMED' && targetStatus !== 'RESERVE') {
+      return res.status(400).json({ error: 'targetStatus must be CONFIRMED or RESERVE' });
+    }
+
+    const result = await EventService.moveParticipant(
+      guildId,
+      id,
+      userId,
+      targetStatus,
+      req.user!.userId,
+      swapWithUserId
+    );
+
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Rebalance roster based on configured role hierarchy
+eventsRouter.post('/:id/rebalance', requireAuth, requirePermission('manageEvents'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const id = req.params.id as string;
+
+    const result = await EventService.rebalanceRoster(guildId, id, req.user!.userId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 export default eventsRouter;

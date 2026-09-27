@@ -10,13 +10,26 @@ import {
   UserMinus, 
   CheckCircle2,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  ArrowUp,
+  ArrowDown,
+  Scale,
+  Trash2,
+  Info,
+  Sparkles,
+  HelpCircle
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
 import { ChannelSelect } from '../components/ChannelSelect';
 import { RoleSelect } from '../components/RoleSelect';
 import { CustomSelect } from '../components/CustomSelect';
+
+export interface RoleHierarchyEntry {
+  roleId: string;
+  roleName?: string;
+  priority: number;
+}
 
 export const Events: React.FC = () => {
   const modal = useModal();
@@ -29,11 +42,20 @@ export const Events: React.FC = () => {
   const [creating, setCreating] = useState(false);
 
   const [mainTab, setMainTab] = useState<'events' | 'prioritySettings'>('events');
-  const [priorityConfig, setPriorityConfig] = useState({
+  const [priorityConfig, setPriorityConfig] = useState<{
+    eventPriorityRoleId: string;
+    eventPriorityMinRank: number;
+    eventRoleHierarchy: RoleHierarchyEntry[];
+  }>({
     eventPriorityRoleId: '',
     eventPriorityMinRank: 0,
+    eventRoleHierarchy: [],
   });
   const [savingPriority, setSavingPriority] = useState(false);
+
+  // New role adder state
+  const [selectedNewRole, setSelectedNewRole] = useState('');
+  const [selectedNewPriority, setSelectedNewPriority] = useState(100);
 
   // New Event Form State
   const [form, setForm] = useState({
@@ -60,7 +82,7 @@ export const Events: React.FC = () => {
         api.get('/guild/roles'),
         api.get('/guild/channels'),
         api.get('/events/defaults').catch(() => ({ data: {} })),
-        api.get('/events/config').catch(() => ({ data: { eventPriorityRoleId: '', eventPriorityMinRank: 0 } })),
+        api.get('/events/config').catch(() => ({ data: { eventPriorityRoleId: '', eventPriorityMinRank: 0, eventRoleHierarchy: [] } })),
       ]);
       setEvents(eventsRes.data.events);
       setRoles(rolesRes.data.roles);
@@ -69,6 +91,7 @@ export const Events: React.FC = () => {
         setPriorityConfig({
           eventPriorityRoleId: cfgRes.data.eventPriorityRoleId || '',
           eventPriorityMinRank: cfgRes.data.eventPriorityMinRank || 0,
+          eventRoleHierarchy: cfgRes.data.eventRoleHierarchy || [],
         });
       }
       if (defaultsRes.data) {
@@ -93,7 +116,7 @@ export const Events: React.FC = () => {
       await api.post('/events/config', priorityConfig);
       modal.alert({
         title: 'Успешно',
-        message: 'Настройки приоритета сборов сохранены!',
+        message: 'Настройки иерархии ролей и приоритетов сборов успешно сохранены!',
         type: 'success',
       });
     } catch (err: any) {
@@ -105,6 +128,72 @@ export const Events: React.FC = () => {
     } finally {
       setSavingPriority(false);
     }
+  };
+
+  const addRoleToHierarchy = () => {
+    if (!selectedNewRole) return;
+    const foundRole = roles.find(r => r.id === selectedNewRole);
+    if (!foundRole) return;
+
+    if (priorityConfig.eventRoleHierarchy.some(r => r.roleId === selectedNewRole)) {
+      modal.alert({ title: 'Внимание', message: 'Эта роль уже добавлена в иерархию', type: 'warning' });
+      return;
+    }
+
+    const newHierarchy = [
+      ...priorityConfig.eventRoleHierarchy,
+      {
+        roleId: selectedNewRole,
+        roleName: foundRole.name,
+        priority: selectedNewPriority,
+      },
+    ];
+
+    // Keep sorted by priority descending
+    newHierarchy.sort((a, b) => b.priority - a.priority);
+
+    setPriorityConfig(prev => ({
+      ...prev,
+      eventRoleHierarchy: newHierarchy,
+    }));
+    setSelectedNewRole('');
+  };
+
+  const removeRoleFromHierarchy = (roleId: string) => {
+    setPriorityConfig(prev => ({
+      ...prev,
+      eventRoleHierarchy: prev.eventRoleHierarchy.filter(r => r.roleId !== roleId),
+    }));
+  };
+
+  const moveRoleHierarchyItem = (index: number, direction: 'up' | 'down') => {
+    const list = [...priorityConfig.eventRoleHierarchy];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+
+    const temp = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = temp;
+
+    // Recalculate descending priorities to preserve visual order
+    for (let i = 0; i < list.length; i++) {
+      list[i].priority = Math.max(10, 100 - i * 10);
+    }
+
+    setPriorityConfig(prev => ({
+      ...prev,
+      eventRoleHierarchy: list,
+    }));
+  };
+
+  const updateRolePriorityValue = (roleId: string, priorityVal: number) => {
+    const list = priorityConfig.eventRoleHierarchy.map(r => 
+      r.roleId === roleId ? { ...r, priority: priorityVal } : r
+    );
+    setPriorityConfig(prev => ({
+      ...prev,
+      eventRoleHierarchy: list,
+    }));
   };
 
   const setQuickDate = (daysAhead: number) => {
@@ -150,17 +239,17 @@ export const Events: React.FC = () => {
     try {
       setCreating(true);
       await api.post('/events', form);
+      setModalOpen(false);
       modal.alert({
-        title: 'Успешно!',
-        message: 'Сбор на мероприятие успешно создан и опубликован в Discord!',
+        title: 'Успешно',
+        message: `Сбор на «${form.title}» успешно опубликован в Discord!`,
         type: 'success',
       });
-      setModalOpen(false);
       fetchData();
     } catch (err: any) {
       modal.alert({
-        title: 'Ошибка создания',
-        message: err.response?.data?.error || 'Ошибка при создании сбора',
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось создать мероприятие',
         type: 'error',
       });
     } finally {
@@ -168,10 +257,41 @@ export const Events: React.FC = () => {
     }
   };
 
+  const handleMoveParticipant = async (eventId: string, userId: string, targetStatus: 'CONFIRMED' | 'RESERVE') => {
+    try {
+      await api.post(`/events/${eventId}/participants/${userId}/move`, { targetStatus });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка перемещения',
+        message: err.response?.data?.error || 'Не удалось переместить участника',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleRebalance = async (eventId: string) => {
+    try {
+      const res = await api.post(`/events/${eventId}/rebalance`);
+      modal.alert({
+        title: 'Состав сбалансирован',
+        message: `Состав успешно распределен по иерархии ролей!\nОснова: ${res.data.confirmedCount}, Резерв: ${res.data.reserveCount}`,
+        type: 'success',
+      });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось сбалансировать состав',
+        type: 'error',
+      });
+    }
+  };
+
   const handleKickParticipant = async (eventId: string, userId: string, tag: string) => {
     const confirmed = await modal.confirm({
       title: 'Исключение из состава',
-      message: `Исключить участника ${tag} из состава?\nЕсли в резерве есть люди, первый из них автоматически перейдет в основу.`,
+      message: `Исключить участника ${tag} из состава?\nЕсли в резерве есть люди, участник с наивысшим приоритетом автоматически перейдет в основу.`,
       confirmText: 'Исключить',
       type: 'danger',
     });
@@ -221,6 +341,11 @@ export const Events: React.FC = () => {
     return found ? `@${found.name}` : `@${targetRoleId}`;
   };
 
+  // Filter roles available to add into hierarchy
+  const availableRolesToAdd = roles.filter(
+    r => !priorityConfig.eventRoleHierarchy.some(item => item.roleId === r.id)
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -231,7 +356,7 @@ export const Events: React.FC = () => {
             Сборы на мероприятия (Капты, ВЗЗ, МЦЛ)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Только лимитированные сборы с умным распределением состава по приоритету рангов и ролей
+            Плюсы могут оставлять любые участники • Бот формирует состав с учётом иерархии ролей семьи
           </p>
         </div>
 
@@ -256,7 +381,7 @@ export const Events: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              ⚙️ Настройки приоритета
+              ⚙️ Иерархия ролей & Приоритет
             </button>
           </div>
 
@@ -273,56 +398,202 @@ export const Events: React.FC = () => {
       </div>
 
       {mainTab === 'prioritySettings' ? (
-        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 space-y-5 max-w-2xl">
-          <div className="flex items-center gap-3">
+        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 space-y-6 max-w-3xl">
+          <div className="flex items-start gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 shrink-0">
-              <ShieldAlert className="w-5 h-5" />
+              <Scale className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Приоритет попадания в основной состав</h3>
-              <p className="text-xs text-slate-400">
-                Настройте Discord роль и ранг, которые дают право приоритетного прохода в основу
+              <h3 className="text-sm font-bold text-white">Иерархия ролей для сборов на мероприятия</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Плюсы могут оставлять все участники сервера. Чем выше роль в списке — тем выше приоритет попадания в основу. 
+                Участники с высшей ролью автоматически вытесняют в резерв участников с меньшим приоритетом.
               </p>
             </div>
           </div>
 
-          <div className="space-y-4 pt-2 text-xs">
-            <div>
-              <label className="block text-slate-300 mb-1.5 font-semibold">Приоритетная роль Discord</label>
-              <RoleSelect
-                roles={roles}
-                value={priorityConfig.eventPriorityRoleId}
-                onChange={(val) => setPriorityConfig({ ...priorityConfig, eventPriorityRoleId: val as string })}
-                isMulti={false}
-                placeholder="Не установлена (только по рангу)"
-              />
-              <p className="text-[11px] text-slate-500 mt-1">
-                Участники с этой ролью всегда попадают в основной состав при записи на сбор, вытесняя в резерв участников без роли.
-              </p>
+          {/* Role Hierarchy List */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Текущая иерархия ролей (по убыванию приоритета)
+              </span>
+              <span className="text-[11px] text-slate-500">
+                Всего в иерархии: {priorityConfig.eventRoleHierarchy.length}
+              </span>
             </div>
 
+            {priorityConfig.eventRoleHierarchy.length === 0 ? (
+              <div className="p-6 rounded-xl bg-[#0B0E14] border border-dashed border-[#1E232F] text-center space-y-1.5">
+                <ShieldAlert className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-xs text-slate-400 font-medium">Иерархия ролей пока не настроена</p>
+                <p className="text-[11px] text-slate-500">
+                  Добавьте роли семьи ниже (например: Старший состав, Капт состав, Стрелок, Основа), чтобы бот отдавал им приоритет.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {priorityConfig.eventRoleHierarchy.map((item, idx) => {
+                  const roleObj = roles.find(r => r.id === item.roleId);
+                  const roleName = roleObj?.name || item.roleName || item.roleId;
+
+                  return (
+                    <div
+                      key={item.roleId}
+                      className="flex items-center justify-between p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F] hover:border-pink-500/30 transition-all gap-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs font-bold ${
+                            idx === 0
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                              : idx === 1
+                              ? 'bg-slate-400/20 text-slate-300 border border-slate-400/40'
+                              : idx === 2
+                              ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
+                              : 'bg-[#151921] text-slate-500 border border-[#1E232F]'
+                          }`}
+                        >
+                          #{idx + 1}
+                        </span>
+                        <div>
+                          <span className="px-2.5 py-1 rounded-lg bg-pink-500/10 border border-pink-500/25 text-pink-300 text-xs font-semibold">
+                            @{roleName}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block font-mono mt-0.5">
+                            ID: {item.roleId}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 bg-[#151921] border border-[#1E232F] px-2 py-1 rounded-lg">
+                          <span className="text-[10px] text-slate-400 font-medium">Очки:</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={1000}
+                            value={item.priority}
+                            onChange={(e) => updateRolePriorityValue(item.roleId, parseInt(e.target.value, 10) || 10)}
+                            className="w-14 bg-transparent text-xs text-right font-mono font-bold text-pink-400 focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Move Up/Down Controls */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveRoleHierarchyItem(idx, 'up')}
+                            disabled={idx === 0}
+                            title="Переместить выше по приоритету"
+                            className="p-1.5 rounded-lg bg-[#151921] hover:bg-[#1E232F] border border-[#1E232F] text-slate-300 disabled:opacity-20 transition-all"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveRoleHierarchyItem(idx, 'down')}
+                            disabled={idx === priorityConfig.eventRoleHierarchy.length - 1}
+                            title="Переместить ниже по приоритету"
+                            className="p-1.5 rounded-lg bg-[#151921] hover:bg-[#1E232F] border border-[#1E232F] text-slate-300 disabled:opacity-20 transition-all"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeRoleFromHierarchy(item.roleId)}
+                            title="Удалить из иерархии"
+                            className="p-1.5 rounded-lg bg-[#151921] hover:bg-red-500/20 hover:text-red-400 border border-[#1E232F] text-slate-400 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Add Role to Hierarchy */}
+          <div className="p-4 rounded-xl bg-[#0B0E14] border border-[#1E232F] space-y-3">
+            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5 text-pink-400" />
+              Добавить роль в иерархию приоритетов
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-7">
+                <label className="block text-[11px] text-slate-400 mb-1">Выберите роль Discord</label>
+                <CustomSelect
+                  options={availableRolesToAdd.map(r => ({
+                    value: r.id,
+                    label: `@${r.name}`,
+                  }))}
+                  value={selectedNewRole}
+                  onChange={(val) => setSelectedNewRole(val)}
+                  placeholder="Выберите роль для добавления..."
+                />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="block text-[11px] text-slate-400 mb-1">Очки приоритета</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={selectedNewPriority}
+                  onChange={(e) => setSelectedNewPriority(parseInt(e.target.value, 10) || 10)}
+                  className="w-full bg-[#151921] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <button
+                  type="button"
+                  onClick={addRoleToHierarchy}
+                  disabled={!selectedNewRole}
+                  className="w-full py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-semibold text-xs shadow-md shadow-pink-600/20 disabled:opacity-40 transition-all"
+                >
+                  Добавить
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Profile IC Rank bonus */}
+          <div className="pt-2 border-t border-[#1E232F] space-y-3">
             <div>
-              <label className="block text-slate-300 mb-1.5 font-semibold">Минимальный приоритетный ранг (IC)</label>
+              <label className="block text-slate-300 mb-1 font-semibold text-xs">
+                Минимальный IC ранг в профиле
+              </label>
               <input
                 type="number"
                 min={0}
                 max={20}
                 value={priorityConfig.eventPriorityMinRank}
                 onChange={(e) => setPriorityConfig({ ...priorityConfig, eventPriorityMinRank: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-pink-500"
+                className="w-48 bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-pink-500"
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                Участники с более высоким рангом в профиле имеют преимущество перед меньшими рангами при заполнении мест.
+                Каждый ранг в профиле бойца добавляет дополнительные очки (ранг × 10), что даёт преимущество старшим рангам при равенстве ролей.
               </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F] flex items-start gap-2.5 text-slate-400 text-xs">
+              <Info className="w-4 h-4 text-pink-400 shrink-0 mt-0.5" />
+              <span>
+                <strong>Удобное управление:</strong> в карточках сборов на вкладке «Сборы» организаторы могут в 1 клик переводить людей между основой и резервом (стрелочки ⬆️ / ⬇️), а также нажимать кнопку <strong>«Сбалансировать»</strong> для мгновенной пересортировки по этой иерархии!
+              </span>
             </div>
 
             <div className="pt-2">
               <button
                 onClick={handleSavePriorityConfig}
                 disabled={savingPriority}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-md shadow-pink-600/25 transition-all disabled:opacity-50"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-lg shadow-pink-600/25 transition-all disabled:opacity-50"
               >
-                {savingPriority ? 'Сохранение...' : 'Сохранить настройки приоритета'}
+                {savingPriority ? 'Сохранение...' : 'Сохранить иерархию ролей'}
               </button>
             </div>
           </div>
@@ -358,65 +629,81 @@ export const Events: React.FC = () => {
           <div className="col-span-full py-12 text-center text-slate-500">Мероприятий не найдено</div>
         ) : (
           events.map((ev) => {
+            const confirmed = ev.participants ? ev.participants.filter((p: any) => p.status === 'CONFIRMED') : [];
+            const reserve = ev.participants ? ev.participants.filter((p: any) => p.status === 'RESERVE') : [];
             const isLimited = ev.type === 'LIMITED';
-            const confirmed = ev.participants?.filter((p: any) => p.status === 'CONFIRMED') || [];
-            const reserve = ev.participants?.filter((p: any) => p.status === 'RESERVE') || [];
 
             return (
               <div
                 key={ev.id}
-                className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 hover:border-slate-700/60 transition-all flex flex-col justify-between"
+                className="bg-[#151921] border border-[#1E232F] hover:border-pink-500/30 rounded-2xl p-5 space-y-4 transition-all flex flex-col justify-between"
               >
                 <div>
-                  {/* Card Top Info */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                        ev.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        ev.status === 'FINISHED' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
-                        'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}>
-                        {ev.status === 'ACTIVE' ? 'Активен' : (ev.status === 'FINISHED' ? 'Завершен' : 'Отменен')}
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        {isLimited ? `Спецсостав (${confirmed.length}/${ev.participantLimit})` : 'Массовый сбор'}
-                      </span>
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-bold text-white">{ev.title}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                          {isLimited ? `Лимит: ${ev.participantLimit}` : 'Без ограничений'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Организатор: <span className="text-slate-200 font-medium">{ev.createdByTag || 'Admin'}</span> • Упоминание: <span className="text-pink-300 font-medium">{getMentionLabel(ev.targetRoleId)}</span>
+                      </p>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap justify-end">
-                      <span className="text-xs text-slate-400 font-medium">
-                        Организатор: @{ev.createdByTag || 'Организатор'}
-                      </span>
-                      <span className="text-slate-600">•</span>
-                      <span className="text-xs text-pink-400 font-medium bg-pink-500/10 px-2 py-0.5 rounded-md border border-pink-500/20">
-                        🔔 {getMentionLabel(ev.targetRoleId)}
+                    <div className="flex items-center gap-2">
+                      {ev.status === 'ACTIVE' && isLimited && (
+                        <button
+                          onClick={() => handleRebalance(ev.id)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#0B0E14] hover:bg-pink-600/20 text-slate-300 hover:text-pink-300 border border-[#1E232F] text-[11px] font-medium transition-all"
+                          title="Автоматически распределить основу и резерв по ролям"
+                        >
+                          <Scale className="w-3 h-3 text-pink-400" />
+                          Сбалансировать
+                        </button>
+                      )}
+                      <span
+                        className={`text-[10px] px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider ${
+                          ev.status === 'ACTIVE'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-slate-700/20 text-slate-400 border border-slate-700/30'
+                        }`}
+                      >
+                        {ev.status === 'ACTIVE' ? 'Активен' : 'Завершен'}
                       </span>
                     </div>
                   </div>
 
-                  <h3 className="text-lg font-bold text-white mb-2">{ev.title}</h3>
-                  {ev.description && (
-                    <p className="text-xs text-slate-400 mb-4 leading-relaxed italic">{ev.description}</p>
-                  )}
-
-                  {/* Metadata cards */}
+                  {/* Info grid */}
                   <div className="grid grid-cols-2 gap-2 text-xs mb-4">
                     <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] flex items-center gap-2">
                       <Clock className="w-4 h-4 text-pink-400 flex-shrink-0" />
                       <div>
-                        <p className="text-[10px] text-slate-500 uppercase font-semibold">Чек-ин явки</p>
+                        <p className="text-[10px] text-slate-500 uppercase font-semibold">Начало</p>
                         <p className="text-slate-200 font-medium">
-                          {new Date(ev.checkInTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(ev.eventTime).toLocaleString('ru-RU', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </p>
                       </div>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                      <Clock className="w-4 h-4 text-indigo-400 flex-shrink-0" />
                       <div>
-                        <p className="text-[10px] text-slate-500 uppercase font-semibold">Старт МП</p>
+                        <p className="text-[10px] text-slate-500 uppercase font-semibold">Чек-ин</p>
                         <p className="text-slate-200 font-medium">
-                          {new Date(ev.eventTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(ev.checkInTime).toLocaleString('ru-RU', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </p>
                       </div>
                     </div>
@@ -443,7 +730,7 @@ export const Events: React.FC = () => {
                   {/* Roster list for LIMITED */}
                   {isLimited && (
                     <div className="space-y-3 mb-4">
-                      {/* Confirmed */}
+                      {/* Confirmed / Main */}
                       <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F]">
                         <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
                           <span className="flex items-center gap-1.5">
@@ -455,24 +742,35 @@ export const Events: React.FC = () => {
                         {confirmed.length === 0 ? (
                           <p className="text-xs text-slate-500 italic">Пока никто не записался</p>
                         ) : (
-                          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                             {confirmed.map((p: any, idx: number) => (
                               <div
                                 key={p.id}
-                                className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-[#151921] border border-[#1E232F]"
+                                className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-[#151921] border border-[#1E232F] hover:border-pink-500/20 transition-all"
                               >
-                                <span className="text-slate-200">
+                                <span className="text-slate-200 truncate">
                                   <strong className="text-slate-500 mr-1.5">{idx + 1}.</strong>
                                   {p.userTag || p.userId}
                                 </span>
+
                                 {ev.status === 'ACTIVE' && (
-                                  <button
-                                    onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
-                                    title="Исключить из состава"
-                                    className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                                  >
-                                    <UserMinus className="w-3.5 h-3.5" />
-                                  </button>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleMoveParticipant(ev.id, p.userId, 'RESERVE')}
+                                      title="Переместить в резерв ⬇️"
+                                      className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-colors flex items-center gap-0.5 text-[10px]"
+                                    >
+                                      <ArrowDown className="w-3 h-3 text-amber-400" />
+                                      <span className="hidden sm:inline">В резерв</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
+                                      title="Исключить из состава"
+                                      className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                    >
+                                      <UserMinus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             ))}
@@ -481,34 +779,48 @@ export const Events: React.FC = () => {
                       </div>
 
                       {/* Reserve */}
-                      {reserve.length > 0 && (
-                        <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F]">
-                          <p className="text-xs font-semibold text-amber-400 mb-2">
-                            🪑 Резерв ({reserve.length})
-                          </p>
-                          <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                      <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F]">
+                        <p className="text-xs font-semibold text-amber-400 mb-2">
+                          🪑 Резерв ({reserve.length})
+                        </p>
+                        {reserve.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">Резерв пуст</p>
+                        ) : (
+                          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                             {reserve.map((p: any, idx: number) => (
                               <div
                                 key={p.id}
-                                className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-[#151921] border border-[#1E232F]"
+                                className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-[#151921] border border-[#1E232F] hover:border-amber-500/20 transition-all"
                               >
-                                <span className="text-slate-300">
+                                <span className="text-slate-300 truncate">
                                   <strong className="text-slate-500 mr-1.5">{idx + 1}.</strong>
                                   {p.userTag || p.userId}
                                 </span>
+
                                 {ev.status === 'ACTIVE' && (
-                                  <button
-                                    onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
-                                    className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                                  >
-                                    <UserMinus className="w-3.5 h-3.5" />
-                                  </button>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleMoveParticipant(ev.id, p.userId, 'CONFIRMED')}
+                                      title="Переместить в основной состав ⬆️"
+                                      className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors flex items-center gap-0.5 text-[10px]"
+                                    >
+                                      <ArrowUp className="w-3 h-3 text-emerald-400" />
+                                      <span className="hidden sm:inline">В основу</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
+                                      title="Исключить из состава"
+                                      className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                    >
+                                      <UserMinus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -596,7 +908,7 @@ export const Events: React.FC = () => {
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">
-                  Все участники сверх лимита попадают в резерв. Приоритетная роль или высокий ранг вытесняют в резерв участников без приоритета.
+                  Все участники сверх лимита попадают в резерв. Приоритетная роль или ранг вытесняют в резерв участников с меньшим приоритетом.
                 </span>
               </div>
 

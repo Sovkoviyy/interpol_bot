@@ -5,6 +5,7 @@ import { registerCommands, deploySlashCommands } from './commands';
 import { registerInteractionHandler } from './interactions/interactionHandler';
 import { initializeLoggingModule } from './modules/logging';
 import { EventScheduler } from './modules/events/eventScheduler';
+import { registerEventMessageListener } from './modules/events/eventMessageListener';
 import prisma from '../database/client';
 
 export async function startBot() {
@@ -16,6 +17,7 @@ export async function startBot() {
   // Register command definitions and interaction handlers
   registerCommands();
   registerInteractionHandler();
+  registerEventMessageListener();
   initializeLoggingModule();
 
   bot.once('ready', async () => {

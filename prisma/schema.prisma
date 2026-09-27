@@ -24,6 +24,7 @@ model GuildConfig {
   leaveRequestChannelId  String?
   eventPriorityRoleId   String?  // Discord role that gets priority for limited events (Капт, ВЗЗ, МЦЛ)
   eventPriorityMinRank  Int?     @default(1)
+  eventRoleHierarchyJson String? @default("[]")
   updatedAt          DateTime @updatedAt
   createdAt          DateTime @default(now())
 }
