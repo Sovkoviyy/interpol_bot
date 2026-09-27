@@ -2,9 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { 
   IdCard, 
   Search, 
-  Trophy, 
   Flame, 
-  Clock, 
   AlertOctagon, 
   Edit3, 
   Plus, 
@@ -31,7 +29,6 @@ import { CustomSelect } from '../components/CustomSelect';
 
 export const Profiles: React.FC = () => {
   const modal = useModal();
-  const [tab, setTab] = useState<'profiles' | 'leaderboard'>('profiles');
   const [profiles, setProfiles] = useState<any[]>([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -39,10 +36,6 @@ export const Profiles: React.FC = () => {
     withoutStatics: 0,
     active: 0,
     onLeave: 0,
-  });
-  const [leaderboard, setLeaderboard] = useState<{ topMp: any[]; topVoice: any[] }>({
-    topMp: [],
-    topVoice: [],
   });
   const [channels, setChannels] = useState<any[]>([]);
   const [guildMembers, setGuildMembers] = useState<any[]>([]);
@@ -78,9 +71,8 @@ export const Profiles: React.FC = () => {
   const fetchProfiles = async () => {
     try {
       setLoading(true);
-      const [profRes, leadRes, chRes, memRes] = await Promise.all([
+      const [profRes, chRes, memRes] = await Promise.all([
         api.get(`/profiles?search=${encodeURIComponent(search)}&sortBy=${sortBy}&order=${order}`),
-        api.get('/profiles/leaderboard'),
         api.get('/guild/channels').catch(() => ({ data: { channels: [] } })),
         api.get('/guild/members').catch(() => ({ data: { members: [] } })),
       ]);
@@ -88,7 +80,6 @@ export const Profiles: React.FC = () => {
       if (profRes.data.stats) {
         setStats(profRes.data.stats);
       }
-      setLeaderboard(leadRes.data || { topMp: [], topVoice: [] });
       
       const textChannels = (chRes.data?.channels || []).filter(
         (c: any) => c.type === 0 || c.type === 'GUILD_TEXT'
@@ -533,35 +524,8 @@ export const Profiles: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-[#1E232F] gap-2">
-        <button
-          onClick={() => setTab('profiles')}
-          className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${
-            tab === 'profiles'
-              ? 'border-pink-500 text-pink-400'
-              : 'border-transparent text-slate-400 hover:text-white'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          Все профили ({profiles.length})
-        </button>
-        <button
-          onClick={() => setTab('leaderboard')}
-          className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${
-            tab === 'leaderboard'
-              ? 'border-pink-500 text-pink-400'
-              : 'border-transparent text-slate-400 hover:text-white'
-          }`}
-        >
-          <Trophy className="w-4 h-4" />
-          Зал славы (Топ актива)
-        </button>
-      </div>
-
-      {/* Profiles Tab */}
-      {tab === 'profiles' && (
-        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-4">
+      {/* Profiles List */}
+      <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="relative w-full sm:w-80">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -746,110 +710,6 @@ export const Profiles: React.FC = () => {
             </div>
           )}
         </div>
-      )}
-
-      {/* Leaderboard Tab */}
-      {tab === 'leaderboard' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Top MP */}
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Flame className="w-5 h-5 text-pink-500" />
-              Топ 10 по отыгранным МП
-            </h2>
-            <div className="space-y-2">
-              {leaderboard.topMp.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 text-xs">Нет данных об активности</div>
-              ) : (
-                leaderboard.topMp.map((p, idx) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between p-3 bg-[#0B0E14] rounded-xl border border-[#1E232F] hover:border-pink-500/30 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
-                          idx === 0
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                            : idx === 1
-                            ? 'bg-slate-400/20 text-slate-300 border border-slate-400/40'
-                            : idx === 2
-                            ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
-                            : 'text-slate-500'
-                        }`}
-                      >
-                        {idx + 1}
-                      </span>
-                      <div>
-                        <div className="font-semibold text-white text-xs">
-                          {p.characterName || p.userTag || 'Боец'}
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          {p.staticId ? `#${p.staticId}` : p.userId}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-bold text-pink-400 font-mono text-sm">{p.mpCount}</span>
-                      <span className="text-[10px] text-slate-500 block">МП</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Top Voice */}
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Clock className="w-5 h-5 text-pink-500" />
-              Топ 10 по времени в войсе
-            </h2>
-            <div className="space-y-2">
-              {leaderboard.topVoice.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 text-xs">Нет данных об активности</div>
-              ) : (
-                leaderboard.topVoice.map((p, idx) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between p-3 bg-[#0B0E14] rounded-xl border border-[#1E232F] hover:border-pink-500/30 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
-                          idx === 0
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                            : idx === 1
-                            ? 'bg-slate-400/20 text-slate-300 border border-slate-400/40'
-                            : idx === 2
-                            ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
-                            : 'text-slate-500'
-                        }`}
-                      >
-                        {idx + 1}
-                      </span>
-                      <div>
-                        <div className="font-semibold text-white text-xs">
-                          {p.characterName || p.userTag || 'Боец'}
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          {p.staticId ? `#${p.staticId}` : p.userId}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-bold text-pink-400 font-mono text-xs">
-                        {formatVoice(p.voiceSeconds)}
-                      </span>
-                      <span className="text-[10px] text-slate-500 block">в войсе</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Manual Profile & Characters Modal (Up to 3 characters) */}
       {manualModalOpen && (
