@@ -393,7 +393,7 @@ export const ServerSetup: React.FC = () => {
         `• Категорию «⚔️ МЕРОПРИЯТИЯ (МП)» (#сборы-на-мп, 🔊 Сбор на МП)\n` +
         `• Категории «🎓 ACADEMY» и «📁 ACADEMY ARCHIVE»\n` +
         `• Категорию «📜 LOGS» со всеми 8 лог-каналами аудита\n` +
-        `• Категорию «🎯 ЗАЯВКИ НА ТИР»\n` +
+        `• Категорию «📹 ОТКАТЫ С МП» (#сдать-откат, #разбор-откатов)\n` +
         (deployPanelsCheck ? `• Авто-отправку всех интерактивных сообщений с кнопками\n\n` : `\n`) +
         `Если каналы с такими именами уже существуют, бот переиспользует их.`,
       type: 'pink',
@@ -490,11 +490,11 @@ export const ServerSetup: React.FC = () => {
     },
     {
       key: 'tierCheckerRoleId',
-      name: 'Проверяющий стрельбу (Тир-инспектор)',
-      defaultName: '🎯 Проверяющий тиров',
+      name: 'Проверяющий откатов (Разбор ошибок)',
+      defaultName: '🎯 Чекер откатов',
       defaultColor: '#8b5cf6',
-      badge: 'Тир система',
-      desc: 'Экзаменатор стрельбы. Получает уведомления в Discord и принимает зачеты по тирам (Tier 1-4).',
+      badge: 'Откаты с МП',
+      desc: 'Опытный игрок / наставник стрельбы. Получает уведомления в Discord и делает разбор ошибок по присланным откатам.',
     },
     {
       key: 'eventPriorityRoleId',
@@ -1310,7 +1310,7 @@ export const ServerSetup: React.FC = () => {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <Target className="w-4 h-4 text-fuchsia-400" />
-                      <span className="text-xs font-bold text-white">Панель подачи заявок на тир</span>
+                      <span className="text-xs font-bold text-white">Панель сдачи откатов с МП</span>
                     </div>
                     <p className="text-[11px] text-slate-400">
                       Канал: {bindings.tierApplyChannelId ? `#${textChannels.find((c: any) => c.id === bindings.tierApplyChannelId)?.name || bindings.tierApplyChannelId}` : 'не привязан'}

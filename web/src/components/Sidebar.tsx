@@ -58,9 +58,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
       ],
     },
     {
-      title: 'Мероприятия & Тиры',
+      title: 'Мероприятия & Откаты',
       links: [
-        { to: '/tier', label: 'Тир система', icon: Target, visible: true },
+        { to: '/tier', label: 'Откаты с МП', icon: Target, visible: true },
         { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: true },
       ],
     },

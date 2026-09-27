@@ -54,37 +54,37 @@ export class TierService {
   }> {
     const config = await this.getConfig(guild.id);
 
-    // 1. Find or create Tier Checker role
+    // 1. Find or create Tier Checker / Reviewer role
     let checkerRole = config.checkerRoleId
       ? guild.roles.cache.get(config.checkerRoleId) || await guild.roles.fetch(config.checkerRoleId).catch(() => null)
       : null;
 
     if (!checkerRole) {
-      checkerRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'тир чекер' || r.name.toLowerCase() === 'tier checker') || null;
+      checkerRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'чекер откатов' || r.name.toLowerCase() === 'тир чекер' || r.name.toLowerCase() === 'tier checker') || null;
     }
 
     if (!checkerRole) {
       checkerRole = await guild.roles.create({
-        name: 'Тир чекер',
+        name: 'Чекер откатов',
         color: 0xEC4899,
-        reason: 'Роль для проверки заявок и откатов на тир',
+        reason: 'Роль для проверки и разбора откатов с МП',
       });
     }
 
-    // 2. Find or create Category "ЗАЯВКИ НА ТИР"
+    // 2. Find or create Category "ОТКАТЫ С МП"
     let category = config.categoryId
       ? (guild.channels.cache.get(config.categoryId) as CategoryChannel) || null
       : null;
 
     if (!category || category.type !== ChannelType.GuildCategory) {
       category = (guild.channels.cache.find(
-        c => c.type === ChannelType.GuildCategory && (c.name.toLowerCase() === 'заявки на тир' || c.name.toLowerCase() === 'тир')
+        c => c.type === ChannelType.GuildCategory && (c.name.toLowerCase() === 'откаты с мп' || c.name.toLowerCase() === 'заявки на тир' || c.name.toLowerCase() === 'тир')
       ) as CategoryChannel) || null;
     }
 
     if (!category) {
       category = await guild.channels.create({
-        name: 'ЗАЯВКИ НА ТИР',
+        name: 'ОТКАТЫ С МП',
         type: ChannelType.GuildCategory,
         permissionOverwrites: [
           {
@@ -95,20 +95,20 @@ export class TierService {
       });
     }
 
-    // 3. Find or create Apply Channel "заявки-на-тир"
+    // 3. Find or create Apply Channel "сдать-откат"
     let applyChannel = config.applyChannelId
       ? (guild.channels.cache.get(config.applyChannelId) as TextChannel) || null
       : null;
 
     if (!applyChannel || applyChannel.type !== ChannelType.GuildText) {
       applyChannel = (guild.channels.cache.find(
-        c => c.type === ChannelType.GuildText && c.parentId === category!.id && (c.name === 'заявки-на-тир' || c.name === 'подача-тир')
+        c => c.type === ChannelType.GuildText && c.parentId === category!.id && (c.name === 'сдать-откат' || c.name === 'заявки-на-тир' || c.name === 'подача-тир')
       ) as TextChannel) || null;
     }
 
     if (!applyChannel) {
       applyChannel = await guild.channels.create({
-        name: 'заявки-на-тир',
+        name: 'сдать-откат',
         type: ChannelType.GuildText,
         parent: category.id,
         permissionOverwrites: [
@@ -121,20 +121,20 @@ export class TierService {
       });
     }
 
-    // 4. Find or create Review Channel "проверка-тир" (Private for Tier Checkers & Admins)
+    // 4. Find or create Review Channel "разбор-откатов"
     let reviewChannel = config.reviewChannelId
       ? (guild.channels.cache.get(config.reviewChannelId) as TextChannel) || null
       : null;
 
     if (!reviewChannel || reviewChannel.type !== ChannelType.GuildText) {
       reviewChannel = (guild.channels.cache.find(
-        c => c.type === ChannelType.GuildText && c.parentId === category!.id && (c.name === 'проверка-тир' || c.name === 'тир-чекеры')
+        c => c.type === ChannelType.GuildText && c.parentId === category!.id && (c.name === 'разбор-откатов' || c.name === 'проверка-тир' || c.name === 'тир-чекеры')
       ) as TextChannel) || null;
     }
 
     if (!reviewChannel) {
       reviewChannel = await guild.channels.create({
-        name: 'проверка-тир',
+        name: 'разбор-откатов',
         type: ChannelType.GuildText,
         parent: category.id,
         permissionOverwrites: [
@@ -189,7 +189,7 @@ export class TierService {
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('tier_request_channel_btn')
-        .setLabel('Подать заявку на тир')
+        .setLabel('📹 Сдать откат с МП')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('🎯')
     );
@@ -243,7 +243,7 @@ export class TierService {
         const existingChannel = guild.channels.cache.get(existingTicket.channelId);
         if (existingChannel) {
           await interaction.editReply({
-            content: `ℹ️ У вас уже есть активный канал для подачи на тир: <#${existingTicket.channelId}>. Перейдите в него для отправки откатов.`,
+            content: `ℹ️ У вас уже есть активный канал для сдачи откатов: <#${existingTicket.channelId}>. Перейдите в него для отправки откатов.`,
           });
           return;
         } else {
@@ -258,7 +258,7 @@ export class TierService {
       // Get user profile for static/name
       const profile = await ProfileService.getOrCreateProfile(guild.id, interaction.user.id, interaction.user.tag);
       const cleanName = profile.characterName ? sanitizeChannelNamePart(profile.characterName) : sanitizeChannelNamePart(interaction.user.username);
-      const channelName = `тир-${cleanName || interaction.user.username}`.toLowerCase().slice(0, 30);
+      const channelName = `откаты-${cleanName || interaction.user.username}`.toLowerCase().slice(0, 30);
 
       // Setup permission overwrites
       const checkerRoleId = config.checkerRoleId;
@@ -397,15 +397,15 @@ export class TierService {
         guildId: guild.id,
         action: 'TIER_CHANNEL_CREATE',
         category: 'BOT',
-        title: 'Создан канал заявки на тир',
-        description: `Кандидат <@${interaction.user.id}> (\`${interaction.user.tag}\`) открыл канал заявки на тир <#${ticketChannel.id}>`,
+        title: 'Создан канал для сдачи откатов',
+        description: `Участник <@${interaction.user.id}> (\`${interaction.user.tag}\`) открыл канал для сдачи откатов <#${ticketChannel.id}>`,
         executorId: interaction.user.id,
         executorTag: interaction.user.tag,
         targetId: ticketChannel.id,
       }).catch(() => null);
 
       await interaction.editReply({
-        content: `✅ Ваш персональный канал для подачи на тир создан: <#${ticketChannel.id}>. Перейдите в него для сдачи откатов!`,
+        content: `✅ Ваш персональный канал для сдачи откатов создан: <#${ticketChannel.id}>. Перейдите в него для отправки откатов с МП!`,
       });
     } catch (err: any) {
       console.error('[TierService handleRequestChannel Error]:', err);
@@ -481,7 +481,7 @@ export class TierService {
       });
 
       if (!ticket) {
-        await interaction.editReply({ content: '❌ Заявка на тир не найдена в базе данных.' });
+        await interaction.editReply({ content: '❌ Тикет сдачи откатов не найден в базе данных.' });
         return;
       }
 
@@ -503,17 +503,17 @@ export class TierService {
 
       // Send confirmation message in the thread
       const threadConfirmEmbed = createThemedEmbed({
-        title: `ОТКАТ ПРИНЯТ НА ПРОВЕРКУ • ${mpType.toUpperCase()}`,
+        title: `ОТКАТ ПРИНЯТ НА РАЗБОР • ${mpType.toUpperCase()}`,
         color: THEME.COLORS.PRIMARY,
         description: [
-          THEME.format.quote('Ваш откат успешно передан тир-чекерам на проверку.'),
+          THEME.format.quote('Ваш откат успешно передан проверяющим на разбор ошибок.'),
           '',
-          THEME.format.item('Кандидат', `<@${interaction.user.id}>`),
+          THEME.format.item('Участник', `<@${interaction.user.id}>`),
           THEME.format.item('Мероприятие', `**${mpType}**`),
           THEME.format.item('Ссылка', `[Смотреть откат](${clipUrl})`),
           comment ? THEME.format.item('Комментарий', comment) : '',
           '',
-          THEME.format.subtext('Ожидайте комментария и вердикта тир-чекера в этой ветке.'),
+          THEME.format.subtext('Ожидайте разбора ошибок и рекомендаций от опытных стрелков в этой ветке.'),
         ].filter(Boolean).join('\n'),
       });
 
@@ -523,7 +523,7 @@ export class TierService {
         });
       }
 
-      // Dispatch to #проверка-тир
+      // Dispatch to #разбор-откатов
       const config = await this.getConfig(guild.id);
       let reviewChannel: TextChannel | null = null;
       if (config.reviewChannelId) {
@@ -532,18 +532,18 @@ export class TierService {
 
       if (reviewChannel && reviewChannel.isTextBased()) {
         const reviewEmbed = createThemedEmbed({
-          title: `НОВЫЙ ОТКАТ НА ТИР • ${mpType.toUpperCase()}`,
+          title: `НОВЫЙ ОТКАТ С МП • ${mpType.toUpperCase()}`,
           color: THEME.COLORS.PRIMARY,
           description: [
-            THEME.format.quote('Поступил новый откат на оценку стрельбы и тира.'),
+            THEME.format.quote('Поступил новый откат с МП на разбор ошибок и оценку стрельбы.'),
             '',
-            THEME.format.item('Кандидат', `<@${interaction.user.id}> (\`${interaction.user.tag}\`)`),
+            THEME.format.item('Участник', `<@${interaction.user.id}> (\`${interaction.user.tag}\`)`),
             THEME.format.item('Мероприятие', `**${mpType}**`),
             THEME.format.item('Ссылка на откат', `[Перейти к видеозаписи](${clipUrl})`),
-            THEME.format.item('Канал кандидата', `<#${ticket.channelId}>`),
-            comment ? THEME.format.item('Комментарий кандидата', comment) : '',
+            THEME.format.item('Канал участника', `<#${ticket.channelId}>`),
+            comment ? THEME.format.item('Комментарий участника', comment) : '',
             '',
-            THEME.format.item('Статус', '`⏳ Ожидает проверки`'),
+            THEME.format.item('Статус', '`⏳ Ожидает разбора`'),
           ].filter(Boolean).join('\n'),
           footerText: `ID отчета: ${submission.id}`,
         });
@@ -551,7 +551,7 @@ export class TierService {
         const reviewRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
             .setCustomId(`tier_review_btn_${submission.id}`)
-            .setLabel('Проверить / Оставить комментарий')
+            .setLabel('Разобрать ошибки / Оставить комментарий')
             .setStyle(ButtonStyle.Primary)
             .setEmoji('📝')
         );
@@ -573,15 +573,15 @@ export class TierService {
         guildId: guild.id,
         action: 'TIER_CLIP_SUBMIT',
         category: 'BOT',
-        title: `Сдан откат на тир [${mpType}]`,
-        description: `Кандидат <@${interaction.user.id}> (\`${interaction.user.tag}\`) отправил откат с МП **${mpType}** на проверку.`,
+        title: `Сдан откат с МП [${mpType}]`,
+        description: `Участник <@${interaction.user.id}> (\`${interaction.user.tag}\`) отправил откат с МП **${mpType}** на разбор ошибок.`,
         executorId: interaction.user.id,
         executorTag: interaction.user.tag,
         metadata: { submissionId: submission.id, mpType, clipUrl },
       }).catch(() => null);
 
       await interaction.editReply({
-        content: `✅ Ваш откат с мероприятия **${mpType}** успешно отправлен тир-чекерам на рассмотрение!`,
+        content: `✅ Ваш откат с мероприятия **${mpType}** успешно отправлен проверяющим на разбор ошибок!`,
       });
     } catch (err: any) {
       console.error('[TierService handleClipModalSubmit Error]:', err);
@@ -630,25 +630,17 @@ export class TierService {
 
     const modal = new ModalBuilder()
       .setCustomId(`tier_review_modal_${submission.id}`)
-      .setTitle(`Проверка отката [${submission.mpType}]`);
+      .setTitle(`Разбор отката [${submission.mpType}]`);
 
     const commentInput = new TextInputBuilder()
       .setCustomId('reviewer_comment')
-      .setLabel('Комментарий / замечания к стрельбе')
-      .setPlaceholder('Напишите обратную связь, разбор позиционки, стрельбы, рекомендации...')
+      .setLabel('Разбор ошибок и рекомендации к откату')
+      .setPlaceholder('Опишите ошибки по позиционке, стрельбе, таймингам, советы и замечания...')
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true);
 
-    const tierInput = new TextInputBuilder()
-      .setCustomId('assigned_tier')
-      .setLabel('Присвоенный тир / статус (опционально)')
-      .setPlaceholder('например: Tier 1, Tier 2, Требуются еще откаты...')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false);
-
     modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(commentInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(tierInput)
+      new ActionRowBuilder<TextInputBuilder>().addComponents(commentInput)
     );
 
     await interaction.showModal(modal);
@@ -671,7 +663,6 @@ export class TierService {
 
     try {
       const reviewerComment = interaction.fields.getTextInputValue('reviewer_comment').trim();
-      const assignedTier = interaction.fields.getTextInputValue('assigned_tier')?.trim() || null;
 
       const submission = await prisma.tierSubmission.findUnique({
         where: { id: submissionId },
@@ -690,7 +681,7 @@ export class TierService {
           status: 'REVIEWED',
           reviewerId: interaction.user.id,
           reviewerTag: interaction.user.tag,
-          reviewerComment: assignedTier ? `[${assignedTier}] ${reviewerComment}` : reviewerComment,
+          reviewerComment: reviewerComment,
           reviewedAt: new Date(),
         },
       });
@@ -706,28 +697,28 @@ export class TierService {
           const reviewMsg = await reviewChannel.messages.fetch(submission.reviewMessageId).catch(() => null);
           if (reviewMsg) {
             const updatedEmbed = createThemedEmbed({
-              title: `ОТКАТ НА ТИР • ${submission.mpType.toUpperCase()} • ПРОСМОТРЕН`,
+              title: `ОТКАТ С МП • ${submission.mpType.toUpperCase()} • РАЗОБРАН`,
               color: THEME.COLORS.SUCCESS,
               description: [
-                THEME.format.quote('Откат проверен тир-чекером.'),
+                THEME.format.quote('Откат проверен и разобран опытным участником семьи.'),
                 '',
-                THEME.format.item('Кандидат', `<@${submission.userId}> (\`${submission.userTag}\`)`),
+                THEME.format.item('Участник', `<@${submission.userId}> (\`${submission.userTag}\`)`),
                 THEME.format.item('Мероприятие', `**${submission.mpType}**`),
                 THEME.format.item('Ссылка на откат', `[Перейти к видеозаписи](${submission.clipUrl})`),
-                submission.comment ? THEME.format.item('Комментарий кандидата', submission.comment) : '',
-                THEME.format.item('Проверяющий', `<@${interaction.user.id}> (\`${interaction.user.tag}\`)`),
-                assignedTier ? THEME.format.item('Вердикт / Тир', `**${assignedTier}**`) : '',
-                THEME.format.item('Комментарий проверяющего', reviewerComment),
+                submission.comment ? THEME.format.item('Комментарий участника', submission.comment) : '',
+                THEME.format.item('Кто разобрал', `<@${interaction.user.id}> (\`${interaction.user.tag}\`)`),
                 '',
-                THEME.format.item('Статус', '`✅ Просмотрен`'),
+                THEME.format.item('Разбор ошибок и рекомендации', reviewerComment),
+                '',
+                THEME.format.item('Статус', '`✅ Разобран`'),
               ].filter(Boolean).join('\n'),
-              footerText: `ID: ${submission.id} • Проверено <t:${Math.floor(Date.now() / 1000)}:R>`,
+              footerText: `ID: ${submission.id} • Разобрано <t:${Math.floor(Date.now() / 1000)}:R>`,
             });
 
             const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder()
                 .setCustomId(`tier_reviewed_${submission.id}`)
-                .setLabel('Просмотрен')
+                .setLabel('Разобран')
                 .setStyle(ButtonStyle.Secondary)
                 .setDisabled(true)
                 .setEmoji('✅')
@@ -745,53 +736,59 @@ export class TierService {
       const targetChannel = (guild.channels.cache.get(targetChannelId) ||
         await guild.channels.fetch(targetChannelId).catch(() => null)) as any;
 
-      const templateKey = assignedTier ? 'tier_approved' : 'tier_rejected';
-      const rendered = await BotMessageManager.renderMessage(guild.id, templateKey, {
-        user: `<@${submission.userId}>`,
-        username: submission.userTag || submission.userId,
-        tierName: assignedTier || 'Без тира',
-        mpType: submission.mpType,
-        checker: `<@${interaction.user.id}>`,
-        comment: reviewerComment,
-        reason: reviewerComment,
-        guild: guild.name,
+      const candidateEmbed = createThemedEmbed({
+        title: `📝 РАЗБОР ОТКАТА • ${submission.mpType.toUpperCase()}`,
+        color: THEME.COLORS.SUCCESS,
+        description: [
+          THEME.format.quote(`Опытный стрелок семьи <@${interaction.user.id}> разобрал ваш откат с мероприятия **${submission.mpType}**:`),
+          '',
+          `**Разбор ошибок и рекомендации:**`,
+          `> ${reviewerComment}`,
+          '',
+          THEME.format.subtext('Ознакомьтесь с замечаниями и применяйте советы в следующих перестрелках!'),
+        ].join('\n'),
       });
 
       if (targetChannel && typeof targetChannel.send === 'function') {
         await targetChannel.send({
-          content: rendered.content || `<@${submission.userId}>`,
-          embeds: [rendered.embed],
+          content: `<@${submission.userId}>`,
+          embeds: [candidateEmbed],
         }).catch(() => null);
       }
 
       // Send DM to candidate
-      const dmKey = assignedTier ? 'tier_dm_approved' : 'tier_dm_rejected';
-      BotMessageManager.sendDM(guild.id, submission.userId, dmKey, {
-        user: `<@${submission.userId}>`,
-        username: submission.userTag || submission.userId,
-        tierName: assignedTier || 'Без тира',
-        mpType: submission.mpType,
-        checker: `<@${interaction.user.id}>`,
-        comment: reviewerComment,
-        reason: reviewerComment,
-        guild: guild.name,
-      }).catch(() => null);
+      const targetMember = await guild.members.fetch(submission.userId).catch(() => null);
+      if (targetMember) {
+        const candidateDmEmbed = createThemedEmbed({
+          title: `📝 Разбор вашего отката с ${submission.mpType} • ${guild.name}`,
+          color: THEME.COLORS.SUCCESS,
+          description: [
+            `Привет, <@${submission.userId}>!`,
+            '',
+            `Опытный участник семьи <@${interaction.user.id}> разобрал твой откат с мероприятия **${submission.mpType}**:`,
+            '',
+            `**Разбор ошибок:**`,
+            `> ${reviewerComment}`,
+          ].join('\n'),
+        });
+        await targetMember.send({ embeds: [candidateDmEmbed] }).catch(() => null);
+      }
 
       // 3. Log to AuditLogger in #бот-лог
       await AuditLogger.recordEntry({
         guildId: guild.id,
         action: 'TIER_CLIP_REVIEWED',
         category: 'BOT',
-        title: `Проверен откат на тир [${submission.mpType}]`,
-        description: `Тир-чекер <@${interaction.user.id}> (\`${interaction.user.tag}\`) проверил откат кандидата <@${submission.userId}>. Вердикт: ${assignedTier || 'Без тира'}.`,
+        title: `Разобран откат с МП [${submission.mpType}]`,
+        description: `Опытный участник <@${interaction.user.id}> (\`${interaction.user.tag}\`) разобрал откат участника <@${submission.userId}>.`,
         executorId: interaction.user.id,
         executorTag: interaction.user.tag,
         targetId: submission.userId,
-        metadata: { submissionId: submission.id, mpType: submission.mpType, assignedTier },
+        metadata: { submissionId: submission.id, mpType: submission.mpType },
       }).catch(() => null);
 
       await interaction.editReply({
-        content: `✅ Комментарий к отчету успешно сохранен, отметка «Просмотрен» проставлена, а кандидат уведомлен в своем канале!`,
+        content: `✅ Разбор ошибок успешно сохранен, отметка «Разобран» проставлена, а участник уведомлен в своей ветке и в ЛС!`,
       });
     } catch (err: any) {
       console.error('[TierService handleReviewModalSubmit Error]:', err);

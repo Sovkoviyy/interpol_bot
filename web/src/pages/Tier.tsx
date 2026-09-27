@@ -62,8 +62,8 @@ export const Tier: React.FC = () => {
 
   const handleSetup = async () => {
     const confirmed = await modal.confirm({
-      title: 'Развернуть структуру Тир-системы?',
-      message: 'Бот автоматически создаст категорию «ЗАЯВКИ НА ТИР», канал «заявки-на-тир» с интерактивной кнопкой подачи, закрытый канал «проверка-тир» и роль «Тир чекер».',
+      title: 'Развернуть структуру сдачи откатов с МП?',
+      message: 'Бот автоматически создаст категорию «ОТКАТЫ С МП», канал «сдать-откат» с интерактивной кнопкой подачи, закрытый канал «разбор-откатов» и роль «Чекер откатов».',
       confirmText: 'Развернуть структуру',
       type: 'pink',
     });
@@ -74,7 +74,7 @@ export const Tier: React.FC = () => {
       await api.post('/tier/setup');
       modal.alert({
         title: 'Успешно!',
-        message: 'Категория, каналы и роль тир-чекеров успешно созданы в Discord!',
+        message: 'Категория, каналы и роль чекеров успешно созданы в Discord!',
         type: 'success',
       });
       fetchData();
@@ -105,7 +105,7 @@ export const Tier: React.FC = () => {
       });
       modal.alert({
         title: 'Успешно',
-        message: 'Статус и вердикт отката успешно обновлены!',
+        message: 'Статус и разбор отката успешно обновлены!',
         type: 'success',
       });
       setEditingSub(null);
@@ -180,7 +180,7 @@ export const Tier: React.FC = () => {
 
   const handleDeleteTicket = async (tkt: any) => {
     const confirmed = await modal.confirm({
-      title: 'Удалить тикет кандидата?',
+      title: 'Удалить тикет участника?',
       message: `Вы действительно хотите удалить тикет пользователя ${tkt.userTag || tkt.userId}? Это удалит все сданные им откаты и сотрет канал в Discord.`,
       confirmText: 'Да, удалить тикет',
       type: 'danger',
@@ -225,13 +225,13 @@ export const Tier: React.FC = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                Тир система
+                Разбор откатов с МП
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-mono font-bold border border-pink-500/30">
-                  TIER
+                  ОТКАТЫ
                 </span>
               </h1>
               <p className="text-xs text-slate-400 mt-0.5">
-                Заявки на получение тира, сдача откатов (Капт, ВЗЗ / МЦЛ, Арена, РП) и проверка тир-чекерами
+                Сдача видеозаписей с мероприятий (Капт, ВЗЗ / МЦЛ, Арена, РП), разбор ошибок опытными игроками и рекомендации
               </p>
             </div>
           </div>
@@ -265,7 +265,7 @@ export const Tier: React.FC = () => {
           </div>
           <div>
             <div className="text-2xl font-bold text-amber-300">{pendingCount}</div>
-            <div className="text-xs text-slate-400 font-medium">Ожидают проверки</div>
+            <div className="text-xs text-slate-400 font-medium">Ожидают разбора</div>
           </div>
         </div>
 
@@ -275,7 +275,7 @@ export const Tier: React.FC = () => {
           </div>
           <div>
             <div className="text-2xl font-bold text-emerald-300">{tickets.length}</div>
-            <div className="text-xs text-slate-400 font-medium">Кандидатов / Тикетов</div>
+            <div className="text-xs text-slate-400 font-medium">Участников / Тикетов</div>
           </div>
         </div>
       </div>
@@ -303,7 +303,7 @@ export const Tier: React.FC = () => {
           }`}
         >
           <Ticket className="w-4 h-4" />
-          <span>Кандидаты и Тикеты ({tickets.length})</span>
+          <span>Участники и Тикеты ({tickets.length})</span>
         </button>
       </div>
 
@@ -345,7 +345,7 @@ export const Tier: React.FC = () => {
                     filter === 'REVIEWED' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Проверены ({reviewedCount})
+                  Разобраны ({reviewedCount})
                 </button>
               </div>
 
@@ -395,7 +395,7 @@ export const Tier: React.FC = () => {
                             : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                         }`}
                       >
-                        {sub.status === 'REVIEWED' ? 'Просмотрен' : 'Ожидает проверки'}
+                        {sub.status === 'REVIEWED' ? 'Разобран' : 'Ожидает разбора'}
                       </span>
                     </div>
 
@@ -407,7 +407,7 @@ export const Tier: React.FC = () => {
 
                     {sub.status === 'REVIEWED' && sub.reviewerComment && (
                       <div className="text-xs text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-2 mt-1">
-                        <strong>Вердикт тир-чекера ({sub.reviewerTag || 'Чекер'}):</strong>{' '}
+                        <strong>Разбор ошибок ({sub.reviewerTag || 'Проверяющий'}):</strong>{' '}
                         {sub.reviewerComment}
                       </div>
                     )}
@@ -431,7 +431,7 @@ export const Tier: React.FC = () => {
                     <button
                       onClick={() => handleOpenEditSub(sub)}
                       className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-slate-700/60 text-slate-300 hover:text-white border border-slate-700/40 transition-colors"
-                      title="Редактировать статус / вердикт"
+                      title="Редактировать статус / разбор"
                     >
                       <Pencil className="w-3.5 h-3.5 text-slate-400" />
                     </button>
@@ -458,10 +458,10 @@ export const Tier: React.FC = () => {
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <Ticket className="w-4 h-4 text-pink-400" />
-                Кандидаты и Тикеты
+                Участники и Тикеты
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Приватные каналы кандидатов на тир и статус прохождения проверки
+                Приватные каналы участников для сдачи откатов с мероприятий
               </p>
             </div>
           </div>
@@ -520,7 +520,7 @@ export const Tier: React.FC = () => {
                     <button
                       onClick={() => handleDeleteTicket(tkt)}
                       className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all"
-                      title="Удалить тикет кандидата"
+                      title="Удалить тикет участника"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -539,7 +539,7 @@ export const Tier: React.FC = () => {
             <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Pencil className="w-4 h-4 text-pink-400" />
-                Редактировать вердикт отката
+                Редактировать разбор отката
               </h3>
               <button
                 onClick={() => setEditingSub(null)}
@@ -551,7 +551,7 @@ export const Tier: React.FC = () => {
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-400 mb-1">Кандидат / МП</label>
+                <label className="block text-slate-400 mb-1">Участник / МП</label>
                 <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] text-slate-200 font-semibold flex items-center justify-between">
                   <span>{editingSub.userTag || editingSub.userId}</span>
                   <span className="text-pink-400">{editingSub.mpType}</span>
@@ -559,7 +559,7 @@ export const Tier: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1">Статус проверки</label>
+                <label className="block text-slate-400 mb-1">Статус разбора</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -570,7 +570,7 @@ export const Tier: React.FC = () => {
                         : 'bg-[#0B0E14] border-[#1E232F] text-slate-400'
                     }`}
                   >
-                    ⏳ Ожидает проверки
+                    ⏳ Ожидает разбора
                   </button>
                   <button
                     type="button"
@@ -581,18 +581,18 @@ export const Tier: React.FC = () => {
                         : 'bg-[#0B0E14] border-[#1E232F] text-slate-400'
                     }`}
                   >
-                    ✅ Просмотрен
+                    ✅ Разобран
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1">Вердикт / Комментарий тир-чекера</label>
+                <label className="block text-slate-400 mb-1">Разбор ошибок и рекомендации проверяющего</label>
                 <textarea
                   rows={4}
                   value={subComment}
                   onChange={(e) => setSubComment(e.target.value)}
-                  placeholder="например: Отличный аим, тир 1 подтвержден..."
+                  placeholder="например: Хороший аим, но на 1:20 не заходи в упор без укрытия..."
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl p-3 text-white placeholder-slate-600 focus:outline-none focus:border-pink-500"
                 />
               </div>
@@ -627,7 +627,7 @@ export const Tier: React.FC = () => {
             <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Ticket className="w-4 h-4 text-pink-400" />
-                Статус тикета кандидата
+                Статус тикета участника
               </h3>
               <button
                 onClick={() => setEditingTicket(null)}
@@ -639,7 +639,7 @@ export const Tier: React.FC = () => {
 
             <div className="space-y-3 text-xs">
               <p className="text-slate-300">
-                Кандидат: <strong>{editingTicket.userTag || editingTicket.userId}</strong>
+                Участник: <strong>{editingTicket.userTag || editingTicket.userId}</strong>
               </p>
 
               <div>
