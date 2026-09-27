@@ -19,24 +19,38 @@ export class PayrollService {
   }
 
   static async saveConfig(guildId: string, data: any) {
+    const payload = data?.config || data || {};
+    const parseRate = (val: any, fallback: number) => {
+      if (val === undefined || val === null || val === '') return fallback;
+      const num = Number(val);
+      return isNaN(num) ? fallback : num;
+    };
+
+    const accepted = parseRate(payload.payPerCandidateAccepted, 10000);
+    const rejected = parseRate(payload.payPerCandidateRejected, 3000);
+    const approvedRep = parseRate(payload.payPerApprovedReport, 3000);
+    const rejectedRep = parseRate(payload.payPerRejectedReport, 1500);
+    const promotion = parseRate(payload.payPerPromotion, 15000);
+    const currency = typeof payload.currencySymbol === 'string' && payload.currencySymbol.trim() ? payload.currencySymbol.trim() : '$';
+
     return await prisma.recruiterSalaryConfig.upsert({
       where: { guildId },
       update: {
-        payPerCandidateAccepted: parseFloat(data.payPerCandidateAccepted) || 10000,
-        payPerCandidateRejected: parseFloat(data.payPerCandidateRejected) || 3000,
-        payPerApprovedReport: parseFloat(data.payPerApprovedReport) || 3000,
-        payPerRejectedReport: parseFloat(data.payPerRejectedReport) || 1500,
-        payPerPromotion: parseFloat(data.payPerPromotion) || 15000,
-        currencySymbol: data.currencySymbol || '$',
+        payPerCandidateAccepted: accepted,
+        payPerCandidateRejected: rejected,
+        payPerApprovedReport: approvedRep,
+        payPerRejectedReport: rejectedRep,
+        payPerPromotion: promotion,
+        currencySymbol: currency,
       },
       create: {
         guildId,
-        payPerCandidateAccepted: parseFloat(data.payPerCandidateAccepted) || 10000,
-        payPerCandidateRejected: parseFloat(data.payPerCandidateRejected) || 3000,
-        payPerApprovedReport: parseFloat(data.payPerApprovedReport) || 3000,
-        payPerRejectedReport: parseFloat(data.payPerRejectedReport) || 1500,
-        payPerPromotion: parseFloat(data.payPerPromotion) || 15000,
-        currencySymbol: data.currencySymbol || '$',
+        payPerCandidateAccepted: accepted,
+        payPerCandidateRejected: rejected,
+        payPerApprovedReport: approvedRep,
+        payPerRejectedReport: rejectedRep,
+        payPerPromotion: promotion,
+        currencySymbol: currency,
       },
     });
   }

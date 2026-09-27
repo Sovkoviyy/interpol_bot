@@ -26,7 +26,13 @@ router.get('/config', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * POST /api/payroll/config
  */
-router.post('/config', requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/config', (req: AuthenticatedRequest, res: Response, next: any) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+  if (req.user.permissions?.isAdmin || req.user.permissions?.manageRecruiting || req.user.permissions?.manageSettings) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Forbidden: You do not have permission to manage recruiter rates' });
+}, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const updated = await PayrollService.saveConfig(guildId, req.body);

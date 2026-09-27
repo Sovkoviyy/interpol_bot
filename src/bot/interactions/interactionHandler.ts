@@ -171,12 +171,12 @@ export function registerInteractionHandler() {
             : customId.startsWith('academy_promo_confirm_')
             ? customId.replace('academy_promo_confirm_', '')
             : customId.replace('academy_promote_', '');
-          await interaction.deferReply();
+          await interaction.deferReply({ ephemeral: true });
           try {
             await AcademyService.promoteAcademician(academyChannelId, member, true);
-            await interaction.editReply({ content: `🎖️ Академик успешно повышен на 2 ранг рекрутером ${member}!` });
+            await interaction.editReply({ content: `🎖️ Академик успешно повышен на 2 ранг рекрутером ${member}! Канал академии удаляется.` }).catch(() => null);
           } catch (err: any) {
-            await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
+            await interaction.editReply({ content: `❌ Ошибка: ${err.message}` }).catch(() => null);
           }
           return;
         }

@@ -729,10 +729,14 @@ export class AcademyService {
           guild: reviewer.guild.name,
         }).catch(() => null);
 
-        // Move to archive category if configured
-        if (config.archiveCategoryId) {
-          await channel.setParent(config.archiveCategoryId, { lockPermissions: false }).catch(() => null);
-        }
+        // Delete the academy channel immediately after promotion to rank 2
+        setTimeout(async () => {
+          try {
+            await channel.delete('Академик успешно повышен на 2 ранг (канал академии закрыт)');
+          } catch (delErr) {
+            console.warn(`[Academy] Could not delete channel ${channel.id}:`, delErr);
+          }
+        }, 1500);
       }
     } else {
       // Rejected promotion with penalties

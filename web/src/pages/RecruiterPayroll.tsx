@@ -192,13 +192,16 @@ export const RecruiterPayroll: React.FC = () => {
   const handleSaveRates = async () => {
     try {
       setSaving(true);
-      await api.post('/payroll/config', config);
+      const res = await api.post('/payroll/config', config);
+      if (res.data?.config) {
+        setConfig(res.data.config);
+      }
       modal.alert({
         title: 'Успешно',
         message: 'Тарифные ставки рекрутеров сохранены!',
         type: 'success',
       });
-      fetchData();
+      await fetchData();
     } catch (err: any) {
       modal.alert({
         title: 'Ошибка',
@@ -530,8 +533,8 @@ export const RecruiterPayroll: React.FC = () => {
                   type="number"
                   min={0}
                   step={500}
-                  value={config?.payPerCandidateAccepted ?? 10000}
-                  onChange={(e) => setConfig({ ...config, payPerCandidateAccepted: parseFloat(e.target.value) || 0 })}
+                  value={config?.payPerCandidateAccepted ?? ''}
+                  onChange={(e) => setConfig({ ...config, payPerCandidateAccepted: e.target.value === '' ? '' : Number(e.target.value) })}
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
@@ -542,8 +545,8 @@ export const RecruiterPayroll: React.FC = () => {
                   type="number"
                   min={0}
                   step={500}
-                  value={config?.payPerCandidateRejected ?? 3000}
-                  onChange={(e) => setConfig({ ...config, payPerCandidateRejected: parseFloat(e.target.value) || 0 })}
+                  value={config?.payPerCandidateRejected ?? ''}
+                  onChange={(e) => setConfig({ ...config, payPerCandidateRejected: e.target.value === '' ? '' : Number(e.target.value) })}
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
@@ -556,8 +559,8 @@ export const RecruiterPayroll: React.FC = () => {
                   type="number"
                   min={0}
                   step={500}
-                  value={config?.payPerApprovedReport ?? 3000}
-                  onChange={(e) => setConfig({ ...config, payPerApprovedReport: parseFloat(e.target.value) || 0 })}
+                  value={config?.payPerApprovedReport ?? ''}
+                  onChange={(e) => setConfig({ ...config, payPerApprovedReport: e.target.value === '' ? '' : Number(e.target.value) })}
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
@@ -568,8 +571,8 @@ export const RecruiterPayroll: React.FC = () => {
                   type="number"
                   min={0}
                   step={500}
-                  value={config?.payPerRejectedReport ?? 1500}
-                  onChange={(e) => setConfig({ ...config, payPerRejectedReport: parseFloat(e.target.value) || 0 })}
+                  value={config?.payPerRejectedReport ?? ''}
+                  onChange={(e) => setConfig({ ...config, payPerRejectedReport: e.target.value === '' ? '' : Number(e.target.value) })}
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
@@ -581,8 +584,8 @@ export const RecruiterPayroll: React.FC = () => {
                 type="number"
                 min={0}
                 step={500}
-                value={config?.payPerPromotion ?? 15000}
-                onChange={(e) => setConfig({ ...config, payPerPromotion: parseFloat(e.target.value) || 0 })}
+                value={config?.payPerPromotion ?? ''}
+                onChange={(e) => setConfig({ ...config, payPerPromotion: e.target.value === '' ? '' : Number(e.target.value) })}
                 className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
               />
             </div>
