@@ -87,6 +87,11 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
             ? 'border-pink-500 ring-1 ring-pink-500/30'
             : 'border-[#1E232F] hover:border-pink-500/40'
         }`}
+        title={
+          selectedChannel
+            ? `${selectedChannel.name}${parentCategory ? ` (в категории «${parentCategory.name}»)` : ''} • ID: ${selectedChannel.id}`
+            : undefined
+        }
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {selectedChannel ? (
@@ -96,15 +101,15 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
                 {selectedChannel.name}
               </span>
               {parentCategory && (
-                <span className="text-[10px] text-slate-500 truncate hidden sm:inline">
+                <span className="text-[10px] text-slate-400 shrink-0 max-w-[45%] truncate hidden sm:inline">
                   • в {parentCategory.name}
                 </span>
               )}
             </>
           ) : (
-            <span className="text-xs text-slate-500 select-none flex items-center gap-1.5">
-              <Hash className="w-3.5 h-3.5 text-slate-600" />
-              {placeholder}
+            <span className="text-xs text-slate-500 select-none flex items-center gap-1.5 truncate">
+              <Hash className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+              <span className="truncate">{placeholder}</span>
             </span>
           )}
         </div>
@@ -143,8 +148,8 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск канала по названию или ID..."
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-colors"
+                placeholder="Поиск по названию или ID..."
+                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-lg pl-9 pr-7 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-colors"
               />
               {search && (
                 <button
@@ -157,9 +162,9 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
               )}
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-              <span>Доступно: {filteredChannels.length} каналов</span>
+              <span>Доступно: {filteredChannels.length}</span>
               {selectedChannel && (
-                <span className="text-pink-400 truncate max-w-[150px]">
+                <span className="text-pink-400 truncate max-w-[160px]">
                   #{selectedChannel.name}
                 </span>
               )}
@@ -167,7 +172,7 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
           </div>
 
           {/* Channels List */}
-          <div className="max-h-56 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+          <div className="max-h-64 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
             {allowClear && (
               <div
                 onClick={() => {
@@ -181,7 +186,7 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
                 }`}
               >
                 <span className="italic">Не выбран (очистить)</span>
-                {!value && <Check className="w-3.5 h-3.5 text-pink-400" />}
+                {!value && <Check className="w-3.5 h-3.5 text-pink-400 shrink-0" />}
               </div>
             )}
 
@@ -199,6 +204,7 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
                 return (
                   <div
                     key={ch.id}
+                    title={`${ch.name}${parent ? ` (в категории «${parent.name}»)` : ''} • ID: ${ch.id}`}
                     onClick={() => {
                       onChange(ch.id);
                       setIsOpen(false);
@@ -209,22 +215,23 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
                         : 'hover:bg-[#1E232F] border border-transparent text-slate-300'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {renderIcon(ch.type)}
-                      <span className="truncate">{ch.name}</span>
-                      {parent && (
-                        <span className="text-[10px] text-slate-500 truncate hidden sm:inline">
-                          ({parent.name})
-                        </span>
-                      )}
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      <div className="mt-0.5 shrink-0">{renderIcon(ch.type)}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-medium leading-snug">
+                          {ch.name}
+                        </div>
+                        {parent && (
+                          <div className="text-[10px] text-slate-400/80 truncate leading-tight mt-0.5">
+                            в {parent.name}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {ch.id}
-                      </span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-pink-400" />}
-                    </div>
+                    {isSelected && (
+                      <Check className="w-4 h-4 text-pink-400 shrink-0 ml-2" />
+                    )}
                   </div>
                 );
               })

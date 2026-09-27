@@ -120,6 +120,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
               return (
                 <span
                   key={id}
+                  title={`@${name} • ID: ${id}`}
                   className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-medium border transition-colors shadow-sm select-none"
                   style={{
                     backgroundColor: `${hex}18`,
@@ -131,7 +132,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
                     className="w-2 h-2 rounded-full shrink-0 shadow-sm"
                     style={{ backgroundColor: hex }}
                   />
-                  <span className="truncate max-w-[150px]">@{name}</span>
+                  <span className="truncate max-w-[200px]">@{name}</span>
                   <button
                     type="button"
                     onClick={(e) => handleRemoveSingle(e, id)}
@@ -209,7 +210,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
           </div>
 
           {/* Roles List */}
-          <div className="max-h-56 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+          <div className="max-h-64 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
             {filteredRoles.length === 0 ? (
               <div className="py-6 text-center text-xs text-slate-500">
                 Роли не найдены по запросу «{search}»
@@ -222,24 +223,27 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
                 return (
                   <div
                     key={role.id}
+                    title={`@${role.name} • ID: ${role.id}`}
                     onClick={() => handleToggleRole(role.id)}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-xs transition-all ${
                       isSelected
-                        ? 'bg-pink-500/15 border border-pink-500/30 text-white'
+                        ? 'bg-pink-500/15 border border-pink-500/30 text-white font-medium'
                         : 'hover:bg-[#1E232F] border border-transparent text-slate-300'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {/* Checkbox badge */}
-                      <div
-                        className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors ${
-                          isSelected
-                            ? 'bg-pink-500 border-pink-500 text-white'
-                            : 'border-slate-700 bg-[#0B0E14]'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3 h-3" />}
-                      </div>
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {/* Checkbox badge for multi-select */}
+                      {isMulti && (
+                        <div
+                          className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors ${
+                            isSelected
+                              ? 'bg-pink-500 border-pink-500 text-white'
+                              : 'border-slate-700 bg-[#0B0E14]'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3" />}
+                        </div>
+                      )}
 
                       {/* Color Dot */}
                       <span
@@ -248,7 +252,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
                       />
 
                       <span
-                        className="font-medium truncate"
+                        className="font-medium truncate min-w-0 flex-1"
                         style={{
                           color: isSelected
                             ? '#ffffff'
@@ -261,9 +265,9 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
                       </span>
                     </div>
 
-                    <span className="text-[10px] text-slate-500 font-mono shrink-0 ml-2">
-                      ID: {role.id}
-                    </span>
+                    {!isMulti && isSelected && (
+                      <Check className="w-4 h-4 text-pink-400 shrink-0 ml-2" />
+                    )}
                   </div>
                 );
               })

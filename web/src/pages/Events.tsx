@@ -847,7 +847,7 @@ export const Events: React.FC = () => {
       {/* Create Event Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-lg bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4 my-8">
+          <div className="w-full max-w-2xl bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4 my-8">
             <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <CalendarDays className="w-5 h-5 text-pink-500" />
@@ -942,7 +942,7 @@ export const Events: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Время начала мероприятия *</label>
                   <input
@@ -968,7 +968,7 @@ export const Events: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Канал для анонса в Discord *</label>
                   <ChannelSelect
@@ -992,7 +992,7 @@ export const Events: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Код группы в игре</label>
                   <input

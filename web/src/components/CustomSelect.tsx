@@ -67,6 +67,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             ? 'border-pink-500 ring-1 ring-pink-500/30'
             : 'border-[#1E232F] hover:border-pink-500/40'
         }`}
+        title={
+          selectedOption
+            ? `${selectedOption.label}${selectedOption.sublabel ? ` (${selectedOption.sublabel})` : ''}`
+            : undefined
+        }
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {selectedOption ? (
@@ -76,13 +81,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 {selectedOption.label}
               </span>
               {selectedOption.sublabel && (
-                <span className="text-[10px] text-slate-500 truncate hidden sm:inline">
-                  {selectedOption.sublabel}
+                <span className="text-[10px] text-slate-400 shrink-0 max-w-[40%] truncate hidden sm:inline">
+                  • {selectedOption.sublabel}
                 </span>
               )}
             </>
           ) : (
-            <span className="text-xs text-slate-500 select-none">
+            <span className="text-xs text-slate-500 select-none truncate">
               {placeholder}
             </span>
           )}
@@ -108,7 +113,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск..."
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-colors"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-lg pl-9 pr-7 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-colors"
                 />
                 {search && (
                   <button
@@ -123,7 +128,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             </div>
           )}
 
-          <div className="max-h-56 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+          <div className="max-h-64 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
             {filtered.length === 0 ? (
               <div className="py-6 text-center text-xs text-slate-500">
                 Ничего не найдено
@@ -134,6 +139,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 return (
                   <div
                     key={opt.value}
+                    title={`${opt.label}${opt.sublabel ? ` (${opt.sublabel})` : ''}`}
                     onClick={() => {
                       onChange(opt.value);
                       setIsOpen(false);
@@ -144,14 +150,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                         : 'hover:bg-[#1E232F] border border-transparent text-slate-300'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-                      <span className="truncate">{opt.label}</span>
-                      {opt.sublabel && (
-                        <span className="text-[10px] text-slate-500 truncate">
-                          {opt.sublabel}
-                        </span>
-                      )}
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      {opt.icon && <span className="shrink-0 mt-0.5">{opt.icon}</span>}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-medium leading-snug">{opt.label}</div>
+                        {opt.sublabel && (
+                          <div className="text-[10px] text-slate-400/80 truncate leading-tight mt-0.5">
+                            {opt.sublabel}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -164,7 +172,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                           {opt.badge}
                         </span>
                       )}
-                      {isSelected && <Check className="w-3.5 h-3.5 text-pink-400" />}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-pink-400 shrink-0" />}
                     </div>
                   </div>
                 );
