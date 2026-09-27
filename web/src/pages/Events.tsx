@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   CalendarDays, 
   Plus, 
@@ -17,7 +18,8 @@ import {
   Trash2,
   Info,
   Sparkles,
-  HelpCircle
+  HelpCircle,
+  X
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -845,217 +847,230 @@ export const Events: React.FC = () => {
   )}
 
       {/* Create Event Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4 my-8">
-            <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
-              <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-pink-500" />
-                Создать сбор на мероприятие
-              </h3>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-[#1E232F]"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateEvent} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-400 mb-1.5 font-medium">Выберите мероприятие (только лимитированные) *</label>
-                <div className="grid grid-cols-3 gap-2 mb-2">
-                  {[
-                    { title: 'Капт', limit: 10, icon: '⚔️' },
-                    { title: 'ВЗЗ', limit: 15, icon: '🛡️' },
-                    { title: 'МЦЛ', limit: 15, icon: '🏆' },
-                  ].map((preset) => (
-                    <button
-                      key={preset.title}
-                      type="button"
-                      onClick={() => setForm({ ...form, title: preset.title, participantLimit: preset.limit })}
-                      className={`p-2.5 rounded-xl border text-center font-semibold text-xs transition-all ${
-                        form.title.startsWith(preset.title)
-                          ? 'bg-pink-600/20 border-pink-500 text-pink-300 shadow-md shadow-pink-600/10'
-                          : 'bg-[#0B0E14] border-[#1E232F] text-slate-400 hover:text-white hover:border-slate-700'
-                      }`}
-                    >
-                      <span className="text-base block mb-0.5">{preset.icon}</span>
-                      <span>{preset.title}</span>
-                      <span className="block text-[10px] text-slate-500 font-normal">до {preset.limit} чел.</span>
-                    </button>
-                  ))}
-                </div>
-
-                <input
-                  type="text"
-                  required
-                  placeholder="Название сбора (например: Капт vs The Families)"
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">Лимит мест в основном составе *</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={form.participantLimit}
-                  onChange={(e) => setForm({ ...form, participantLimit: parseInt(e.target.value, 10) || 10 })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                />
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  Все участники сверх лимита попадают в резерв. Приоритетная роль или ранг вытесняют в резерв участников с меньшим приоритетом.
-                </span>
-              </div>
-
-              {/* Quick Date Presets */}
-              <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 font-medium text-[11px]">Быстрый выбор дня проведения:</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setQuickDate(0)}
-                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
-                    >
-                      Сегодня
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuickDate(1)}
-                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
-                    >
-                      Завтра
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuickDate(2)}
-                      className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
-                    >
-                      Послезавтра
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Время начала мероприятия *</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={form.eventTime}
-                    onChange={(e) => handleEventTimeChange(e.target.value)}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Чек-ин рассчитается за 10 мин</span>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Время проверки явки (чек-ин) *</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={form.checkInTime}
-                    onChange={(e) => setForm({ ...form, checkInTime: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Авто или вручную</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Канал для анонса в Discord *</label>
-                  <ChannelSelect
-                    channels={channels}
-                    channelType="text"
-                    value={form.channelId}
-                    onChange={(val) => setForm({ ...form, channelId: val })}
-                    placeholder="Выберите канал..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Голосовой канал для сбора</label>
-                  <ChannelSelect
-                    channels={channels}
-                    channelType="voice"
-                    value={form.voiceChannelId}
-                    onChange={(val) => setForm({ ...form, voiceChannelId: val })}
-                    placeholder="Без голосового канала"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Код группы в игре</label>
-                  <input
-                    type="text"
-                    placeholder="например: 123-456"
-                    value={form.partyCode}
-                    onChange={(e) => setForm({ ...form, partyCode: e.target.value })}
-                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Роль для упоминания (пинг)</label>
-                  <CustomSelect
-                    options={[
-                      { value: 'none', label: 'Без упоминания (тихий сбор)' },
-                      { value: 'here', label: '@here (только кто онлайн)' },
-                      { value: 'everyone', label: '@everyone (все участники)' },
-                      ...roles.map((r) => ({
-                        value: r.id,
-                        label: `@${r.name}`,
-                      })),
-                    ]}
-                    value={form.targetRoleId || 'none'}
-                    onChange={(val) => setForm({ ...form, targetRoleId: val })}
-                    placeholder="Выберите роль для пинга..."
-                  />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">
-                    Бот отправит пинг выбранной роли при публикации и напоминаниях
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">Примечание / Экипировка</label>
-                <textarea
-                  rows={2}
-                  placeholder="Броня 50%+, пулеметы, 100 бинтов..."
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-3">
+      {modalOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-2xl max-h-[90vh] bg-[#151921] border border-[#1E232F] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <form onSubmit={handleCreateEvent} className="flex flex-col max-h-[90vh] min-h-0">
+              {/* Pinned Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[#1E232F] bg-[#151921] shrink-0">
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-pink-500" />
+                  Создать сбор на мероприятие
+                </h3>
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-[#1E232F] text-slate-300 hover:text-white"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#1E232F] transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scrollable Form Body */}
+              <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1 custom-scrollbar">
+                <div>
+                  <label className="block text-slate-400 mb-1.5 font-medium">Выберите мероприятие (только лимитированные) *</label>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {[
+                      { title: 'Капт', limit: 10, icon: '⚔️' },
+                      { title: 'ВЗЗ', limit: 15, icon: '🛡️' },
+                      { title: 'МЦЛ', limit: 15, icon: '🏆' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.title}
+                        type="button"
+                        onClick={() => setForm({ ...form, title: preset.title, participantLimit: preset.limit })}
+                        className={`p-2.5 rounded-xl border text-center font-semibold text-xs transition-all ${
+                          form.title.startsWith(preset.title)
+                            ? 'bg-pink-600/20 border-pink-500 text-pink-300 shadow-md shadow-pink-600/10'
+                            : 'bg-[#0B0E14] border-[#1E232F] text-slate-400 hover:text-white hover:border-slate-700'
+                        }`}
+                      >
+                        <span className="text-base block mb-0.5">{preset.icon}</span>
+                        <span>{preset.title}</span>
+                        <span className="block text-[10px] text-slate-500 font-normal">до {preset.limit} чел.</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="text"
+                    required
+                    placeholder="Название сбора (например: Капт vs The Families)"
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Лимит мест в основном составе *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={form.participantLimit}
+                    onChange={(e) => setForm({ ...form, participantLimit: parseInt(e.target.value, 10) || 10 })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Все участники сверх лимита попадают в резерв. Приоритетная роль или ранг вытесняют в резерв участников с меньшим приоритетом.
+                  </span>
+                </div>
+
+                {/* Quick Date Presets */}
+                <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-medium text-[11px]">Быстрый выбор дня проведения:</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setQuickDate(0)}
+                        className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
+                      >
+                        Сегодня
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickDate(1)}
+                        className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
+                      >
+                        Завтра
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickDate(2)}
+                        className="px-2.5 py-1 rounded-lg bg-[#151921] hover:bg-pink-600/20 hover:border-pink-500/50 hover:text-pink-300 border border-slate-700/50 text-[11px] text-slate-300 font-medium transition-all"
+                      >
+                        Послезавтра
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">Время начала мероприятия *</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={form.eventTime}
+                      onChange={(e) => handleEventTimeChange(e.target.value)}
+                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-0.5 block">Чек-ин рассчитается за 10 мин</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">Время проверки явки (чек-ин) *</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={form.checkInTime}
+                      onChange={(e) => setForm({ ...form, checkInTime: e.target.value })}
+                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-0.5 block">Авто или вручную</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">Канал для анонса в Discord *</label>
+                    <ChannelSelect
+                      channels={channels}
+                      channelType="text"
+                      value={form.channelId}
+                      onChange={(val) => setForm({ ...form, channelId: val })}
+                      placeholder="Выберите канал..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">Голосовой канал для сбора</label>
+                    <ChannelSelect
+                      channels={channels}
+                      channelType="voice"
+                      value={form.voiceChannelId}
+                      onChange={(val) => setForm({ ...form, voiceChannelId: val })}
+                      placeholder="Без голосового канала"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">Код группы в игре</label>
+                    <input
+                      type="text"
+                      placeholder="например: 123-456"
+                      value={form.partyCode}
+                      onChange={(e) => setForm({ ...form, partyCode: e.target.value })}
+                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1 font-medium">Роль для упоминания (пинг)</label>
+                    <CustomSelect
+                      options={[
+                        { value: 'none', label: 'Без упоминания (тихий сбор)' },
+                        { value: 'here', label: '@here (только кто онлайн)' },
+                        { value: 'everyone', label: '@everyone (все участники)' },
+                        ...roles.map((r) => ({
+                          value: r.id,
+                          label: `@${r.name}`,
+                        })),
+                      ]}
+                      value={form.targetRoleId || 'none'}
+                      onChange={(val) => setForm({ ...form, targetRoleId: val })}
+                      placeholder="Выберите роль для пинга..."
+                    />
+                    <span className="text-[10px] text-slate-500 mt-0.5 block">
+                      Бот отправит пинг выбранной роли при публикации и напоминаниях
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Примечание / Экипировка</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Броня 50%+, пулеметы, 100 бинтов..."
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-slate-200"
+                  />
+                </div>
+              </div>
+
+              {/* Pinned Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#1E232F] bg-[#11141B] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-[#1E232F] text-slate-300 hover:text-white font-medium text-xs transition-colors"
                 >
                   Отмена
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold shadow-lg shadow-pink-600/25 disabled:opacity-50 transition-all"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold shadow-lg shadow-pink-600/25 disabled:opacity-50 transition-all text-xs"
                 >
                   {creating ? 'Публикация...' : 'Опубликовать сбор'}
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
