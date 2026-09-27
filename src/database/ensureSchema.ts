@@ -3,11 +3,11 @@ import prisma from './client';
 export async function ensureDatabaseSchema(): Promise<void> {
   try {
     // 1. Check RecruiterSalaryConfig
-    const salaryColumns: Array<{ name: string }> = await prisma.$queryRawUnsafe(
+    const salaryColumns = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
       `PRAGMA table_info("RecruiterSalaryConfig")`
-    ).catch(() => []);
+    ).catch(() => [])) as Array<{ name: string }>;
 
-    if (salaryColumns.length > 0) {
+    if (salaryColumns && salaryColumns.length > 0) {
       const colNames = new Set(salaryColumns.map((c) => c.name));
 
       if (!colNames.has('lastResetAt')) {
@@ -26,9 +26,9 @@ export async function ensureDatabaseSchema(): Promise<void> {
     }
 
     // 2. Check GuildConfig
-    const guildColumns: Array<{ name: string }> = await prisma.$queryRawUnsafe(
+    const guildColumns = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
       `PRAGMA table_info("GuildConfig")`
-    ).catch(() => []);
+    ).catch(() => [])) as Array<{ name: string }>;
 
     if (guildColumns.length > 0) {
       const colNames = new Set(guildColumns.map((c) => c.name));
