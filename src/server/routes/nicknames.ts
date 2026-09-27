@@ -160,7 +160,7 @@ nicknamesRouter.get('/locks', async (req: AuthenticatedRequest, res: Response) =
     });
 
     const enriched = await Promise.all(
-      locks.map(async (lock) => {
+      locks.map(async (lock: any) => {
         let avatarUrl: string | null = null;
         let displayName = lock.userTag || lock.userId;
         let currentNick: string | null = null;

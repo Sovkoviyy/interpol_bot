@@ -7,9 +7,10 @@
     "start": "node start.js",
     "setup": "node start.js --setup-only",
     "dev": "tsx src/index.ts",
-    "build:server": "tsc",
+    "build:server": "prisma generate && tsc",
     "build:web": "npm --prefix web run build",
-    "build": "tsc && npm --prefix web run build",
+    "build": "prisma generate && tsc && npm --prefix web run build",
+    "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },
