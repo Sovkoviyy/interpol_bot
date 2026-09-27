@@ -53,6 +53,60 @@ export const Recruitment: React.FC = () => {
     fetchData();
   }, [statusFilter]);
 
+  const handleDeleteApp = async (app: any) => {
+    const confirmed = await modal.confirm({
+      title: 'Удаление заявки',
+      message: `Вы действительно хотите удалить заявку кандидата ${app.userTag || app.userId}? Она будет безвозвратно удалена из базы данных и статистики рекрутера.`,
+      confirmText: 'Удалить',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/recruitment/applications/${app.id}`);
+      modal.alert({
+        title: 'Успешно',
+        message: 'Заявка успешно удалена!',
+        type: 'success',
+      });
+      if (selectedApp?.id === app.id) setSelectedApp(null);
+      fetchData();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось удалить заявку',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleBulkDelete = async (status: string) => {
+    const statusLabel = status === 'ACCEPTED' ? 'одобренные' : status === 'REJECTED' ? 'отклоненные' : status;
+    const confirmed = await modal.confirm({
+      title: `Удаление всех заявок (${statusLabel})`,
+      message: `Вы действительно хотите удалить ВСЕ ${statusLabel} заявки? Они будут удалены из базы данных и статистики.`,
+      confirmText: 'Удалить все',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await api.post('/recruitment/applications/bulk-delete', { status });
+      modal.alert({
+        title: 'Успешно',
+        message: `Удалено заявок: ${res.data.count || 0}`,
+        type: 'success',
+      });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка',
+        message: err.response?.data?.error || 'Не удалось удалить заявки',
+        type: 'error',
+      });
+    }
+  };
+
   const handleSaveConfig = async () => {
     try {
       setSaving(true);
@@ -182,24 +236,48 @@ export const Recruitment: React.FC = () => {
         /* Applications Tab */
         <div className="space-y-4">
           {/* Status filters */}
-          <div className="flex gap-2">
-            {['ALL', 'PENDING', 'UNDER_REVIEW', 'ACCEPTED', 'REJECTED'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                  statusFilter === st
-                    ? 'bg-pink-600/20 text-pink-300 border-pink-500/40'
-                    : 'bg-[#151921] text-slate-400 border-[#1E232F] hover:text-white'
-                }`}
-              >
-                {st === 'ALL' && 'Все'}
-                {st === 'PENDING' && '⏳ Ожидают'}
-                {st === 'UNDER_REVIEW' && '🟡 На рассмотрении'}
-                {st === 'ACCEPTED' && '✅ Приняты'}
-                {st === 'REJECTED' && '❌ Отклонены'}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {['ALL', 'PENDING', 'UNDER_REVIEW', 'ACCEPTED', 'REJECTED'].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                    statusFilter === st
+                      ? 'bg-pink-600/20 text-pink-300 border-pink-500/40'
+                      : 'bg-[#151921] text-slate-400 border-[#1E232F] hover:text-white'
+                  }`}
+                >
+                  {st === 'ALL' && 'Все'}
+                  {st === 'PENDING' && '⏳ Ожидают'}
+                  {st === 'UNDER_REVIEW' && '🟡 На рассмотрении'}
+                  {st === 'ACCEPTED' && '✅ Приняты'}
+                  {st === 'REJECTED' && '❌ Отклонены'}
+                </button>
+              ))}
+            </div>
+
+            {/* Bulk action buttons for completed applications */}
+            <div className="flex items-center gap-2">
+              {statusFilter === 'ACCEPTED' && applications.length > 0 && (
+                <button
+                  onClick={() => handleBulkDelete('ACCEPTED')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Удалить все одобренные</span>
+                </button>
+              )}
+              {statusFilter === 'REJECTED' && applications.length > 0 && (
+                <button
+                  onClick={() => handleBulkDelete('REJECTED')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Удалить все отклоненные</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Table */}
@@ -258,13 +336,24 @@ export const Recruitment: React.FC = () => {
                           {app.recruiterTag ? `@${app.recruiterTag}` : '—'}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => setSelectedApp(app)}
-                            className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-pink-600/20 text-pink-400 hover:text-pink-300 transition-colors inline-flex items-center gap-1 text-xs px-2.5 border border-transparent hover:border-pink-500/30"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Анкета</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setSelectedApp(app)}
+                              className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-pink-600/20 text-pink-400 hover:text-pink-300 transition-colors inline-flex items-center gap-1 text-xs px-2.5 border border-transparent hover:border-pink-500/30 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Анкета</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteApp(app)}
+                              title="Удалить заявку"
+                              className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-red-600/20 text-red-400 hover:text-red-300 transition-colors inline-flex items-center gap-1 text-xs px-2 border border-transparent hover:border-red-500/30 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Удалить</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -548,10 +637,18 @@ export const Recruitment: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-2 flex justify-end">
+            <div className="pt-2 flex justify-between items-center">
+              <button
+                onClick={() => handleDeleteApp(selectedApp)}
+                className="px-3.5 py-2 rounded-xl bg-red-600/15 hover:bg-red-600/25 text-red-400 hover:text-red-300 text-xs font-semibold border border-red-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Удалить заявку</span>
+              </button>
+
               <button
                 onClick={() => setSelectedApp(null)}
-                className="px-4 py-2 rounded-xl bg-[#1E232F] text-slate-300 hover:text-white text-xs font-medium"
+                className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#252B3B] text-slate-300 hover:text-white text-xs font-medium cursor-pointer transition-all"
               >
                 Закрыть
               </button>

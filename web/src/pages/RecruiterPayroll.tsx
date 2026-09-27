@@ -13,7 +13,11 @@ import {
   Award,
   Copy,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw,
+  Trash2,
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -25,9 +29,16 @@ export const RecruiterPayroll: React.FC = () => {
   const [payrollData, setPayrollData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Period filters
   const [daysWindow, setDaysWindow] = useState(7); // 7 days (week), 30 days (month)
+
+  // Recruiter applications view/delete modal
+  const [selectedRecruiterForApps, setSelectedRecruiterForApps] = useState<any | null>(null);
+  const [recruiterApps, setRecruiterApps] = useState<any[]>([]);
+  const [recruiterAppsLoading, setRecruiterAppsLoading] = useState(false);
+  const [recruiterAppsFilter, setRecruiterAppsFilter] = useState<'ALL' | 'ACCEPTED' | 'REJECTED'>('ALL');
 
   // Export Modal
   const [showExportModal, setShowExportModal] = useState(false);
@@ -57,6 +68,126 @@ export const RecruiterPayroll: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [daysWindow]);
+
+  const handleOpenRecruiterApps = async (recruiter: any) => {
+    setSelectedRecruiterForApps(recruiter);
+    setRecruiterAppsFilter('ALL');
+    await fetchRecruiterApps(recruiter.recruiterId);
+  };
+
+  const fetchRecruiterApps = async (recruiterId: string) => {
+    try {
+      setRecruiterAppsLoading(true);
+      const end = new Date();
+      const start = new Date(Date.now() - daysWindow * 24 * 3600 * 1000);
+      const res = await api.get(`/recruitment/applications?recruiterId=${recruiterId}&start=${start.toISOString()}&end=${end.toISOString()}&limit=200`);
+      setRecruiterApps(res.data.applications || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRecruiterAppsLoading(false);
+    }
+  };
+
+  const handleDeleteAppFromStats = async (appId: string, userTag?: string) => {
+    const confirmed = await modal.confirm({
+      title: 'Удаление заявки из статистики',
+      message: `Удалить заявку кандидата ${userTag || 'кандидата'}? Она будет безвозвратно удалена из базы данных и статистики рекрутера.`,
+      confirmText: 'Удалить',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/recruitment/applications/${appId}`);
+      modal.alert({ title: 'Успешно', message: 'Заявка успешно удалена!', type: 'success' });
+      if (selectedRecruiterForApps) {
+        await fetchRecruiterApps(selectedRecruiterForApps.recruiterId);
+      }
+      fetchData();
+    } catch (err: any) {
+      modal.alert({ title: 'Ошибка', message: err.response?.data?.error || 'Не удалось удалить заявку', type: 'error' });
+    }
+  };
+
+  const handleBulkDeleteRecruiterApps = async (status: 'ACCEPTED' | 'REJECTED') => {
+    if (!selectedRecruiterForApps) return;
+    const statusLabel = status === 'ACCEPTED' ? 'одобренные' : 'отклоненные';
+    const confirmed = await modal.confirm({
+      title: `Удаление заявок (${statusLabel})`,
+      message: `Вы действительно хотите удалить ВСЕ ${statusLabel} заявки рекрутера @${selectedRecruiterForApps.recruiterTag || selectedRecruiterForApps.recruiterId}? Они будут удалены из базы данных и статистики.`,
+      confirmText: 'Удалить все',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await api.post('/recruitment/applications/bulk-delete', {
+        recruiterId: selectedRecruiterForApps.recruiterId,
+        status,
+      });
+      modal.alert({ title: 'Успешно', message: `Удалено ${res.data.count || 0} заявок`, type: 'success' });
+      await fetchRecruiterApps(selectedRecruiterForApps.recruiterId);
+      fetchData();
+    } catch (err: any) {
+      modal.alert({ title: 'Ошибка', message: err.response?.data?.error || 'Ошибка удаления', type: 'error' });
+    }
+  };
+
+  const handleResetAllStats = async () => {
+    const confirmed = await modal.confirm({
+      title: 'Обнуление статистики всех рекрутеров',
+      message: 'Вы действительно хотите обнулить текущую статистику всех рекрутеров? С этого момента счетчики будут обнулены, а отсчет начнется заново.',
+      confirmText: 'Обнулить статистику',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      setResetting(true);
+      await api.post('/payroll/reset', {});
+      modal.alert({ title: 'Успешно', message: 'Статистика рекрутеров успешно обнулена!', type: 'success' });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({ title: 'Ошибка', message: err.response?.data?.error || 'Не удалось обнулить статистику', type: 'error' });
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleResetSingleRecruiter = async (recruiter: any) => {
+    const confirmed = await modal.confirm({
+      title: 'Обнуление статистики рекрутера',
+      message: `Обнулить текущую статистику для рекрутера @${recruiter.recruiterTag || recruiter.recruiterId}? Его счетчики за текущий период будут обнулены.`,
+      confirmText: 'Обнулить',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      setResetting(true);
+      await api.post('/payroll/reset', { recruiterId: recruiter.recruiterId });
+      modal.alert({ title: 'Успешно', message: `Статистика рекрутера @${recruiter.recruiterTag || recruiter.recruiterId} обнулена!`, type: 'success' });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({ title: 'Ошибка', message: err.response?.data?.error || 'Не удалось обнулить', type: 'error' });
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleClearReset = async (recruiterId?: string) => {
+    try {
+      setResetting(true);
+      await api.post('/payroll/reset-clear', { recruiterId });
+      modal.alert({ title: 'Успешно', message: 'Точка обнуления сброшена. Отображаются данные за полный период.', type: 'success' });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({ title: 'Ошибка', message: err.response?.data?.error || 'Не удалось сбросить', type: 'error' });
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const handleSaveRates = async () => {
     try {
@@ -176,7 +307,7 @@ export const RecruiterPayroll: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="text-xs">
                 <span className="text-slate-400 mr-2">Итого к выплате:</span>
                 <strong className="text-base text-pink-400 font-mono font-bold">
@@ -191,8 +322,37 @@ export const RecruiterPayroll: React.FC = () => {
                 <Download className="w-4 h-4" />
                 <span>Массовый вывод (.txt)</span>
               </button>
+
+              <button
+                onClick={handleResetAllStats}
+                disabled={resetting}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 hover:text-white border border-red-500/30 text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+                title="Обнулить текущую статистику всех рекрутеров"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Обнулить статистику</span>
+              </button>
             </div>
           </div>
+
+          {/* Reset Information Banner */}
+          {payrollData?.lastResetAt && (
+            <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-300">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  Статистика рекрутеров обнулена: <strong>{new Date(payrollData.lastResetAt).toLocaleString('ru-RU')}</strong>. Отсчет ведется с момента последнего обнуления.
+                </span>
+              </div>
+              <button
+                onClick={() => handleClearReset()}
+                disabled={resetting}
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/30 font-semibold transition-all"
+              >
+                Сбросить обнуление (полный период)
+              </button>
+            </div>
+          )}
 
           {/* Current Rates Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -240,18 +400,19 @@ export const RecruiterPayroll: React.FC = () => {
                   <th className="px-4 py-3.5 text-center">Отчеты МП (Одобр / Отклон)</th>
                   <th className="px-4 py-3.5 text-center">Повышено на 2 ранг</th>
                   <th className="px-5 py-3.5 text-right">Сумма выплаты</th>
+                  <th className="px-5 py-3.5 text-right">Действия</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1E232F]">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
+                    <td colSpan={8} className="px-6 py-8 text-center text-slate-500">
                       Расчет ведомости...
                     </td>
                   </tr>
                 ) : (!payrollData?.recruiters || payrollData.recruiters.length === 0) ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
+                    <td colSpan={8} className="px-6 py-8 text-center text-slate-500">
                       За выбранный период нет зафиксированных действий рекрутеров
                     </td>
                   </tr>
@@ -262,7 +423,17 @@ export const RecruiterPayroll: React.FC = () => {
                         {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`}
                       </td>
                       <td className="px-5 py-4 font-semibold text-white">
-                        @{r.recruiterTag || r.recruiterId}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>@{r.recruiterTag || r.recruiterId}</span>
+                          {r.isReset && (
+                            <span 
+                              className="text-[10px] text-amber-400 bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-normal"
+                              title={`Обнулен: ${r.resetAt ? new Date(r.resetAt).toLocaleString('ru-RU') : ''}`}
+                            >
+                              Обнулен
+                            </span>
+                          )}
+                        </div>
                         {r.characterName && (
                           <span className="block text-[11px] text-slate-400 font-normal">{r.characterName}</span>
                         )}
@@ -278,10 +449,17 @@ export const RecruiterPayroll: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-center font-mono font-bold">
-                        <span className="text-emerald-400">{r.acceptedCount}</span>
-                        <span className="text-slate-500 mx-1">/</span>
-                        <span className="text-slate-400">{r.rejectedCandidatesCount || 0}</span>
+                      <td className="px-4 py-4 text-center">
+                        <button
+                          onClick={() => handleOpenRecruiterApps(r)}
+                          title="Посмотреть и удалить заявки рекрутера"
+                          className="group inline-flex items-center gap-1 font-mono font-bold hover:bg-pink-500/15 px-2.5 py-1 rounded-lg border border-transparent hover:border-pink-500/30 transition-all cursor-pointer"
+                        >
+                          <span className="text-emerald-400">{r.acceptedCount}</span>
+                          <span className="text-slate-500 mx-1">/</span>
+                          <span className="text-slate-400">{r.rejectedCandidatesCount || 0}</span>
+                          <Eye className="w-3.5 h-3.5 text-pink-400 opacity-60 group-hover:opacity-100 ml-1 transition-opacity" />
+                        </button>
                       </td>
                       <td className="px-4 py-4 text-center font-mono font-bold">
                         <span className="text-pink-400">{r.approvedReportsCount || r.reportsCount || 0}</span>
@@ -293,6 +471,40 @@ export const RecruiterPayroll: React.FC = () => {
                       </td>
                       <td className="px-5 py-4 text-right font-mono font-extrabold text-white text-sm">
                         {r.totalPayout.toLocaleString('ru-RU')} <span className="text-pink-400 font-bold">{currency}</span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenRecruiterApps(r)}
+                            title="Управление и удаление заявок рекрутера"
+                            className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-pink-600/20 text-pink-400 hover:text-pink-300 transition-all text-xs inline-flex items-center gap-1 border border-slate-700/40"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Заявки</span>
+                          </button>
+
+                          {r.isReset ? (
+                            <button
+                              onClick={() => handleClearReset(r.recruiterId)}
+                              disabled={resetting}
+                              title="Вернуть статистику рекрутера (снять обнуление)"
+                              className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-amber-600/20 text-amber-400 hover:text-amber-300 transition-all text-xs inline-flex items-center gap-1 border border-slate-700/40"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Вернуть</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleResetSingleRecruiter(r)}
+                              disabled={resetting}
+                              title="Обнулить статистику этого рекрутера"
+                              className="p-1.5 rounded-lg bg-[#1E232F] hover:bg-red-600/20 text-red-400 hover:text-red-300 transition-all text-xs inline-flex items-center gap-1 border border-slate-700/40 disabled:opacity-50"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Обнулить</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -491,6 +703,156 @@ export const RecruiterPayroll: React.FC = () => {
                   <span>Скачать .txt</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECRUITER APPLICATIONS MODAL (VIEW & DELETE) */}
+      {selectedRecruiterForApps && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-pink-500" />
+                <div>
+                  <h3 className="font-bold text-white text-sm">
+                    Заявки рекрутера: @{selectedRecruiterForApps.recruiterTag || selectedRecruiterForApps.recruiterId}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Статик: {selectedRecruiterForApps.staticId || 'Не привязан'} | Удаление заявок из статистики
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedRecruiterForApps(null)}
+                className="p-1 rounded-lg hover:bg-[#1E232F] text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Filter and Bulk Action Bar */}
+            <div className="p-4 border-b border-[#1E232F] bg-[#0B0E14]/40 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex gap-1.5">
+                {[
+                  { id: 'ALL', label: `Все (${recruiterApps.length})` },
+                  { id: 'ACCEPTED', label: `Одобренные (${recruiterApps.filter(a => a.status === 'ACCEPTED').length})` },
+                  { id: 'REJECTED', label: `Отклоненные (${recruiterApps.filter(a => a.status === 'REJECTED').length})` },
+                ].map((f: any) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setRecruiterAppsFilter(f.id)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      recruiterAppsFilter === f.id
+                        ? 'bg-pink-600/20 text-pink-300 border border-pink-500/40'
+                        : 'bg-[#151921] text-slate-400 hover:text-white border border-[#1E232F]'
+                    }`}
+                  >
+                    {f.id === 'ACCEPTED' && '✅ '}
+                    {f.id === 'REJECTED' && '❌ '}
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {recruiterApps.some(a => a.status === 'ACCEPTED') && (
+                  <button
+                    onClick={() => handleBulkDeleteRecruiterApps('ACCEPTED')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 text-[11px] font-medium transition-all"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Удалить все одобренные</span>
+                  </button>
+                )}
+                {recruiterApps.some(a => a.status === 'REJECTED') && (
+                  <button
+                    onClick={() => handleBulkDeleteRecruiterApps('REJECTED')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 text-[11px] font-medium transition-all"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Удалить все отклоненные</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* List */}
+            <div className="p-4 space-y-3 overflow-y-auto flex-1 text-xs">
+              {recruiterAppsLoading ? (
+                <div className="py-12 text-center text-slate-500">Загрузка заявок...</div>
+              ) : recruiterApps
+                  .filter(a => recruiterAppsFilter === 'ALL' || a.status === recruiterAppsFilter)
+                  .length === 0 ? (
+                <div className="py-12 text-center text-slate-500">
+                  Заявок в этой категории не найдено
+                </div>
+              ) : (
+                recruiterApps
+                  .filter(a => recruiterAppsFilter === 'ALL' || a.status === recruiterAppsFilter)
+                  .map((app: any) => (
+                    <div
+                      key={app.id}
+                      className="p-3.5 rounded-xl bg-[#0B0E14] border border-[#1E232F] flex items-center justify-between gap-4 hover:border-slate-700/50 transition-colors"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">@{app.userTag || app.userId}</span>
+                          <span className="text-[10px] text-slate-500 font-mono">ID: {app.userId}</span>
+                          {app.status === 'ACCEPTED' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                              <CheckCircle className="w-3 h-3" /> Одобрена
+                            </span>
+                          ) : app.status === 'REJECTED' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/15 text-red-400 border border-red-500/25">
+                              <XCircle className="w-3 h-3" /> Отклонена
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">{app.status}</span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-3">
+                          <span>Подана: {new Date(app.createdAt).toLocaleDateString('ru-RU')}</span>
+                          {app.closedAt && (
+                            <span>Закрыта: {new Date(app.closedAt).toLocaleString('ru-RU')}</span>
+                          )}
+                          {app.rejectionReason && (
+                            <span className="text-red-400">Причина: {app.rejectionReason}</span>
+                          )}
+                        </div>
+
+                        {app.answers && Object.keys(app.answers).length > 0 && (
+                          <div className="text-[11px] text-slate-400 line-clamp-1 pt-0.5">
+                            {Object.entries(app.answers).slice(0, 2).map(([k, v]: any) => `${k}: ${v}`).join(' | ')}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteAppFromStats(app.id, app.userTag || app.userId)}
+                        title="Удалить заявку из базы и статистики"
+                        className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 transition-all shrink-0 flex items-center gap-1 text-xs font-semibold cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span className="hidden sm:inline">Удалить</span>
+                      </button>
+                    </div>
+                  ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-[#1E232F] bg-[#1A1F2B]/40 flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                При удалении заявки она убирается из базы и пересчитывает ведомость
+              </span>
+              <button
+                onClick={() => setSelectedRecruiterForApps(null)}
+                className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#252B3B] text-slate-200 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Закрыть
+              </button>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import prisma from '../../../database/client';
+import { AuditLogger } from '../logging/auditLogger';
 
 export class PayrollService {
   static async getConfig(guildId: string) {
@@ -41,10 +42,115 @@ export class PayrollService {
   }
 
   /**
+   * Reset stats for all recruiters or an individual recruiter
+   */
+  static async resetStats(guildId: string, recruiterId?: string, executor?: { id: string; tag: string }) {
+    const config = await this.getConfig(guildId);
+    const now = new Date();
+
+    if (!recruiterId) {
+      // Global reset for all recruiters
+      await prisma.recruiterSalaryConfig.update({
+        where: { guildId },
+        data: {
+          lastResetAt: now,
+          recruiterResetsJson: '{}',
+        },
+      });
+
+      await AuditLogger.recordEntry({
+        guildId,
+        category: 'RECRUIT',
+        action: 'RECRUITER_STATS_RESET_ALL',
+        title: 'Обнуление статистики всех рекрутеров',
+        description: `Администратор обнулил статистику всех рекрутеров. Отсчет начат с ${now.toLocaleString('ru-RU')}.`,
+        executorId: executor?.id,
+        executorTag: executor?.tag,
+      }).catch(() => null);
+
+      return { success: true, resetAt: now };
+    } else {
+      // Reset for a specific recruiter
+      let resets: Record<string, string> = {};
+      try {
+        resets = JSON.parse(config.recruiterResetsJson || '{}');
+      } catch {
+        resets = {};
+      }
+      resets[recruiterId] = now.toISOString();
+
+      await prisma.recruiterSalaryConfig.update({
+        where: { guildId },
+        data: {
+          recruiterResetsJson: JSON.stringify(resets),
+        },
+      });
+
+      await AuditLogger.recordEntry({
+        guildId,
+        category: 'RECRUIT',
+        action: 'RECRUITER_STATS_RESET_USER',
+        title: 'Обнуление статистики рекрутера',
+        description: `Администратор обнулил статистику рекрутера <@${recruiterId}>. Отсчет начат с ${now.toLocaleString('ru-RU')}.`,
+        executorId: executor?.id,
+        executorTag: executor?.tag,
+        targetId: recruiterId,
+      }).catch(() => null);
+
+      return { success: true, recruiterId, resetAt: now };
+    }
+  }
+
+  /**
+   * Clear reset checkpoint (revert to default date window)
+   */
+  static async clearReset(guildId: string, recruiterId?: string) {
+    const config = await this.getConfig(guildId);
+
+    if (!recruiterId) {
+      await prisma.recruiterSalaryConfig.update({
+        where: { guildId },
+        data: {
+          lastResetAt: null,
+        },
+      });
+      return { success: true };
+    } else {
+      let resets: Record<string, string> = {};
+      try {
+        resets = JSON.parse(config.recruiterResetsJson || '{}');
+      } catch {
+        resets = {};
+      }
+      delete resets[recruiterId];
+
+      await prisma.recruiterSalaryConfig.update({
+        where: { guildId },
+        data: {
+          recruiterResetsJson: JSON.stringify(resets),
+        },
+      });
+      return { success: true };
+    }
+  }
+
+  /**
    * Calculate activity and payouts for recruiters within a given time period
    */
   static async calculatePayroll(guildId: string, periodStart: Date, periodEnd: Date) {
     const config = await this.getConfig(guildId);
+
+    // Global reset check
+    const effectiveStart = config.lastResetAt && config.lastResetAt > periodStart
+      ? config.lastResetAt
+      : periodStart;
+
+    let recruiterResets: Record<string, string> = {};
+    try {
+      recruiterResets = JSON.parse(config.recruiterResetsJson || '{}');
+    } catch {
+      recruiterResets = {};
+    }
 
     // 1. Accepted recruitment candidates
     const acceptedCandidates = await prisma.recruitmentApplication.findMany({
@@ -52,7 +158,7 @@ export class PayrollService {
         guildId,
         status: 'ACCEPTED',
         recruiterId: { not: null },
-        closedAt: { gte: periodStart, lte: periodEnd },
+        closedAt: { gte: effectiveStart, lte: periodEnd },
       },
     });
 
@@ -62,7 +168,7 @@ export class PayrollService {
         guildId,
         status: 'REJECTED',
         recruiterId: { not: null },
-        closedAt: { gte: periodStart, lte: periodEnd },
+        closedAt: { gte: effectiveStart, lte: periodEnd },
       },
     });
 
@@ -72,7 +178,7 @@ export class PayrollService {
         guildId,
         status: 'APPROVED',
         reviewerId: { not: null },
-        reviewedAt: { gte: periodStart, lte: periodEnd },
+        reviewedAt: { gte: effectiveStart, lte: periodEnd },
       },
     });
 
@@ -82,7 +188,7 @@ export class PayrollService {
         guildId,
         status: 'REJECTED',
         reviewerId: { not: null },
-        reviewedAt: { gte: periodStart, lte: periodEnd },
+        reviewedAt: { gte: effectiveStart, lte: periodEnd },
       },
     });
 
@@ -91,7 +197,7 @@ export class PayrollService {
       where: {
         guildId,
         status: 'PROMOTED',
-        archivedAt: { gte: periodStart, lte: periodEnd },
+        archivedAt: { gte: effectiveStart, lte: periodEnd },
       },
     });
 
@@ -105,10 +211,13 @@ export class PayrollService {
       rejectedReportsCount: number;
       promotionsCount: number;
       totalPayout: number;
+      isReset?: boolean;
+      resetAt?: string | null;
     }>();
 
     const getOrInit = (id: string, tag?: string | null) => {
       if (!recruitersMap.has(id)) {
+        const recReset = recruiterResets[id] || null;
         recruitersMap.set(id, {
           recruiterId: id,
           recruiterTag: tag || id,
@@ -118,6 +227,8 @@ export class PayrollService {
           rejectedReportsCount: 0,
           promotionsCount: 0,
           totalPayout: 0,
+          isReset: Boolean(recReset),
+          resetAt: recReset,
         });
       }
       return recruitersMap.get(id)!;
@@ -126,6 +237,10 @@ export class PayrollService {
     // Credit accepted candidates
     for (const app of acceptedCandidates) {
       if (app.recruiterId) {
+        const recReset = recruiterResets[app.recruiterId];
+        if (recReset && app.closedAt && app.closedAt <= new Date(recReset)) {
+          continue;
+        }
         const r = getOrInit(app.recruiterId, app.recruiterTag);
         r.acceptedCount += 1;
       }
@@ -134,6 +249,10 @@ export class PayrollService {
     // Credit rejected candidates
     for (const app of rejectedCandidates) {
       if (app.recruiterId) {
+        const recReset = recruiterResets[app.recruiterId];
+        if (recReset && app.closedAt && app.closedAt <= new Date(recReset)) {
+          continue;
+        }
         const r = getOrInit(app.recruiterId, app.recruiterTag);
         r.rejectedCandidatesCount += 1;
       }
@@ -142,6 +261,10 @@ export class PayrollService {
     // Credit approved reports
     for (const rep of approvedReports) {
       if (rep.reviewerId) {
+        const recReset = recruiterResets[rep.reviewerId];
+        if (recReset && rep.reviewedAt && rep.reviewedAt <= new Date(recReset)) {
+          continue;
+        }
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
         r.approvedReportsCount += 1;
       }
@@ -150,6 +273,10 @@ export class PayrollService {
     // Credit rejected reports
     for (const rep of rejectedReports) {
       if (rep.reviewerId) {
+        const recReset = recruiterResets[rep.reviewerId];
+        if (recReset && rep.reviewedAt && rep.reviewedAt <= new Date(recReset)) {
+          continue;
+        }
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
         r.rejectedReportsCount += 1;
       }
@@ -159,8 +286,19 @@ export class PayrollService {
     for (const promo of promotions) {
       const promoterId = promo.promotedById;
       if (promoterId) {
+        const recReset = recruiterResets[promoterId];
+        if (recReset && promo.archivedAt && promo.archivedAt <= new Date(recReset)) {
+          continue;
+        }
         const r = getOrInit(promoterId, promo.promotedByTag);
         r.promotionsCount += 1;
+      }
+    }
+
+    // Ensure recruiters with active individual reset appear even if they have 0 actions
+    for (const [recId, recReset] of Object.entries(recruiterResets)) {
+      if (!recruitersMap.has(recId)) {
+        getOrInit(recId);
       }
     }
 
@@ -199,6 +337,9 @@ export class PayrollService {
     return {
       periodStart,
       periodEnd,
+      effectiveStart,
+      lastResetAt: config.lastResetAt,
+      recruiterResets,
       currencySymbol: config.currencySymbol,
       rates: {
         payPerCandidateAccepted: config.payPerCandidateAccepted,

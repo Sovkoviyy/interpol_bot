@@ -55,4 +55,43 @@ router.get('/calculate', requirePermission('manageRecruiting'), async (req: Auth
   }
 });
 
+/**
+ * POST /api/payroll/reset
+ * Reset stats for all recruiters or an individual recruiter
+ */
+router.post('/reset', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const { recruiterId } = req.body;
+    const executor = {
+      id: req.user?.userId || 'unknown',
+      tag: req.user?.username ? `${req.user.username}#${req.user.discriminator || '0'}` : 'Web Admin',
+    };
+
+    const result = await PayrollService.resetStats(guildId, recruiterId, executor);
+    res.json({
+      message: recruiterId ? 'Статистика рекрутера успешно обнулена' : 'Статистика всех рекрутеров успешно обнулена',
+      ...result,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/payroll/reset-clear
+ * Clear reset checkpoint (reverts to standard period filtering)
+ */
+router.post('/reset-clear', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const { recruiterId } = req.body;
+
+    const result = await PayrollService.clearReset(guildId, recruiterId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

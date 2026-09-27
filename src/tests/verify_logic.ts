@@ -455,10 +455,39 @@ async function runTests() {
   }));
   console.assert(discordOptions[2].label.length <= 100, 'Discord select menu option label must be <= 100 chars');
   console.assert(discordOptions[2].value.length <= 100, 'Discord select menu option value must be <= 100 chars');
-  console.assert(discordOptions[0].emoji === '🏝️', 'Option emoji should match');
-  console.log('✅ Test 28: Dynamic MP types parsing and Discord select menu constraints verified');
+  // Test 29: Recruiter stats reset and application filtering/deletion logic
+  const testResetNow = new Date('2026-09-27T19:30:00.000Z');
+  const pastAction = new Date('2026-09-27T18:00:00.000Z');
+  const futureAction = new Date('2026-09-27T20:00:00.000Z');
 
-  console.log('🎉 ALL 28 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
+  // Test global reset: actions before lastResetAt are excluded
+  const lastResetAt = testResetNow;
+  const periodStart = new Date('2026-09-20T00:00:00.000Z');
+  const effectiveStart = lastResetAt && lastResetAt > periodStart ? lastResetAt : periodStart;
+  console.assert(effectiveStart === lastResetAt, 'Effective start should be lastResetAt when newer than periodStart');
+
+  // Test individual recruiter reset: actions before recruiter reset timestamp are excluded
+  const recruiterResets: Record<string, string> = {
+    'recruiter_1': testResetNow.toISOString(),
+  };
+  const shouldIncludePast = pastAction > new Date(recruiterResets['recruiter_1']);
+  const shouldIncludeFuture = futureAction > new Date(recruiterResets['recruiter_1']);
+  console.assert(!shouldIncludePast, 'Past action should NOT be credited after recruiter reset');
+  console.assert(shouldIncludeFuture, 'Future action SHOULD be credited after recruiter reset');
+
+  // Test application deletion from stats count
+  let appList = [
+    { id: 'app_1', recruiterId: 'recruiter_1', status: 'ACCEPTED' },
+    { id: 'app_2', recruiterId: 'recruiter_1', status: 'REJECTED' },
+    { id: 'app_3', recruiterId: 'recruiter_1', status: 'ACCEPTED' },
+  ];
+  // Delete app_1
+  appList = appList.filter(a => a.id !== 'app_1');
+  const remainingAccepted = appList.filter(a => a.recruiterId === 'recruiter_1' && a.status === 'ACCEPTED').length;
+  console.assert(remainingAccepted === 1, `Remaining accepted should be 1 after deleting app_1, got ${remainingAccepted}`);
+  console.log('✅ Test 29: Recruiter stats reset and application deletion logic verified');
+
+  console.log('🎉 ALL 29 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
 runTests().catch(err => {

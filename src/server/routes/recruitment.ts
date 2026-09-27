@@ -126,16 +126,28 @@ recruitmentRouter.post('/config', requireAuth, requirePermission('manageRecruiti
 recruitmentRouter.get('/applications', requireAuth, requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
   const status = req.query.status as string;
+  const recruiterId = req.query.recruiterId as string;
+  const startStr = req.query.start as string;
+  const endStr = req.query.end as string;
+  const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
 
   const whereClause: any = { guildId };
   if (status && status !== 'ALL') {
     whereClause.status = status;
   }
+  if (recruiterId) {
+    whereClause.recruiterId = recruiterId;
+  }
+  if (startStr || endStr) {
+    whereClause.createdAt = {};
+    if (startStr) whereClause.createdAt.gte = new Date(startStr);
+    if (endStr) whereClause.createdAt.lte = new Date(endStr);
+  }
 
   const applications = await prisma.recruitmentApplication.findMany({
     where: whereClause,
     orderBy: { createdAt: 'desc' },
-    take: 100,
+    take: limit,
   });
 
   const parsed = applications.map(app => {
@@ -149,6 +161,59 @@ recruitmentRouter.get('/applications', requireAuth, requirePermission('manageRec
   });
 
   return res.json({ applications: parsed });
+});
+
+// Delete an application by ID
+recruitmentRouter.delete('/applications/:id', requireAuth, requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const id = String(req.params.id);
+
+    const application = await prisma.recruitmentApplication.findUnique({
+      where: { id },
+    });
+
+    if (!application || application.guildId !== guildId) {
+      return res.status(404).json({ error: 'Заявка не найдена' });
+    }
+
+    await prisma.recruitmentApplication.delete({
+      where: { id },
+    });
+
+    return res.json({ success: true, message: 'Заявка успешно удалена' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Bulk delete applications
+recruitmentRouter.post('/applications/bulk-delete', requireAuth, requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const { ids, status, recruiterId } = req.body;
+
+    const whereClause: any = { guildId };
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      whereClause.id = { in: ids };
+    } else {
+      if (status && status !== 'ALL') {
+        whereClause.status = status;
+      }
+      if (recruiterId) {
+        whereClause.recruiterId = recruiterId;
+      }
+    }
+
+    const result = await prisma.recruitmentApplication.deleteMany({
+      where: whereClause,
+    });
+
+    return res.json({ success: true, count: result.count, message: `Удалено ${result.count} заявок` });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // Post recruitment embed in Discord channel from web dashboard
