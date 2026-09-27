@@ -7,6 +7,8 @@ import { requirePermission } from '../middlewares/rbac';
 import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 import { ProfileService } from '../../bot/modules/profiles/profileService';
 import { NicknameService } from '../../bot/modules/nicknames/nicknameService';
+import { BotMessageManager } from '../../bot/utils/botMessageManager';
+import { AuditLogger } from '../../bot/modules/logging/auditLogger';
 
 export const guildRouter = Router();
 
@@ -207,6 +209,10 @@ guildRouter.put('/members/:userId/profile', requireAuth, requirePermission('mana
     const cleanStatic = staticId !== undefined ? (staticId ? String(staticId).trim() : null) : undefined;
     const cleanCharName = characterName !== undefined ? (characterName ? String(characterName).trim() : null) : undefined;
 
+    const existingProfile = await prisma.userProfile.findUnique({
+      where: { guildId_userId: { guildId, userId } },
+    });
+
     const profile = await prisma.userProfile.upsert({
       where: {
         guildId_userId: { guildId, userId },
@@ -230,6 +236,32 @@ guildRouter.put('/members/:userId/profile', requireAuth, requirePermission('mana
         notes: notes ? String(notes) : null,
       },
     });
+
+    if (rank !== undefined && existingProfile) {
+      const oldRankNum = existingProfile.rank || 1;
+      const newRankNum = Number(rank);
+      if (newRankNum > oldRankNum && guild) {
+        BotMessageManager.sendDM(guildId, userId, 'rank_up_dm', {
+          user: `<@${userId}>`,
+          username: userTag || userId,
+          oldRank: `${oldRankNum} ранг`,
+          newRank: `${newRankNum} ранг`,
+          guild: guild.name,
+        }).catch(() => null);
+
+        const renderedRank = await BotMessageManager.renderMessage(guildId, 'rank_up', {
+          user: `<@${userId}>`,
+          username: userTag || userId,
+          oldRank: `${oldRankNum} ранг`,
+          newRank: `${newRankNum} ранг`,
+          mpCount: String(profile.mpCount || 0),
+          guild: guild.name,
+        });
+        if (renderedRank.enabled) {
+          await AuditLogger.sendLog(guild, 'MEMBERS', renderedRank.embed).catch(() => null);
+        }
+      }
+    }
 
     // If characterName or static changed, add to UserCharacter history if not already present
     if (cleanCharName || cleanStatic) {

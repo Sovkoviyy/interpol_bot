@@ -134,7 +134,7 @@ export class LeaveService {
         },
       });
 
-      // Update Discord message in channel: mark approved and remove action buttons (stays in channel until expired)
+      // Update Discord message in channel: render leave_approved from BotMessageManager and remove action buttons
       if (leave.channelId && leave.messageId) {
         try {
           const guild = bot.guilds.cache.get(leave.guildId) || await bot.guilds.fetch(leave.guildId).catch(() => null);
@@ -142,13 +142,25 @@ export class LeaveService {
             const ch = (guild.channels.cache.get(leave.channelId) || await guild.channels.fetch(leave.channelId).catch(() => null)) as TextChannel | null;
             if (ch) {
               const msg = await ch.messages.fetch(leave.messageId).catch(() => null);
-              if (msg && msg.embeds.length > 0) {
-                const oldEmbed = msg.embeds[0];
-                const approvedEmbed = EmbedBuilder.from(oldEmbed)
-                  .setColor(THEME.COLORS.SUCCESS)
-                  .setFooter({ text: `✅ Одобрено ${reviewerTag} • Действует до ${leave.endDate.toLocaleDateString('ru-RU')}` });
+              if (msg) {
+                const leaveType = leave.type === 'VACATION' ? 'Отпуск' : 'Отгул';
+                const daysDiff = Math.max(1, Math.round((leave.endDate.getTime() - leave.startDate.getTime()) / (1000 * 60 * 60 * 24)));
+                const daysStr = leave.type === 'DAY_OFF' ? '1 дн.' : `${daysDiff} дн.`;
+
+                const rendered = await BotMessageManager.renderMessage(leave.guildId, 'leave_approved', {
+                  user: `<@${leave.userId}>`,
+                  username: leave.userTag || 'Участник',
+                  admin: `<@${reviewerId}>`,
+                  leaveType,
+                  days: daysStr,
+                  startDate: leave.startDate.toLocaleDateString('ru-RU'),
+                  endDate: leave.endDate.toLocaleDateString('ru-RU'),
+                  guild: guild.name,
+                });
+
                 await msg.edit({
-                  embeds: [approvedEmbed],
+                  content: rendered.content || null,
+                  embeds: [rendered.embed],
                   components: [],
                 }).catch(() => null);
               }
@@ -170,6 +182,19 @@ export class LeaveService {
               if (msg) {
                 await msg.delete().catch(() => null);
               }
+            }
+
+            // Log rejection to audit channel using leave_rejected template
+            const renderedReject = await BotMessageManager.renderMessage(leave.guildId, 'leave_rejected', {
+              user: `<@${leave.userId}>`,
+              username: leave.userTag || 'Участник',
+              admin: `<@${reviewerId}>`,
+              leaveType: leave.type === 'VACATION' ? 'отпуск' : 'отгул',
+              reason: rejectionReason || 'Не указана',
+              guild: guild.name,
+            });
+            if (renderedReject.enabled) {
+              await AuditLogger.sendLog(guild, 'MEMBERS', renderedReject.embed).catch(() => null);
             }
           }
           await prisma.leaveRequest.update({

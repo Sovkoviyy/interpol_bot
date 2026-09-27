@@ -7,6 +7,7 @@ import { requirePermission } from '../middlewares/rbac';
 import { EventService } from '../../bot/modules/events/eventService';
 import { TextChannel, EmbedBuilder } from 'discord.js';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
+import { BotMessageManager } from '../../bot/utils/botMessageManager';
 import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 export const eventsRouter = Router();
@@ -249,6 +250,25 @@ eventsRouter.post('/:id/status', requireAuth, requirePermission('manageEvents'),
       )
       .setTimestamp();
     await AuditLogger.sendLog(guild, 'EVENTS', statusEmbed);
+
+    if (status === 'CANCELLED' && event.channelId) {
+      const cancelRendered = await BotMessageManager.renderMessage(event.guildId, 'event_cancelled', {
+        eventTitle: event.title,
+        reason: (req.body.reason as string) || 'Отменено организатором',
+        author: `<@${req.user!.userId}>`,
+        role: event.targetRoleId ? `<@&${event.targetRoleId}>` : '@everyone',
+        guild: guild.name,
+      });
+      if (cancelRendered.enabled) {
+        const evChannel = guild.channels.cache.get(event.channelId) as TextChannel | null;
+        if (evChannel && evChannel.isTextBased()) {
+          await evChannel.send({
+            content: cancelRendered.content || undefined,
+            embeds: [cancelRendered.embed],
+          }).catch(() => null);
+        }
+      }
+    }
   }
 
   return res.json({ success: true, event });

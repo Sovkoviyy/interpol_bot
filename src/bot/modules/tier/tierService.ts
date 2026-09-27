@@ -532,33 +532,44 @@ export class TierService {
       }
 
       if (reviewChannel && reviewChannel.isTextBased()) {
-        const reviewEmbed = createThemedEmbed({
-          title: `НОВЫЙ ОТКАТ С МП • ${mpType.toUpperCase()}`,
-          color: THEME.COLORS.PRIMARY,
-          description: [
-            THEME.format.quote('Поступил новый откат с МП на разбор ошибок и оценку стрельбы.'),
-            '',
-            THEME.format.item('Участник', `<@${interaction.user.id}> (\`${interaction.user.tag}\`)`),
-            THEME.format.item('Мероприятие', `**${mpType}**`),
-            THEME.format.item('Ссылка на откат', `[Перейти к видеозаписи](${clipUrl})`),
-            THEME.format.item('Канал участника', `<#${ticket.channelId}>`),
-            comment ? THEME.format.item('Комментарий участника', comment) : '',
-            '',
-            THEME.format.item('Статус', '`⏳ Ожидает разбора`'),
-          ].filter(Boolean).join('\n'),
-          footerText: `ID отчета: ${submission.id}`,
+        const profile = await prisma.userProfile.findUnique({
+          where: { guildId_userId: { guildId: guild.id, userId: interaction.user.id } },
+        }).catch(() => null);
+
+        const renderedApp = await BotMessageManager.renderMessage(guild.id, 'tier_application', {
+          user: `<@${interaction.user.id}>`,
+          username: interaction.user.username,
+          mpType: mpType,
+          staticId: profile?.staticId || 'Не указан',
+          checkerRole: config.checkerRoleId ? `<@&${config.checkerRoleId}>` : '@Проверяющий',
+          guild: guild.name,
         });
+
+        const reviewEmbed = EmbedBuilder.from(renderedApp.embed);
+        reviewEmbed.addFields(
+          { name: 'Мероприятие', value: `**${mpType}**`, inline: true },
+          { name: 'Ссылка на откат', value: `[Перейти к видеозаписи](${clipUrl})`, inline: true },
+          { name: 'Канал участника', value: `<#${ticket.channelId}>`, inline: true },
+          ...(comment ? [{ name: 'Комментарий участника', value: comment, inline: false }] : []),
+          { name: 'Статус', value: '`⏳ Ожидает разбора`', inline: true }
+        );
+        reviewEmbed.setFooter({ text: `ID отчета: ${submission.id}` });
 
         const reviewRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
             .setCustomId(`tier_review_btn_${submission.id}`)
-            .setLabel('Разобрать ошибки / Оставить комментарий')
+            .setLabel('Разобрать ошибки')
             .setStyle(ButtonStyle.Primary)
-            .setEmoji('📝')
+            .setEmoji('📝'),
+          new ButtonBuilder()
+            .setCustomId(`tier_reject_btn_${submission.id}`)
+            .setLabel('Отклонить откат')
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji('❌')
         );
 
         const reviewMsg = await reviewChannel.send({
-          content: config.checkerRoleId ? `<@&${config.checkerRoleId}>` : undefined,
+          content: renderedApp.content || (config.checkerRoleId ? `<@&${config.checkerRoleId}>` : undefined),
           embeds: [reviewEmbed],
           components: [reviewRow],
         });
@@ -737,42 +748,33 @@ export class TierService {
       const targetChannel = (guild.channels.cache.get(targetChannelId) ||
         await guild.channels.fetch(targetChannelId).catch(() => null)) as any;
 
-      const candidateEmbed = createThemedEmbed({
-        title: `📝 РАЗБОР ОТКАТА • ${submission.mpType.toUpperCase()}`,
-        color: THEME.COLORS.SUCCESS,
-        description: [
-          THEME.format.quote(`Опытный стрелок семьи <@${interaction.user.id}> разобрал ваш откат с мероприятия **${submission.mpType}**:`),
-          '',
-          `**Разбор ошибок и рекомендации:**`,
-          `> ${reviewerComment}`,
-          '',
-          THEME.format.subtext('Ознакомьтесь с замечаниями и применяйте советы в следующих перестрелках!'),
-        ].join('\n'),
+      const renderedAppr = await BotMessageManager.renderMessage(guild.id, 'tier_approved', {
+        user: `<@${submission.userId}>`,
+        username: submission.userTag || submission.userId,
+        mpType: submission.mpType,
+        checker: `<@${interaction.user.id}>`,
+        comment: reviewerComment,
+        guild: guild.name,
       });
 
-      if (targetChannel && typeof targetChannel.send === 'function') {
+      if (targetChannel && typeof targetChannel.send === 'function' && renderedAppr.enabled) {
         await targetChannel.send({
-          content: `<@${submission.userId}>`,
-          embeds: [candidateEmbed],
+          content: renderedAppr.content || `<@${submission.userId}>`,
+          embeds: [renderedAppr.embed],
         }).catch(() => null);
       }
 
       // Send DM to candidate
       const targetMember = await guild.members.fetch(submission.userId).catch(() => null);
       if (targetMember) {
-        const candidateDmEmbed = createThemedEmbed({
-          title: `📝 Разбор вашего отката с ${submission.mpType} • ${guild.name}`,
-          color: THEME.COLORS.SUCCESS,
-          description: [
-            `Привет, <@${submission.userId}>!`,
-            '',
-            `Опытный участник семьи <@${interaction.user.id}> разобрал твой откат с мероприятия **${submission.mpType}**:`,
-            '',
-            `**Разбор ошибок:**`,
-            `> ${reviewerComment}`,
-          ].join('\n'),
-        });
-        await targetMember.send({ embeds: [candidateDmEmbed] }).catch(() => null);
+        await BotMessageManager.sendDM(guild.id, targetMember, 'tier_dm_approved', {
+          user: `<@${submission.userId}>`,
+          username: targetMember.user?.username || submission.userTag || submission.userId,
+          mpType: submission.mpType,
+          checker: interaction.user.tag,
+          comment: reviewerComment,
+          guild: guild.name,
+        }).catch(() => null);
       }
 
       // 3. Log to AuditLogger in #бот-лог
@@ -796,6 +798,165 @@ export class TierService {
       await interaction.editReply({
         content: `❌ Ошибка при сохранении проверки: ${err.message}`,
       });
+    }
+  }
+
+  /**
+   * Handle Tier Reject button
+   */
+  public static async handleRejectButton(
+    interaction: ButtonInteraction,
+    submissionId: string
+  ): Promise<void> {
+    const guild = interaction.guild;
+    const member = interaction.member as GuildMember;
+
+    if (!guild || !member) {
+      await interaction.reply({ content: '❌ Ошибка определения пользователя.', ephemeral: true });
+      return;
+    }
+
+    const config = await this.getConfig(guild.id);
+    const hasCheckerRole = config.checkerRoleId && member.roles.cache.has(config.checkerRoleId);
+    const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator);
+
+    if (!hasCheckerRole && !isAdmin) {
+      await interaction.reply({
+        content: '❌ Только проверяющие с ролью **Тир чекер** или Администраторы могут отклонять отчеты.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const submission = await prisma.tierSubmission.findUnique({
+      where: { id: submissionId },
+    });
+
+    if (!submission) {
+      await interaction.reply({ content: '❌ Отчет не найден в базе данных.', ephemeral: true });
+      return;
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId(`tier_reject_modal_${submission.id}`)
+      .setTitle(`Отклонить откат [${submission.mpType}]`);
+
+    const reasonInput = new TextInputBuilder()
+      .setCustomId('reject_reason')
+      .setLabel('Причина отклонения')
+      .setPlaceholder('Видео недоступно / закрытый доступ / нет таймкодов...')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true);
+
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput));
+    await interaction.showModal(modal);
+  }
+
+  /**
+   * Handle Tier Reject modal submission
+   */
+  public static async handleRejectModalSubmit(
+    interaction: ModalSubmitInteraction,
+    submissionId: string
+  ): Promise<void> {
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      const guild = interaction.guild;
+      if (!guild) {
+        await interaction.editReply({ content: '❌ Сервер не найден.' });
+        return;
+      }
+
+      const reason = interaction.fields.getTextInputValue('reject_reason');
+
+      const submission = await prisma.tierSubmission.findUnique({
+        where: { id: submissionId },
+      });
+
+      if (!submission) {
+        await interaction.editReply({ content: '❌ Отчет не найден.' });
+        return;
+      }
+
+      await prisma.tierSubmission.update({
+        where: { id: submissionId },
+        data: {
+          status: 'REJECTED',
+          reviewerId: interaction.user.id,
+          reviewerTag: interaction.user.tag,
+          reviewedAt: new Date(),
+          reviewerComment: reason,
+        },
+      });
+
+      // Update message in review channel
+      if (submission.reviewMessageId) {
+        const config = await this.getConfig(guild.id);
+        const reviewChannel = config.reviewChannelId
+          ? (guild.channels.cache.get(config.reviewChannelId) as TextChannel) || null
+          : null;
+
+        if (reviewChannel) {
+          const reviewMsg = await reviewChannel.messages.fetch(submission.reviewMessageId).catch(() => null);
+          if (reviewMsg) {
+            const updatedEmbed = EmbedBuilder.from(reviewMsg.embeds[0] || new EmbedBuilder())
+              .setColor(THEME.COLORS.DANGER)
+              .setFooter({ text: `❌ Отклонено ${interaction.user.tag} • Причина: ${reason}` });
+
+            const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`tier_rejected_${submission.id}`)
+                .setLabel('Отклонен')
+                .setStyle(ButtonStyle.Danger)
+                .setDisabled(true)
+            );
+
+            await reviewMsg.edit({ embeds: [updatedEmbed], components: [disabledRow] }).catch(() => null);
+          }
+        }
+      }
+
+      // Notify candidate in their ticket thread or channel
+      const targetChannelId = submission.threadId || submission.channelId;
+      const targetChannel = (guild.channels.cache.get(targetChannelId) ||
+        await guild.channels.fetch(targetChannelId).catch(() => null)) as any;
+
+      const renderedReject = await BotMessageManager.renderMessage(guild.id, 'tier_rejected', {
+        user: `<@${submission.userId}>`,
+        username: submission.userTag || submission.userId,
+        mpType: submission.mpType,
+        checker: `<@${interaction.user.id}>`,
+        reason: reason,
+        guild: guild.name,
+      });
+
+      if (targetChannel && typeof targetChannel.send === 'function' && renderedReject.enabled) {
+        await targetChannel.send({
+          content: renderedReject.content || `<@${submission.userId}>`,
+          embeds: [renderedReject.embed],
+        }).catch(() => null);
+      }
+
+      // Send DM to candidate
+      const targetMember = await guild.members.fetch(submission.userId).catch(() => null);
+      if (targetMember) {
+        await BotMessageManager.sendDM(guild.id, targetMember, 'tier_dm_rejected', {
+          user: `<@${submission.userId}>`,
+          username: targetMember.user?.username || submission.userTag || submission.userId,
+          mpType: submission.mpType,
+          checker: interaction.user.tag,
+          reason: reason,
+          guild: guild.name,
+        }).catch(() => null);
+      }
+
+      await interaction.editReply({
+        content: `✅ Откат успешно отклонен. Участник уведомлен в канале и в ЛС.`,
+      });
+    } catch (err: any) {
+      console.error('[TierService handleRejectModalSubmit Error]:', err);
+      await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
     }
   }
 }

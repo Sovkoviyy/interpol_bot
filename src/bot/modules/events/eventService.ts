@@ -131,18 +131,41 @@ export class EventService {
 
     const separator = '────────────────────────────────────────';
 
-    const descParts: string[] = [
-      `### 🎯 Сбор на ${event.title.toUpperCase()}${roleMention ? ` ${roleMention}` : ''}`,
-      `**Время:** <t:${eventUnix}:F> (<t:${eventUnix}:R>)`,
-      `**Войс:** 🔊 ┠ ${voiceDisplay}`,
-      `**Карта:** ${mapDisplay}`,
-    ];
-
-    if (event.partyCode) {
-      descParts.push(`**Код группы:** \`${event.partyCode}\``);
+    let renderedHeader = '';
+    let baseEmbed: EmbedBuilder;
+    try {
+      const guild = bot.guilds.cache.get(event.guildId) || await bot.guilds.fetch(event.guildId).catch(() => null);
+      const rendered = await BotMessageManager.renderMessage(event.guildId, 'event_announcement', {
+        eventTitle: event.title,
+        eventType: (event as any).type || 'LIMITED',
+        mapName: mapDisplay,
+        eventTime: `<t:${eventUnix}:t>`,
+        checkInTime: `<t:${eventUnix - 900}:t>`,
+        voiceChannel: voiceDisplay,
+        partyCode: event.partyCode || 'Не указан',
+        role: roleMention || 'Состав',
+        limit: String(limit),
+        author: event.createdByTag || 'Организатор',
+        guild: guild?.name || 'INTERPOL',
+      });
+      baseEmbed = EmbedBuilder.from(rendered.embed);
+      renderedHeader = rendered.embed.data.description || '';
+    } catch {
+      baseEmbed = new EmbedBuilder().setColor(THEME.COLORS.PRIMARY);
     }
-    if (event.description) {
-      descParts.push(`**Инфо:** *${event.description}*`);
+
+    const descParts: string[] = [];
+    if (renderedHeader) {
+      descParts.push(renderedHeader);
+    } else {
+      descParts.push(
+        `### 🎯 Сбор на ${event.title.toUpperCase()}${roleMention ? ` ${roleMention}` : ''}`,
+        `**Время:** <t:${eventUnix}:F> (<t:${eventUnix}:R>)`,
+        `**Войс:** 🔊 ┠ ${voiceDisplay}`,
+        `**Карта:** ${mapDisplay}`
+      );
+      if (event.partyCode) descParts.push(`**Код группы:** \`${event.partyCode}\``);
+      if (event.description) descParts.push(`**Инфо:** *${event.description}*`);
     }
 
     descParts.push(
@@ -156,15 +179,16 @@ export class EventService {
       reserveList
     );
 
-    const embed = new EmbedBuilder()
-      .setColor(event.status === 'ACTIVE' ? THEME.COLORS.PRIMARY : (event.status === 'FINISHED' ? THEME.COLORS.SUCCESS : THEME.COLORS.DANGER))
+    const embed = baseEmbed
       .setDescription(descParts.join('\n'));
 
     if (event.status === 'FINISHED') {
+      embed.setColor(THEME.COLORS.SUCCESS);
       embed.setFooter({ text: '🏁 Мероприятие завершено • Сообщение удалится через 30 мин' });
     } else if (event.status === 'CANCELLED') {
+      embed.setColor(THEME.COLORS.DANGER);
       embed.setFooter({ text: '❌ Мероприятие отменено организатором' });
-    } else {
+    } else if (!embed.data.footer) {
       embed.setFooter({ text: '💡 Оставляйте «+» в чате или нажимайте кнопки ниже • Учитывается иерархия ролей' });
     }
 

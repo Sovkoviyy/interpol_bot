@@ -5,6 +5,7 @@ import { NicknameService } from '../nicknames/nicknameService';
 import { extractFirstName } from '../../utils/nameUtils';
 import { THEME, createThemedEmbed } from '../../utils/theme';
 import { BotMessageManager } from '../../utils/botMessageManager';
+import { AuditLogger } from '../logging/auditLogger';
 
 export class ProfileService {
   /**
@@ -111,7 +112,7 @@ export class ProfileService {
       include: { characters: { orderBy: { createdAt: 'asc' } } },
     });
 
-    // Send DM confirmation to member
+    // Send DM confirmation to member & log static_bound to audit/bot log
     try {
       const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
       if (guild) {
@@ -122,6 +123,17 @@ export class ProfileService {
           characterName: cleanNick || 'Не указано',
           guild: guild.name,
         }).catch(() => null);
+
+        const renderedBound = await BotMessageManager.renderMessage(guildId, 'static_bound', {
+          user: `<@${userId}>`,
+          username: userTag || userId,
+          staticId: cleanStatic,
+          characterName: cleanNick || 'Не указано',
+          guild: guild.name,
+        });
+        if (renderedBound.enabled) {
+          await AuditLogger.sendLog(guild, 'BOT', renderedBound.embed).catch(() => null);
+        }
       }
     } catch {}
 

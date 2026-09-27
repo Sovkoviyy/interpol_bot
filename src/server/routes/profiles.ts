@@ -8,6 +8,7 @@ import bot from '../../bot/client';
 import { ProfileService } from '../../bot/modules/profiles/profileService';
 import { ServerSetupService } from '../../bot/modules/setup/serverSetupService';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
+import { BotMessageManager } from '../../bot/utils/botMessageManager';
 import { resolveGuildId } from '../utils/guild';
 
 const router = Router();
@@ -280,6 +281,32 @@ router.post('/:userId/penalty', requirePermission('manageRecruiting'), async (re
       targetId: String(req.params.userId),
     });
 
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+    if (guild) {
+      BotMessageManager.sendDM(guildId, String(req.params.userId), 'sanction_dm_warn', {
+        user: `<@${req.params.userId}>`,
+        username: updated.userTag || String(req.params.userId),
+        moderator: req.user!.username,
+        reason: reason || 'Нарушение дисциплины / штрафные МП',
+        warnCount: String(updated.penaltyMp),
+        maxWarns: '10',
+        guild: guild.name,
+      }).catch(() => null);
+
+      const renderedWarn = await BotMessageManager.renderMessage(guildId, 'sanction_warn_channel', {
+        user: `<@${req.params.userId}>`,
+        username: updated.userTag || String(req.params.userId),
+        moderator: `<@${req.user!.userId}>`,
+        reason: reason || 'Нарушение дисциплины / штрафные МП',
+        warnCount: String(updated.penaltyMp),
+        maxWarns: '10',
+        guild: guild.name,
+      });
+      if (renderedWarn.enabled) {
+        await AuditLogger.sendLog(guild, 'MEMBERS', renderedWarn.embed).catch(() => null);
+      }
+    }
+
     res.json({ profile: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -313,6 +340,18 @@ router.post('/:userId/penalty/remove', requirePermission('manageRecruiting'), as
       executorTag: req.user!.username,
       targetId: String(req.params.userId),
     });
+
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+    if (guild) {
+      BotMessageManager.sendDM(guildId, String(req.params.userId), 'sanction_dm_unwarn', {
+        user: `<@${req.params.userId}>`,
+        username: updated.userTag || String(req.params.userId),
+        moderator: req.user!.username,
+        warnCount: String(updated.penaltyMp),
+        maxWarns: '10',
+        guild: guild.name,
+      }).catch(() => null);
+    }
 
     res.json({ profile: updated });
   } catch (err: any) {

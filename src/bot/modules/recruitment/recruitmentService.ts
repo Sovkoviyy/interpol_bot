@@ -1010,6 +1010,20 @@ export class RecruitmentService {
     });
     await AuditLogger.sendLog(guild, 'BOT', botEmbed);
 
+    const renderedAccept = await BotMessageManager.renderMessage(guild.id, 'ticket_accepted', {
+      user: `<@${application.userId}>`,
+      username: targetMember?.user?.username || application.userTag || application.userId,
+      guild: guild.name,
+      recruiter: `<@${interaction.user.id}>`,
+      role: config?.memberRoleId ? `<@&${config.memberRoleId}>` : 'Участник',
+    });
+    if (renderedAccept.enabled && channel) {
+      await channel.send({
+        content: renderedAccept.content || undefined,
+        embeds: [renderedAccept.embed],
+      }).catch(() => null);
+    }
+
     await interaction.editReply({
       content: `Заявка одобрена. Роль выдана. Канал будет удален через 5 секунд...`,
     });
@@ -1135,6 +1149,20 @@ export class RecruitmentService {
       footerText: 'INTERPOL • Бот-лог',
     });
     await AuditLogger.sendLog(guild, 'BOT', botEmbed);
+
+    const renderedReject = await BotMessageManager.renderMessage(guild.id, 'ticket_rejected', {
+      user: `<@${application.userId}>`,
+      username: targetMember?.user?.username || application.userTag || application.userId,
+      guild: guild.name,
+      recruiter: `<@${interaction.user.id}>`,
+      reason: reason,
+    });
+    if (renderedReject.enabled && channel) {
+      await channel.send({
+        content: renderedReject.content || undefined,
+        embeds: [renderedReject.embed],
+      }).catch(() => null);
+    }
 
     await interaction.editReply({
       content: `Заявка отклонена. Пользователю отправлено уведомление в ЛС. Канал будет удален через 5 секунд...`,

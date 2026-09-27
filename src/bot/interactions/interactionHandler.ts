@@ -398,7 +398,7 @@ export function registerInteractionHandler() {
 
         if (customId.startsWith('leave_approve_')) {
           const leaveId = customId.replace('leave_approve_', '');
-          await interaction.deferReply();
+          await interaction.deferReply({ ephemeral: true });
           try {
             const isLeaderOrAdmin = member.permissions && typeof member.permissions.has === 'function'
               ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
@@ -408,10 +408,16 @@ export function registerInteractionHandler() {
               return;
             }
             await LeaveService.reviewLeave(leaveId, member.id, member.user.tag, true);
-            await interaction.editReply({ content: `✅ Заявка на отпуск одобрена руководителем ${member}.` });
+            await interaction.editReply({ content: `✅ Заявка на отпуск одобрена.` });
           } catch (err: any) {
             await interaction.editReply({ content: `❌ Ошибка: ${err.message}` });
           }
+          return;
+        }
+
+        if (customId.startsWith('tier_reject_btn_')) {
+          const subId = customId.replace('tier_reject_btn_', '');
+          await TierService.handleRejectButton(interaction, subId);
           return;
         }
 
@@ -796,6 +802,12 @@ export function registerInteractionHandler() {
         if (customId.startsWith('tier_review_modal_')) {
           const submissionId = customId.replace('tier_review_modal_', '');
           await TierService.handleReviewModalSubmit(interaction, submissionId);
+          return;
+        }
+
+        if (customId.startsWith('tier_reject_modal_')) {
+          const submissionId = customId.replace('tier_reject_modal_', '');
+          await TierService.handleRejectModalSubmit(interaction, submissionId);
           return;
         }
       }

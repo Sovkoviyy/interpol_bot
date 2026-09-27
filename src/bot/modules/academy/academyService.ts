@@ -222,8 +222,24 @@ export class AcademyService {
       await member.roles.add(config.academicRoleId).catch(() => null);
     }
 
+    // Send welcome greeting in the academy channel
+    const welcomeRendered = await BotMessageManager.renderMessage(guild.id, 'academy_channel_welcome', {
+      user: `<@${member.id}>`,
+      username: member.user?.username || member.displayName,
+      guild: guild.name,
+      staticId: effectiveStatic,
+      mentorRole: config.academicRoleId ? `<@&${config.academicRoleId}>` : '@Куратор',
+    });
+    if (welcomeRendered.enabled) {
+      await channel.send({
+        content: welcomeRendered.content,
+        embeds: [welcomeRendered.embed],
+      }).catch(() => null);
+    }
+
     // Post initial greeting embed with button to submit report and pin it
-    const welcomeEmbed = this.buildStatusEmbed(
+    const welcomeEmbed = await this.buildStatusEmbed(
+      guild.id,
       { id: member.id, tag: member.user.tag, avatarUrl: member.user.displayAvatarURL() },
       effectiveStatic,
       0,
@@ -257,44 +273,48 @@ export class AcademyService {
   /**
    * Builds the live status embed for an academician's personal channel
    */
-  public static buildStatusEmbed(
+  public static async buildStatusEmbed(
+    guildId: string,
     memberUser: { id: string; tag?: string; avatarUrl?: string },
     staticId: string,
     approvedCount: number,
     requiredMp: number,
     penaltyMp: number
-  ): EmbedBuilder {
+  ): Promise<EmbedBuilder> {
     const totalNeeded = requiredMp + penaltyMp;
     const remaining = Math.max(0, totalNeeded - approvedCount);
     const isCompleted = approvedCount >= totalNeeded;
 
-    const desc = [
-      THEME.format.quote(`Личное дело академика семьи INTERPOL.`),
-      '',
-      THEME.format.item('Кандидат', `<@${memberUser.id}>`),
-      THEME.format.item('Статик', THEME.format.code(`#${staticId}`)),
-      THEME.format.item('Критерий повышения', `Подтвердить ${THEME.format.bold(totalNeeded)} МП для 2 ранга`),
-      '',
-      THEME.format.progressBar(approvedCount, totalNeeded),
-      '',
-      THEME.format.section('Регламент сдачи отчетов'),
-      THEME.format.quote('После участия в дропе, цехе, ВЗМ, МЦЛ или капте нажмите кнопку ниже и прикрепите скриншот.'),
-      '',
-      THEME.format.subtext('После вердикта рекрутера сообщение отчета удаляется, а данный статус обновляется.'),
-    ].join('\n');
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+    const guildName = guild ? guild.name : 'INTERPOL';
 
-    return createThemedEmbed({
-      title: `ЛИЧНЫЙ КАНАЛ АКАДЕМИИ • #${staticId}`,
-      description: desc,
-      color: isCompleted ? THEME.COLORS.SUCCESS : THEME.COLORS.PRIMARY,
-      fields: [
-        { name: 'Подтверждено', value: `\`${approvedCount} / ${totalNeeded} МП\``, inline: true },
-        { name: 'Штрафы', value: `\`${penaltyMp} МП\``, inline: true },
-        { name: 'Остаток', value: `\`${remaining} МП\``, inline: true },
-      ],
-      thumbnailUrl: memberUser.avatarUrl || null,
-      footerText: 'INTERPOL Academy • Актуализация в реальном времени',
+    const rendered = await BotMessageManager.renderMessage(guildId, 'academy_status_panel', {
+      user: `<@${memberUser.id}>`,
+      username: memberUser.tag || 'Курсант',
+      guild: guildName,
+      staticId,
+      totalNeeded: String(totalNeeded),
+      approvedCount: String(approvedCount),
+      penaltyMp: String(penaltyMp),
+      remaining: String(remaining),
     });
+
+    const embed = EmbedBuilder.from(rendered.embed);
+    if (isCompleted) {
+      embed.setColor(THEME.COLORS.SUCCESS);
+    }
+    if (memberUser.avatarUrl) {
+      embed.setThumbnail(memberUser.avatarUrl);
+    }
+    const currentDesc = embed.data.description || '';
+    embed.setDescription(currentDesc + '\n\n' + THEME.format.progressBar(approvedCount, totalNeeded));
+    embed.setFields([
+      { name: 'Подтверждено', value: `\`${approvedCount} / ${totalNeeded} МП\``, inline: true },
+      { name: 'Штрафы', value: `\`${penaltyMp} МП\``, inline: true },
+      { name: 'Остаток', value: `\`${remaining} МП\``, inline: true },
+    ]);
+
+    return embed;
   }
 
   /**
@@ -340,7 +360,8 @@ export class AcademyService {
         ? member.user.displayAvatarURL()
         : undefined;
 
-      const embed = this.buildStatusEmbed(
+      const embed = await this.buildStatusEmbed(
+        academy.guildId,
         { id: academy.userId, tag: academy.userTag || member?.user?.tag, avatarUrl },
         academy.staticId || profile?.staticId || '—',
         approvedCount,
