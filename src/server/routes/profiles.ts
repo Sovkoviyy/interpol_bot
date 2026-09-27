@@ -19,7 +19,7 @@ router.use(requireAuth);
  * GET /api/profiles
  * List profiles with search, sorting, and aggregate statistics
  */
-router.get('/', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', requirePermission('manageProfiles', 'manageRecruiting', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const search = req.query.search as string;
@@ -110,7 +110,7 @@ router.get('/leaderboard', async (req: AuthenticatedRequest, res: Response) => {
  * POST /api/profiles/manual
  * Manually create or update member profile with up to 3 characters
  */
-router.post('/manual', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/manual', requirePermission('manageProfiles', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const { userId, userTag, rank, notes, status, characters } = req.body;
@@ -217,7 +217,7 @@ router.post('/:userId/static', async (req: AuthenticatedRequest, res: Response) 
  * POST /api/profiles/:userId/characters
  * Set/update up to 3 characters for user
  */
-router.post('/:userId/characters', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:userId/characters', requirePermission('manageProfiles', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const targetUserId = String(req.params.userId);
@@ -257,7 +257,7 @@ router.post('/:userId/set-main', async (req: AuthenticatedRequest, res: Response
  * POST /api/profiles/:userId/penalty
  * Add penalty MPs
  */
-router.post('/:userId/penalty', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:userId/penalty', requirePermission('manageProfiles', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const { count, reason } = req.body;
@@ -317,7 +317,7 @@ router.post('/:userId/penalty', requirePermission('manageRecruiting'), async (re
  * POST /api/profiles/:userId/penalty/remove
  * Remove penalty MPs
  */
-router.post('/:userId/penalty/remove', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:userId/penalty/remove', requirePermission('manageProfiles', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const { count, reason } = req.body;

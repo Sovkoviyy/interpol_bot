@@ -10,6 +10,47 @@ import { PermissionFlagsBits } from 'discord.js';
 
 export const authRouter = Router();
 
+export function buildUserPermissions(isAdmin: boolean, rolePermissions: any[]) {
+  const modular: Record<string, boolean> = {};
+
+  for (const rp of rolePermissions) {
+    if (rp.permissionsJson) {
+      try {
+        const parsed = typeof rp.permissionsJson === 'string' ? JSON.parse(rp.permissionsJson) : rp.permissionsJson;
+        if (parsed && typeof parsed === 'object') {
+          for (const [k, v] of Object.entries(parsed)) {
+            if (v) modular[k] = true;
+          }
+        }
+      } catch {}
+    }
+  }
+
+  const hasRecruitMod = Object.keys(modular).some(k => k.startsWith('recruitment.') && modular[k]);
+  const hasAcademyMod = Object.keys(modular).some(k => k.startsWith('academy.') && modular[k]);
+  const hasLeaveMod = Object.keys(modular).some(k => k.startsWith('leave.') && modular[k]);
+  const hasEventMod = Object.keys(modular).some(k => k.startsWith('events.') && modular[k]);
+  const hasProfileMod = Object.keys(modular).some(k => k.startsWith('profiles.') && modular[k]);
+  const hasPayrollMod = Object.keys(modular).some(k => k.startsWith('payroll.') && modular[k]);
+  const hasTierMod = Object.keys(modular).some(k => k.startsWith('tier.') && modular[k]);
+  const hasSettingsMod = Boolean(modular['settings.rbac'] || modular['settings.botMessages'] || modular['settings.logs']);
+  const hasLogMod = Boolean(modular['settings.logs'] || modular['leave.viewLogs']);
+
+  return {
+    isAdmin,
+    manageSettings: isAdmin || rolePermissions.some(rp => rp.manageSettings) || hasSettingsMod,
+    manageRecruiting: isAdmin || rolePermissions.some(rp => rp.manageRecruiting) || hasRecruitMod,
+    manageEvents: isAdmin || rolePermissions.some(rp => rp.manageEvents) || hasEventMod,
+    viewLogs: isAdmin || rolePermissions.some(rp => rp.viewLogs) || hasLogMod,
+    manageAcademy: isAdmin || rolePermissions.some(rp => rp.manageAcademy) || hasAcademyMod,
+    manageLeaves: isAdmin || hasLeaveMod,
+    manageProfiles: isAdmin || hasProfileMod,
+    manageTier: isAdmin || rolePermissions.some(rp => rp.manageTier) || hasTierMod,
+    managePayroll: isAdmin || hasPayrollMod || rolePermissions.some(rp => rp.manageRecruiting),
+    modular,
+  };
+}
+
 // 1. Get Discord OAuth2 Login URL
 authRouter.get('/login', (req: Request, res: Response) => {
   if (!config.discord.clientId) {
@@ -86,13 +127,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       },
     });
 
-    const permissions = {
-      isAdmin,
-      manageSettings: isAdmin || rolePermissions.some(rp => rp.manageSettings),
-      manageRecruiting: isAdmin || rolePermissions.some(rp => rp.manageRecruiting),
-      manageEvents: isAdmin || rolePermissions.some(rp => rp.manageEvents),
-      viewLogs: isAdmin || rolePermissions.some(rp => rp.viewLogs),
-    };
+    const permissions = buildUserPermissions(isAdmin, rolePermissions);
 
     const sessionData: UserSessionData = {
       userId: discordUser.id,
@@ -141,13 +176,7 @@ authRouter.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Respon
             },
           });
           user.roles = roles;
-          user.permissions = {
-            isAdmin,
-            manageSettings: isAdmin || rolePermissions.some(rp => rp.manageSettings),
-            manageRecruiting: isAdmin || rolePermissions.some(rp => rp.manageRecruiting),
-            manageEvents: isAdmin || rolePermissions.some(rp => rp.manageEvents),
-            viewLogs: isAdmin || rolePermissions.some(rp => rp.viewLogs),
-          };
+          user.permissions = buildUserPermissions(isAdmin, rolePermissions);
         }
       }
     }

@@ -105,7 +105,7 @@ guildRouter.post('/config', requireAuth, requirePermission('manageSettings'), as
 });
 
 // Get all guild members with rich metadata, Discord roles, invite info, and in-game profiles
-guildRouter.get('/members', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+guildRouter.get('/members', requireAuth, requirePermission('manageProfiles', 'manageRecruiting', 'manageAcademy', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
   const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
 

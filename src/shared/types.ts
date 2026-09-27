@@ -30,6 +30,9 @@ export interface RolePermissionDTO {
   manageRecruiting: boolean;
   manageEvents: boolean;
   viewLogs: boolean;
+  manageAcademy?: boolean;
+  manageTier?: boolean;
+  permissionsJson?: string;
 }
 
 export interface UserSessionData {
@@ -45,5 +48,11 @@ export interface UserSessionData {
     manageRecruiting: boolean;
     manageEvents: boolean;
     viewLogs: boolean;
+    manageAcademy?: boolean;
+    manageLeaves?: boolean;
+    manageProfiles?: boolean;
+    manageTier?: boolean;
+    managePayroll?: boolean;
+    modular?: Record<string, boolean>;
   };
 }

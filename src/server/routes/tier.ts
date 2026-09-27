@@ -13,7 +13,7 @@ router.use(requireAuth);
 /**
  * GET /api/tier/config
  */
-router.get('/config', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/config', requirePermission('manageTier', 'manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const tierConfig = await TierService.getConfig(guildId);
@@ -78,7 +78,7 @@ router.post('/setup', requirePermission('manageSettings'), async (req: Authentic
 /**
  * GET /api/tier/tickets
  */
-router.get('/tickets', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/tickets', requirePermission('manageTier', 'manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const tickets = await prisma.tierTicket.findMany({
@@ -99,7 +99,7 @@ router.get('/tickets', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * GET /api/tier/submissions
  */
-router.get('/submissions', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/submissions', requirePermission('manageTier', 'manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const { status, mpType } = req.query;
@@ -130,7 +130,7 @@ router.get('/submissions', async (req: AuthenticatedRequest, res: Response) => {
  * PUT /api/tier/tickets/:id
  * Edit a tier ticket
  */
-router.put('/tickets/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.put('/tickets/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     const { status } = req.body;
@@ -156,7 +156,7 @@ router.put('/tickets/:id', requirePermission('manageRecruiting'), async (req: Au
  * DELETE /api/tier/tickets/:id
  * Delete a tier ticket (and all its submissions)
  */
-router.delete('/tickets/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/tickets/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     const ticket = await prisma.tierTicket.findUnique({ where: { id } });
@@ -186,7 +186,7 @@ router.delete('/tickets/:id', requirePermission('manageRecruiting'), async (req:
  * PUT /api/tier/submissions/:id
  * Edit or review a tier submission
  */
-router.put('/submissions/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.put('/submissions/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     const { status, reviewerComment, mpType, clipUrl } = req.body;
@@ -214,7 +214,7 @@ router.put('/submissions/:id', requirePermission('manageRecruiting'), async (req
  * DELETE /api/tier/submissions/:id
  * Delete a single submission (fake/rofl clip)
  */
-router.delete('/submissions/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/submissions/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     const submission = await prisma.tierSubmission.findUnique({ where: { id } });

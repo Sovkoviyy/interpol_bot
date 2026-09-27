@@ -15,7 +15,7 @@ router.use(requireAuth);
 /**
  * GET /api/academy/config
  */
-router.get('/config', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/config', requirePermission('manageAcademy', 'manageRecruiting', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const academyConfig = await AcademyService.getConfig(guildId);
@@ -28,7 +28,7 @@ router.get('/config', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * POST /api/academy/config
  */
-router.post('/config', requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/config', requirePermission('manageAcademy', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const updated = await AcademyService.saveConfig(guildId, req.body);
@@ -41,7 +41,7 @@ router.post('/config', requirePermission('manageSettings'), async (req: Authenti
 /**
  * GET /api/academy/channels
  */
-router.get('/channels', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/channels', requirePermission('manageAcademy', 'manageRecruiting', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const channels = await prisma.academyChannel.findMany({
@@ -62,7 +62,7 @@ router.get('/channels', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * GET /api/academy/reports
  */
-router.get('/reports', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/reports', requirePermission('manageAcademy', 'manageRecruiting', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const status = req.query.status as string;
@@ -85,7 +85,7 @@ router.get('/reports', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * POST /api/academy/reports/:id/review
  */
-router.post('/reports/:id/review', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/reports/:id/review', requirePermission('manageAcademy', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { approved, rejectionReason } = req.body;
     const reportId = String(req.params.id);
@@ -116,7 +116,7 @@ router.post('/reports/:id/review', requirePermission('manageRecruiting'), async 
 /**
  * POST /api/academy/channels/:id/promote
  */
-router.post('/channels/:id/promote', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/channels/:id/promote', requirePermission('manageAcademy', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { approved, rejectionReason, penaltyMp } = req.body;
     const channelId = String(req.params.id);
@@ -149,7 +149,7 @@ router.post('/channels/:id/promote', requirePermission('manageRecruiting'), asyn
  * PUT /api/academy/channels/:id
  * Edit an academy student profile
  */
-router.put('/channels/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.put('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     const { staticId, approvedMpCount, requiredMp, penaltyMp, status } = req.body;
@@ -181,7 +181,7 @@ router.put('/channels/:id', requirePermission('manageRecruiting'), async (req: A
  * DELETE /api/academy/channels/:id
  * Delete an academy student profile (and its reports)
  */
-router.delete('/channels/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     const existing = await prisma.academyChannel.findUnique({ where: { id } });
@@ -212,7 +212,7 @@ router.delete('/channels/:id', requirePermission('manageRecruiting'), async (req
  * DELETE /api/academy/reports/:id
  * Delete a specific report (fake/spam)
  */
-router.delete('/reports/:id', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/reports/:id', requirePermission('manageAcademy', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const id = String(req.params.id);
     const report = await prisma.mpReport.findUnique({ where: { id } });

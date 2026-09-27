@@ -25,8 +25,35 @@ import { Tier } from './pages/Tier';
 import { ModalProvider } from './context/ModalContext';
 import { ShieldAlert } from 'lucide-react';
 
-const AnimatedPageRoutes: React.FC = () => {
+const ProtectedRoute: React.FC<{ allowed: boolean; children: React.ReactElement }> = ({ allowed, children }) => {
+  if (!allowed) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
+interface AnimatedPageRoutesProps {
+  userPermissions?: any;
+}
+
+const AnimatedPageRoutes: React.FC<AnimatedPageRoutesProps> = ({ userPermissions }) => {
   const location = useLocation();
+  const isAdmin = Boolean(userPermissions?.isAdmin);
+  const p = userPermissions;
+  const mod = userPermissions?.modular || {};
+
+  const canSettings = Boolean(isAdmin || p?.manageSettings || mod['settings.rbac'] || mod['settings.botMessages'] || mod['settings.logs']);
+  const canRecruit = Boolean(isAdmin || canSettings || p?.manageRecruiting || Object.keys(mod).some(k => k.startsWith('recruitment.') && mod[k]));
+  const canAcademy = Boolean(isAdmin || canSettings || p?.manageAcademy || Object.keys(mod).some(k => k.startsWith('academy.') && mod[k]));
+  const canLeaves = Boolean(isAdmin || canSettings || p?.manageLeaves || Object.keys(mod).some(k => k.startsWith('leave.') && mod[k]));
+  const canEvents = Boolean(isAdmin || canSettings || p?.manageEvents || Object.keys(mod).some(k => k.startsWith('events.') && mod[k]));
+  const canProfiles = Boolean(isAdmin || canSettings || p?.manageProfiles || p?.manageRecruiting || Object.keys(mod).some(k => k.startsWith('profiles.') && mod[k]));
+  const canPayroll = Boolean(isAdmin || canSettings || p?.managePayroll || p?.manageRecruiting || Object.keys(mod).some(k => k.startsWith('payroll.') && mod[k]));
+  const canTier = Boolean(isAdmin || canSettings || p?.manageTier || canEvents || Object.keys(mod).some(k => k.startsWith('tier.') && mod[k]));
+  const canLogs = Boolean(isAdmin || canSettings || p?.viewLogs || mod['settings.logs'] || mod['leave.viewLogs']);
+  const canRoles = Boolean(isAdmin || p?.manageSettings || mod['settings.rbac']);
+  const canBotMessages = Boolean(isAdmin || p?.manageSettings || mod['settings.botMessages']);
+  const canMembers = Boolean(isAdmin || canSettings || canProfiles || canRecruit || canAcademy);
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -40,22 +67,22 @@ const AnimatedPageRoutes: React.FC = () => {
       >
         <Routes location={location}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/setup" element={<ServerSetup />} />
-          <Route path="/profiles" element={<Profiles />} />
-          <Route path="/nicknames" element={<Nicknames />} />
-          <Route path="/academy" element={<Academy />} />
-          <Route path="/recruitment" element={<Recruitment />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/tier" element={<Tier />} />
-          <Route path="/leaves" element={<Leaves />} />
-          <Route path="/payroll" element={<RecruiterPayroll />} />
-          <Route path="/blacklist" element={<Blacklist />} />
-          <Route path="/members" element={<Members />} />
-          <Route path="/messages" element={<BotMessages />} />
-          <Route path="/embeds" element={<EmbedBuilder />} />
-          <Route path="/logs" element={<Logs />} />
-          <Route path="/roles" element={<Roles />} />
           <Route path="/stats" element={<Stats />} />
+          <Route path="/setup" element={<ProtectedRoute allowed={canSettings}><ServerSetup /></ProtectedRoute>} />
+          <Route path="/profiles" element={<ProtectedRoute allowed={canProfiles}><Profiles /></ProtectedRoute>} />
+          <Route path="/nicknames" element={<ProtectedRoute allowed={canSettings}><Nicknames /></ProtectedRoute>} />
+          <Route path="/academy" element={<ProtectedRoute allowed={canAcademy}><Academy /></ProtectedRoute>} />
+          <Route path="/recruitment" element={<ProtectedRoute allowed={canRecruit}><Recruitment /></ProtectedRoute>} />
+          <Route path="/events" element={<ProtectedRoute allowed={canEvents}><Events /></ProtectedRoute>} />
+          <Route path="/tier" element={<ProtectedRoute allowed={canTier}><Tier /></ProtectedRoute>} />
+          <Route path="/leaves" element={<ProtectedRoute allowed={canLeaves}><Leaves /></ProtectedRoute>} />
+          <Route path="/payroll" element={<ProtectedRoute allowed={canPayroll}><RecruiterPayroll /></ProtectedRoute>} />
+          <Route path="/blacklist" element={<ProtectedRoute allowed={canRecruit || canSettings}><Blacklist /></ProtectedRoute>} />
+          <Route path="/members" element={<ProtectedRoute allowed={canMembers}><Members /></ProtectedRoute>} />
+          <Route path="/messages" element={<ProtectedRoute allowed={canBotMessages}><BotMessages /></ProtectedRoute>} />
+          <Route path="/embeds" element={<ProtectedRoute allowed={canBotMessages}><EmbedBuilder /></ProtectedRoute>} />
+          <Route path="/logs" element={<ProtectedRoute allowed={canLogs}><Logs /></ProtectedRoute>} />
+          <Route path="/roles" element={<ProtectedRoute allowed={canRoles}><Roles /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </motion.div>
@@ -115,7 +142,13 @@ export const App: React.FC = () => {
     user?.permissions?.manageSettings ||
     user?.permissions?.manageRecruiting ||
     user?.permissions?.manageEvents ||
-    user?.permissions?.viewLogs
+    user?.permissions?.viewLogs ||
+    user?.permissions?.manageAcademy ||
+    user?.permissions?.manageLeaves ||
+    user?.permissions?.manageProfiles ||
+    user?.permissions?.manageTier ||
+    user?.permissions?.managePayroll ||
+    (user?.permissions?.modular && Object.values(user.permissions.modular).some(Boolean))
   );
 
   return (
@@ -184,7 +217,7 @@ export const App: React.FC = () => {
                     <Navbar user={user} onLogout={handleLogout} />
                     <main className="flex-1 px-4 py-6 md:px-8 md:py-8 overflow-y-auto custom-scrollbar">
                       <div className="w-full max-w-7xl mx-auto">
-                        <AnimatedPageRoutes />
+                        <AnimatedPageRoutes userPermissions={user?.permissions} />
                       </div>
                     </main>
                   </div>

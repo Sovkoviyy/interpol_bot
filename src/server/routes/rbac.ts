@@ -39,6 +39,7 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
     manageEvents, 
     viewLogs,
     manageAcademy,
+    manageTier,
     modular,
     permissionsJson
   } = req.body;
@@ -58,6 +59,7 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageEvents: Boolean(manageEvents),
       viewLogs: Boolean(viewLogs),
       manageAcademy: Boolean(manageAcademy),
+      manageTier: Boolean(manageTier),
       permissionsJson: finalJson,
     },
     create: {
@@ -69,6 +71,7 @@ rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (re
       manageEvents: Boolean(manageEvents),
       viewLogs: Boolean(viewLogs),
       manageAcademy: Boolean(manageAcademy),
+      manageTier: Boolean(manageTier),
       permissionsJson: finalJson,
     },
   });

@@ -16,7 +16,7 @@ router.use(requireAuth);
  * GET /api/leave/active
  * Get currently active leaves/time-offs with remaining time
  */
-router.get('/active', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/active', requirePermission('manageLeaves', 'manageRecruiting', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const active = await LeaveService.getActiveLeaves(guildId);
@@ -30,7 +30,7 @@ router.get('/active', async (req: AuthenticatedRequest, res: Response) => {
  * GET /api/leave/logs
  * Get leave history & audit logs
  */
-router.get('/logs', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/logs', requirePermission('manageLeaves', 'manageRecruiting', 'manageSettings', 'viewLogs'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const logs = await LeaveService.getLeaveLogs(guildId);
@@ -43,7 +43,7 @@ router.get('/logs', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * GET /api/leave
  */
-router.get('/', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', requirePermission('manageLeaves', 'manageRecruiting', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const status = req.query.status as string;
@@ -88,7 +88,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * POST /api/leave/:id/review
  */
-router.post('/:id/review', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/review', requirePermission('manageLeaves', 'manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.userId || (req.user as any)?.id || 'unknown';
     const userTag = req.user?.username || 'Reviewer';

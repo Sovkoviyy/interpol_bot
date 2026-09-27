@@ -17,7 +17,8 @@ import {
   Coins,
   Settings2,
   CheckCircle2,
-  Shield
+  Shield,
+  Target
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -111,6 +112,17 @@ export const PERMISSION_MODULES: PermModule[] = [
     ],
   },
   {
+    id: 'tier',
+    name: 'Разбор откатов и Тир система',
+    icon: Target,
+    description: 'Проверка видео-откатов с мероприятий, закрытие тикетов',
+    functions: [
+      { key: 'tier.review', name: 'Проверка откатов с МП', desc: 'Одобрение и отклонение видео-отчетов участников' },
+      { key: 'tier.tickets', name: 'Управление тикетами', desc: 'Закрытие и удаление тикетов на проверку стрельбы' },
+      { key: 'tier.config', name: 'Настройка тир системы', desc: 'Привязка каналов и роли проверяющего' },
+    ],
+  },
+  {
     id: 'system',
     name: 'Система и Администрирование',
     icon: Settings2,
@@ -191,11 +203,17 @@ export const Roles: React.FC = () => {
       setSavingRoleId(permRecord.roleId);
       const roleObj = roles.find(r => r.id === permRecord.roleId);
 
-      // Map coarse permissions for backwards compatibility
+      // Map module permissions
       const mod = permRecord.modular || {};
-      const hasRecruit = Boolean(mod['recruitment.claim'] || mod['recruitment.approve']);
-      const hasEvents = Boolean(mod['events.create'] || mod['events.kick']);
-      const hasSettings = Boolean(mod['settings.rbac'] || mod['settings.logs']);
+      const hasRecruit = Boolean(mod['recruitment.claim'] || mod['recruitment.interview'] || mod['recruitment.approve'] || mod['recruitment.reject'] || mod['recruitment.deploy']);
+      const hasAcademy = Boolean(mod['academy.reviewReports'] || mod['academy.addPenalty'] || mod['academy.removePenalty'] || mod['academy.promote'] || mod['academy.config']);
+      const hasLeaves = Boolean(mod['leave.approve'] || mod['leave.reject'] || mod['leave.deploy'] || mod['leave.viewLogs']);
+      const hasEvents = Boolean(mod['events.create'] || mod['events.kick'] || mod['events.finish'] || mod['events.priorityConfig']);
+      const hasProfiles = Boolean(mod['profiles.editManual'] || mod['profiles.setMain'] || mod['profiles.managePenalties']);
+      const hasPayroll = Boolean(mod['payroll.calculate'] || mod['payroll.export'] || mod['payroll.configRates']);
+      const hasTier = Boolean(mod['tier.review'] || mod['tier.tickets'] || mod['tier.config']);
+      const hasSettings = Boolean(mod['settings.rbac'] || mod['settings.logs'] || mod['settings.botMessages']);
+      const hasLogs = Boolean(mod['settings.logs'] || mod['leave.viewLogs']);
 
       await api.post('/rbac', {
         roleId: permRecord.roleId,
@@ -203,6 +221,9 @@ export const Roles: React.FC = () => {
         manageSettings: hasSettings,
         manageRecruiting: hasRecruit,
         manageEvents: hasEvents,
+        viewLogs: hasLogs,
+        manageAcademy: hasAcademy,
+        manageTier: hasTier,
         modular: mod,
       });
 
@@ -227,20 +248,17 @@ export const Roles: React.FC = () => {
     const roleObj = roles.find((r) => r.id === selectedRoleToAdd);
 
     try {
-      const defaultModular: Record<string, boolean> = {
-        'recruitment.claim': true,
-        'recruitment.interview': true,
-        'recruitment.approve': true,
-        'academy.reviewReports': true,
-        'events.create': true,
-      };
+      const defaultModular: Record<string, boolean> = {};
 
       await api.post('/rbac', {
         roleId: selectedRoleToAdd,
         roleName: roleObj?.name || 'Unknown',
         manageSettings: false,
-        manageRecruiting: true,
-        manageEvents: true,
+        manageRecruiting: false,
+        manageEvents: false,
+        viewLogs: false,
+        manageAcademy: false,
+        manageTier: false,
         modular: defaultModular,
       });
 

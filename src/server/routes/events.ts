@@ -13,7 +13,7 @@ import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 export const eventsRouter = Router();
 
 // Get event settings (priority role, min rank, and role hierarchy)
-eventsRouter.get('/config', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+eventsRouter.get('/config', requireAuth, requirePermission('manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const guildConfig = await prisma.guildConfig.findUnique({
@@ -68,7 +68,7 @@ eventsRouter.post('/config', requireAuth, requirePermission('manageEvents'), asy
 });
 
 // Get remembered default channels and roles
-eventsRouter.get('/defaults', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+eventsRouter.get('/defaults', requireAuth, requirePermission('manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
   const guildConfig = await prisma.guildConfig.findUnique({
     where: { guildId },
@@ -82,7 +82,7 @@ eventsRouter.get('/defaults', requireAuth, async (req: AuthenticatedRequest, res
 });
 
 // Get list of events
-eventsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+eventsRouter.get('/', requireAuth, requirePermission('manageEvents', 'manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
   const status = req.query.status as string;
 

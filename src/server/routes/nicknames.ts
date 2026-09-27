@@ -13,7 +13,7 @@ nicknamesRouter.use(requireAuth);
  * GET /api/nicknames/config
  * Get configuration, role bindings, and discord roles
  */
-nicknamesRouter.get('/config', async (req: AuthenticatedRequest, res: Response) => {
+nicknamesRouter.get('/config', requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const guildId = resolveGuildId(req);
     const config = await NicknameService.getConfig(guildId);

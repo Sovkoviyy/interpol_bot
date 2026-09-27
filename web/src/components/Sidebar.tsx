@@ -31,11 +31,31 @@ interface SidebarProps {
     manageEvents: boolean;
     viewLogs: boolean;
     manageAcademy?: boolean;
+    manageLeaves?: boolean;
+    manageProfiles?: boolean;
+    manageTier?: boolean;
+    managePayroll?: boolean;
+    modular?: Record<string, boolean>;
   };
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
-  const isAdmin = userPermissions?.isAdmin;
+  const isAdmin = Boolean(userPermissions?.isAdmin);
+  const p = userPermissions;
+  const mod = userPermissions?.modular || {};
+
+  const canSettings = Boolean(isAdmin || p?.manageSettings || mod['settings.rbac'] || mod['settings.botMessages'] || mod['settings.logs']);
+  const canRecruit = Boolean(isAdmin || canSettings || p?.manageRecruiting || Object.keys(mod).some(k => k.startsWith('recruitment.') && mod[k]));
+  const canAcademy = Boolean(isAdmin || canSettings || p?.manageAcademy || Object.keys(mod).some(k => k.startsWith('academy.') && mod[k]));
+  const canLeaves = Boolean(isAdmin || canSettings || p?.manageLeaves || Object.keys(mod).some(k => k.startsWith('leave.') && mod[k]));
+  const canEvents = Boolean(isAdmin || canSettings || p?.manageEvents || Object.keys(mod).some(k => k.startsWith('events.') && mod[k]));
+  const canProfiles = Boolean(isAdmin || canSettings || p?.manageProfiles || p?.manageRecruiting || Object.keys(mod).some(k => k.startsWith('profiles.') && mod[k]));
+  const canPayroll = Boolean(isAdmin || canSettings || p?.managePayroll || p?.manageRecruiting || Object.keys(mod).some(k => k.startsWith('payroll.') && mod[k]));
+  const canTier = Boolean(isAdmin || canSettings || p?.manageTier || canEvents || Object.keys(mod).some(k => k.startsWith('tier.') && mod[k]));
+  const canLogs = Boolean(isAdmin || canSettings || p?.viewLogs || mod['settings.logs'] || mod['leave.viewLogs']);
+  const canRoles = Boolean(isAdmin || p?.manageSettings || mod['settings.rbac']);
+  const canBotMessages = Boolean(isAdmin || p?.manageSettings || mod['settings.botMessages']);
+  const canMembers = Boolean(isAdmin || canSettings || canProfiles || canRecruit || canAcademy);
 
   const categories = [
     {
@@ -48,36 +68,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
     {
       title: 'Состав & Рекрутинг',
       links: [
-        { to: '/members', label: 'Участники сервера', icon: Users, visible: true },
-        { to: '/profiles', label: 'Профили & Статики', icon: IdCard, visible: true },
-        { to: '/nicknames', label: 'Авто-Ники & Бинды', icon: AtSign, visible: true },
-        { to: '/academy', label: 'Академия (1-2 ранг)', icon: GraduationCap, visible: true },
-        { to: '/recruitment', label: 'Заявки в семью', icon: UserPlus, visible: isAdmin || userPermissions?.manageRecruiting },
-        { to: '/leaves', label: 'Отпуска & Неактив', icon: CalendarOff, visible: true },
-        { to: '/payroll', label: 'Выплаты рекрутерам', icon: Coins, visible: isAdmin || userPermissions?.manageRecruiting },
+        { to: '/members', label: 'Участники сервера', icon: Users, visible: canMembers },
+        { to: '/profiles', label: 'Профили & Статики', icon: IdCard, visible: canProfiles },
+        { to: '/nicknames', label: 'Авто-Ники & Бинды', icon: AtSign, visible: canSettings },
+        { to: '/academy', label: 'Академия (1-2 ранг)', icon: GraduationCap, visible: canAcademy },
+        { to: '/recruitment', label: 'Заявки в семью', icon: UserPlus, visible: canRecruit },
+        { to: '/leaves', label: 'Отпуска & Неактив', icon: CalendarOff, visible: canLeaves },
+        { to: '/payroll', label: 'Выплаты рекрутерам', icon: Coins, visible: canPayroll },
       ],
     },
     {
       title: 'Мероприятия & Откаты',
       links: [
-        { to: '/tier', label: 'Откаты с МП', icon: Target, visible: true },
-        { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: true },
+        { to: '/tier', label: 'Откаты с МП', icon: Target, visible: canTier },
+        { to: '/events', label: 'Сборы на МП', icon: CalendarDays, visible: canEvents },
       ],
     },
     {
       title: 'Безопасность',
       links: [
-        { to: '/blacklist', label: 'Черный список (ЧС)', icon: UserX, visible: isAdmin || userPermissions?.manageRecruiting },
-        { to: '/logs', label: 'Аудит сервера', icon: ScrollText, visible: isAdmin || userPermissions?.viewLogs },
-        { to: '/roles', label: 'Уровни доступа', icon: ShieldCheck, visible: isAdmin || userPermissions?.manageSettings },
+        { to: '/blacklist', label: 'Черный список (ЧС)', icon: UserX, visible: canRecruit || canSettings },
+        { to: '/logs', label: 'Аудит сервера', icon: ScrollText, visible: canLogs },
+        { to: '/roles', label: 'Уровни доступа', icon: ShieldCheck, visible: canRoles },
       ],
     },
     {
       title: 'Настройки & Бот',
       links: [
-        { to: '/setup', label: 'Каналы & Сервер', icon: FolderTree, visible: isAdmin || userPermissions?.manageSettings },
-        { to: '/messages', label: 'Сообщения бота', icon: MessageSquare, visible: isAdmin || userPermissions?.manageSettings },
-        { to: '/embeds', label: 'Embed Генератор', icon: Sparkles, visible: isAdmin || userPermissions?.manageSettings },
+        { to: '/setup', label: 'Каналы & Сервер', icon: FolderTree, visible: canSettings },
+        { to: '/messages', label: 'Сообщения бота', icon: MessageSquare, visible: canBotMessages },
+        { to: '/embeds', label: 'Embed Генератор', icon: Sparkles, visible: canBotMessages },
       ],
     },
   ];
