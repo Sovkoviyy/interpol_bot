@@ -1,6 +1,7 @@
 import config from './config';
 import { startBot } from './bot';
 import { startServer } from './server/server';
+import { ensureDatabaseSchema } from './database/ensureSchema';
 
 // Global Process Resilience Handlers
 process.on('unhandledRejection', (reason: any, promise) => {
@@ -19,6 +20,9 @@ async function main() {
   if (!config.isDev && config.server.jwtSecret.includes('default_development')) {
     console.warn('⚠️ [SECURITY WARNING] Default JWT_SECRET is active in production mode! Set JWT_SECRET in .env for security.');
   }
+
+  // 0. Ensure Database Schema is Up-to-Date (Auto-migrates SQLite columns)
+  await ensureDatabaseSchema();
 
   // 1. Start Web Dashboard Server
   startServer();

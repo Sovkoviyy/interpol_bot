@@ -1,21 +1,42 @@
 import prisma from '../../../database/client';
 import { AuditLogger } from '../logging/auditLogger';
+import { ensureDatabaseSchema } from '../../../database/ensureSchema';
 
 export class PayrollService {
   static async getConfig(guildId: string) {
-    return await prisma.recruiterSalaryConfig.upsert({
-      where: { guildId },
-      update: {},
-      create: {
-        guildId,
-        payPerCandidateAccepted: 10000,
-        payPerCandidateRejected: 3000,
-        payPerApprovedReport: 3000,
-        payPerRejectedReport: 1500,
-        payPerPromotion: 15000,
-        currencySymbol: '$',
-      },
-    });
+    try {
+      return await prisma.recruiterSalaryConfig.upsert({
+        where: { guildId },
+        update: {},
+        create: {
+          guildId,
+          payPerCandidateAccepted: 10000,
+          payPerCandidateRejected: 3000,
+          payPerApprovedReport: 3000,
+          payPerRejectedReport: 1500,
+          payPerPromotion: 15000,
+          currencySymbol: '$',
+        },
+      });
+    } catch (err: any) {
+      if (err?.message?.includes('lastResetAt') || err?.message?.includes('does not exist')) {
+        await ensureDatabaseSchema();
+        return await prisma.recruiterSalaryConfig.upsert({
+          where: { guildId },
+          update: {},
+          create: {
+            guildId,
+            payPerCandidateAccepted: 10000,
+            payPerCandidateRejected: 3000,
+            payPerApprovedReport: 3000,
+            payPerRejectedReport: 1500,
+            payPerPromotion: 15000,
+            currencySymbol: '$',
+          },
+        });
+      }
+      throw err;
+    }
   }
 
   static async saveConfig(guildId: string, data: any) {
@@ -33,26 +54,53 @@ export class PayrollService {
     const promotion = parseRate(payload.payPerPromotion, 15000);
     const currency = typeof payload.currencySymbol === 'string' && payload.currencySymbol.trim() ? payload.currencySymbol.trim() : '$';
 
-    return await prisma.recruiterSalaryConfig.upsert({
-      where: { guildId },
-      update: {
-        payPerCandidateAccepted: accepted,
-        payPerCandidateRejected: rejected,
-        payPerApprovedReport: approvedRep,
-        payPerRejectedReport: rejectedRep,
-        payPerPromotion: promotion,
-        currencySymbol: currency,
-      },
-      create: {
-        guildId,
-        payPerCandidateAccepted: accepted,
-        payPerCandidateRejected: rejected,
-        payPerApprovedReport: approvedRep,
-        payPerRejectedReport: rejectedRep,
-        payPerPromotion: promotion,
-        currencySymbol: currency,
-      },
-    });
+    try {
+      return await prisma.recruiterSalaryConfig.upsert({
+        where: { guildId },
+        update: {
+          payPerCandidateAccepted: accepted,
+          payPerCandidateRejected: rejected,
+          payPerApprovedReport: approvedRep,
+          payPerRejectedReport: rejectedRep,
+          payPerPromotion: promotion,
+          currencySymbol: currency,
+        },
+        create: {
+          guildId,
+          payPerCandidateAccepted: accepted,
+          payPerCandidateRejected: rejected,
+          payPerApprovedReport: approvedRep,
+          payPerRejectedReport: rejectedRep,
+          payPerPromotion: promotion,
+          currencySymbol: currency,
+        },
+      });
+    } catch (err: any) {
+      if (err?.message?.includes('lastResetAt') || err?.message?.includes('does not exist')) {
+        await ensureDatabaseSchema();
+        return await prisma.recruiterSalaryConfig.upsert({
+          where: { guildId },
+          update: {
+            payPerCandidateAccepted: accepted,
+            payPerCandidateRejected: rejected,
+            payPerApprovedReport: approvedRep,
+            payPerRejectedReport: rejectedRep,
+            payPerPromotion: promotion,
+            currencySymbol: currency,
+          },
+          create: {
+            guildId,
+            payPerCandidateAccepted: accepted,
+            payPerCandidateRejected: rejected,
+            payPerApprovedReport: approvedRep,
+            payPerRejectedReport: rejectedRep,
+            payPerPromotion: promotion,
+            currencySymbol: currency,
+          },
+        });
+      }
+      throw err;
+    }
   }
 
   /**
