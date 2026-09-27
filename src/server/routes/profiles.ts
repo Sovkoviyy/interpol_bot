@@ -122,32 +122,24 @@ router.post('/manual', requirePermission('manageRecruiting'), async (req: Authen
     const cleanUserTag = userTag?.trim() || `User_${cleanUserId.slice(-4)}`;
 
     // Ensure profile exists
-    let profile = await prisma.userProfile.findUnique({
+    let profile = await prisma.userProfile.upsert({
       where: { guildId_userId: { guildId, userId: cleanUserId } },
+      create: {
+        guildId,
+        userId: cleanUserId,
+        userTag: cleanUserTag,
+        rank: parseInt(rank, 10) || 1,
+        status: status || 'ACTIVE',
+        notes: notes || null,
+      },
+      update: {
+        userTag: cleanUserTag,
+        ...(rank !== undefined ? { rank: parseInt(rank, 10) } : {}),
+        ...(status ? { status } : {}),
+        ...(notes !== undefined ? { notes } : {}),
+      },
     });
 
-    if (!profile) {
-      profile = await prisma.userProfile.create({
-        data: {
-          guildId,
-          userId: cleanUserId,
-          userTag: cleanUserTag,
-          rank: parseInt(rank, 10) || 1,
-          status: status || 'ACTIVE',
-          notes: notes || null,
-        },
-      });
-    } else {
-      profile = await prisma.userProfile.update({
-        where: { id: profile.id },
-        data: {
-          userTag: cleanUserTag,
-          rank: rank ? parseInt(rank, 10) : profile.rank,
-          status: status || profile.status,
-          notes: notes !== undefined ? notes : profile.notes,
-        },
-      });
-    }
 
     // Sync characters if provided
     let updatedProfile = profile;

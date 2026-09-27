@@ -46,7 +46,12 @@ class ExtendedClient extends Client {
     });
 
     this.rest.on('rateLimited', (info) => {
-      console.warn(`⚠️ [Discord RateLimit]: ${info.method} ${info.route} (timeout: ${info.timeToReset}ms)`);
+      const waitSec = (info.timeToReset / 1000).toFixed(1);
+      if (info.timeToReset > 15000) {
+        console.warn(`⚠️ [Discord RateLimit Queue]: ${info.method} ${info.route} (REST queue waiting ${waitSec}s for bucket reset)`);
+      } else {
+        console.log(`ℹ️ [Discord Queue]: ${info.method} ${info.route} (auto-queued for ${waitSec}s, will retry automatically)`);
+      }
     });
   }
 }

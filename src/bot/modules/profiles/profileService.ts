@@ -21,30 +21,17 @@ export class ProfileService {
    * Get or create a user profile for a guild member
    */
   static async getOrCreateProfile(guildId: string, userId: string, userTag?: string) {
-    let profile = await prisma.userProfile.findUnique({
+    return await prisma.userProfile.upsert({
       where: { guildId_userId: { guildId, userId } },
+      update: userTag ? { userTag } : {},
+      create: {
+        guildId,
+        userId,
+        userTag: userTag || 'User',
+        rank: 1,
+      },
       include: { characters: { orderBy: { createdAt: 'asc' } } },
     });
-
-    if (!profile) {
-      profile = await prisma.userProfile.create({
-        data: {
-          guildId,
-          userId,
-          userTag: userTag || 'User',
-          rank: 1,
-        },
-        include: { characters: true },
-      });
-    } else if (userTag && profile.userTag !== userTag) {
-      profile = await prisma.userProfile.update({
-        where: { id: profile.id },
-        data: { userTag },
-        include: { characters: { orderBy: { createdAt: 'asc' } } },
-      });
-    }
-
-    return profile;
   }
 
   /**

@@ -14,21 +14,17 @@ export class NicknameService {
    * Get or create nickname configuration for a guild
    */
   public static async getConfig(guildId: string) {
-    let cfg = await prisma.nicknameConfig.findUnique({
+    return await prisma.nicknameConfig.upsert({
       where: { guildId },
+      update: {},
+      create: {
+        guildId,
+        enabled: true,
+        defaultFormat: '{prefix} | {name} | {static}',
+        defaultPrefix: '1',
+        fallbackFormat: '{name} | {static}',
+      },
     });
-    if (!cfg) {
-      cfg = await prisma.nicknameConfig.create({
-        data: {
-          guildId,
-          enabled: true,
-          defaultFormat: '{prefix} | {name} | {static}',
-          defaultPrefix: '1',
-          fallbackFormat: '{name} | {static}',
-        },
-      });
-    }
-    return cfg;
   }
 
   /**

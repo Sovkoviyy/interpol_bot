@@ -15,27 +15,23 @@ export const botMessagesRouter = Router();
 botMessagesRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const guildId = resolveGuildId(req);
 
-  let cfg = await prisma.botMessagesConfig.findUnique({
+  const cfg = await prisma.botMessagesConfig.upsert({
     where: { guildId },
+    update: {},
+    create: {
+      guildId,
+      welcomeEnabled: false,
+      welcomeTitle: 'Добро пожаловать в семью, {user}!',
+      welcomeMessage: 'Рады приветствовать тебя на нашем сервере {guild}! Ознакомься с правилами и подай заявку в семью.',
+      welcomeEmbedColor: '#EC4899',
+      leaveEnabled: false,
+      leaveMessage: '{user} покинул наш сервер.',
+      ticketGreetingTitle: 'Заявка в семью INTERPOL',
+      ticketGreetingDesc: 'Приветствуем, {user}!\nВаша анкета получена. Ожидайте рассмотрения рекрутерами семьи.\nНе забудьте подготовить скриншоты статистики.',
+      botStatusText: 'Majestic RP • /event',
+      botStatusActivity: 'PLAYING',
+    },
   });
-
-  if (!cfg) {
-    cfg = await prisma.botMessagesConfig.create({
-      data: {
-        guildId,
-        welcomeEnabled: false,
-        welcomeTitle: 'Добро пожаловать в семью, {user}!',
-        welcomeMessage: 'Рады приветствовать тебя на нашем сервере {guild}! Ознакомься с правилами и подай заявку в семью.',
-        welcomeEmbedColor: '#EC4899',
-        leaveEnabled: false,
-        leaveMessage: '{user} покинул наш сервер.',
-        ticketGreetingTitle: 'Заявка в семью INTERPOL',
-        ticketGreetingDesc: 'Приветствуем, {user}!\nВаша анкета получена. Ожидайте рассмотрения рекрутерами семьи.\nНе забудьте подготовить скриншоты статистики.',
-        botStatusText: 'Majestic RP • /event',
-        botStatusActivity: 'PLAYING',
-      },
-    });
-  }
 
   const templates = await prisma.customEmbedTemplate.findMany({
     where: { guildId },

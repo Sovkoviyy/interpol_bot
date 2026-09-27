@@ -25,21 +25,15 @@ export class AcademyService {
    * Get Academy configuration for guild
    */
   static async getConfig(guildId: string) {
-    let config = await prisma.academyConfig.findUnique({
+    return await prisma.academyConfig.upsert({
       where: { guildId },
+      update: {},
+      create: {
+        guildId,
+        requiredMpForRankUp: 10,
+        channelPrefix: 'academ-',
+      },
     });
-
-    if (!config) {
-      config = await prisma.academyConfig.create({
-        data: {
-          guildId,
-          requiredMpForRankUp: 10,
-          channelPrefix: 'academ-',
-        },
-      });
-    }
-
-    return config;
   }
 
   /**

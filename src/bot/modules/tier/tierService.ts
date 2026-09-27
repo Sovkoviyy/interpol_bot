@@ -31,16 +31,14 @@ export class TierService {
    * Get or create guild tier configuration
    */
   public static async getConfig(guildId: string) {
-    let config = await prisma.tierConfig.findUnique({ where: { guildId } });
-    if (!config) {
-      config = await prisma.tierConfig.create({
-        data: {
-          guildId,
-          enabled: true,
-        },
-      });
-    }
-    return config;
+    return await prisma.tierConfig.upsert({
+      where: { guildId },
+      update: {},
+      create: {
+        guildId,
+        enabled: true,
+      },
+    });
   }
 
   /**
@@ -382,6 +380,9 @@ export class TierService {
           embeds: [formEmbed],
           components: [submitRow],
         });
+
+        // Small delay between creating threads to respect Discord channel rate limits
+        await new Promise((resolve) => setTimeout(resolve, 350));
       }
 
       // Send DM notification to candidate

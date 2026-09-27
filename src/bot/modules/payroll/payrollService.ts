@@ -2,25 +2,19 @@ import prisma from '../../../database/client';
 
 export class PayrollService {
   static async getConfig(guildId: string) {
-    let config = await prisma.recruiterSalaryConfig.findUnique({
+    return await prisma.recruiterSalaryConfig.upsert({
       where: { guildId },
+      update: {},
+      create: {
+        guildId,
+        payPerCandidateAccepted: 10000,
+        payPerCandidateRejected: 3000,
+        payPerApprovedReport: 3000,
+        payPerRejectedReport: 1500,
+        payPerPromotion: 15000,
+        currencySymbol: '$',
+      },
     });
-
-    if (!config) {
-      config = await prisma.recruiterSalaryConfig.create({
-        data: {
-          guildId,
-          payPerCandidateAccepted: 10000,
-          payPerCandidateRejected: 3000,
-          payPerApprovedReport: 3000,
-          payPerRejectedReport: 1500,
-          payPerPromotion: 15000,
-          currencySymbol: '$',
-        },
-      });
-    }
-
-    return config;
   }
 
   static async saveConfig(guildId: string, data: any) {
