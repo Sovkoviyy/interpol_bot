@@ -1,74 +1,40 @@
 import { REST, Routes } from 'discord.js';
 import bot from '../client';
 import config from '../../config';
-import { recruitCommand } from './recruit';
-import { eventCommand } from './event';
-import { logsCommand } from './logs';
-import { profileCommand, setStaticCommand, topCommand, penaltyCommand } from './profile';
-import { academyCommand } from './academy';
-import { tierCommand } from './tier';
-import { clearChannelCommand } from './clearChannel';
 
 export function registerCommands() {
-  const commands = [
-    recruitCommand, 
-    eventCommand, 
-    logsCommand,
-    profileCommand,
-    setStaticCommand,
-    topCommand,
-    penaltyCommand,
-    academyCommand,
-    tierCommand,
-    clearChannelCommand,
-  ];
-
-  for (const cmd of commands) {
-    bot.commands.set(cmd.data.name, cmd);
-  }
-
-  console.log(`✅ [Commands] Registered ${commands.length} local slash commands`);
+  bot.commands.clear();
+  console.log('ℹ️ [Commands] Slash commands are disabled. Bot operates via interactive buttons and web dashboard.');
 }
 
-export async function deploySlashCommands() {
+/**
+ * Remove / clear any previously registered slash commands from Discord REST API
+ */
+export async function clearSlashCommands() {
   if (!config.discord.token || !config.discord.clientId) {
-    console.warn('⚠️ [DeployCommands] Skipping Discord REST command deployment: token or clientId missing in .env');
     return;
   }
-
-  const commandsJson = [
-    recruitCommand.data.toJSON(),
-    eventCommand.data.toJSON(),
-    logsCommand.data.toJSON(),
-    profileCommand.data.toJSON(),
-    setStaticCommand.data.toJSON(),
-    topCommand.data.toJSON(),
-    penaltyCommand.data.toJSON(),
-    academyCommand.data.toJSON(),
-    tierCommand.data.toJSON(),
-    clearChannelCommand.data.toJSON(),
-  ];
 
   const rest = new REST({ version: '10' }).setToken(config.discord.token);
 
   try {
-    console.log('🔄 [DeployCommands] Registering slash commands with Discord API...');
+    console.log('🔄 [Commands] Clearing slash commands from Discord API...');
     if (config.discord.guildId) {
-      // Guild-specific registration (instant update, perfect for family bot!)
       await rest.put(
         Routes.applicationGuildCommands(config.discord.clientId, config.discord.guildId),
-        { body: commandsJson }
-      );
-      console.log(`✅ [DeployCommands] Successfully registered commands for guild ${config.discord.guildId}`);
-    } else {
-      // Global registration
-      await rest.put(
-        Routes.applicationCommands(config.discord.clientId),
-        { body: commandsJson }
-      );
-      console.log('✅ [DeployCommands] Successfully registered global commands');
+        { body: [] }
+      ).catch(() => null);
+      console.log(`✅ [Commands] Cleared guild slash commands for ${config.discord.guildId}`);
     }
+
+    await rest.put(
+      Routes.applicationCommands(config.discord.clientId),
+      { body: [] }
+    ).catch(() => null);
+    console.log('✅ [Commands] Cleared global slash commands from Discord');
   } catch (error) {
-    console.error('❌ [DeployCommands] Failed to deploy slash commands:', error);
+    console.warn('ℹ️ [Commands] Note on clearing slash commands:', (error as any)?.message || error);
   }
 }
+
+export const deploySlashCommands = clearSlashCommands;

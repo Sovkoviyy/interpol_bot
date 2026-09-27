@@ -40,11 +40,12 @@ export function registerInteractionHandler() {
 
   bot.on(Events.InteractionCreate, async (interaction: Interaction) => {
     try {
-      // 1. Slash commands
+      // 1. Slash commands (disabled per configuration)
       if (interaction.isChatInputCommand()) {
-        const command = bot.commands.get(interaction.commandName);
-        if (!command) return;
-        await command.execute(interaction);
+        await interaction.reply({
+          content: 'ℹ️ Слэш-команды в боте отключены. Всё управление осуществляется через интерактивные кнопки в каналах сервера и веб-панель управления.',
+          ephemeral: true,
+        }).catch(() => null);
         return;
       }
 

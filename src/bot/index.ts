@@ -1,7 +1,8 @@
 import { Events, GuildChannel } from 'discord.js';
 import bot from './client';
 import config from '../config';
-import { registerCommands, deploySlashCommands } from './commands';
+import { registerCommands, clearSlashCommands } from './commands';
+import { handleClearChannelMessageCommand } from './commands/clearChannel';
 import { registerInteractionHandler } from './interactions/interactionHandler';
 import { initializeLoggingModule } from './modules/logging';
 import { EventScheduler } from './modules/events/eventScheduler';
@@ -20,14 +21,17 @@ export async function startBot() {
   registerEventMessageListener();
   initializeLoggingModule();
 
+  // Register prefix command listener for !clear_channel
+  bot.on(Events.MessageCreate, handleClearChannelMessageCommand);
+
   bot.once('ready', async () => {
     console.log(`🤖 [Bot Ready] Logged in as ${bot.user?.tag} (${bot.user?.id})!`);
     
     // Start background event scheduler
     EventScheduler.start();
 
-    // Deploy slash commands
-    await deploySlashCommands();
+    // Clear any slash commands from Discord API
+    await clearSlashCommands();
 
     // Initialize or sync guild config for connected guilds
     for (const [guildId, guild] of bot.guilds.cache) {
