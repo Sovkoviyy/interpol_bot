@@ -42,7 +42,29 @@ export const Leaves: React.FC = () => {
   const [timeoffDurationHours, setTimeoffDurationHours] = useState('2');
   const [timeoffDurationMinutes, setTimeoffDurationMinutes] = useState('0');
   const [leaveReason, setLeaveReason] = useState('');
+  const [proofUrl, setProofUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const renderReasonWithLinks = (text: string) => {
+    if (!text) return '—';
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) =>
+      urlRegex.test(part) ? (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-pink-400 hover:text-pink-300 underline font-medium break-all inline-flex items-center gap-1"
+        >
+          <span>{part.length > 50 ? `${part.slice(0, 47)}...` : part}</span>
+        </a>
+      ) : (
+        <span key={i} className="whitespace-pre-line">{part}</span>
+      )
+    );
+  };
 
   const fetchActive = async () => {
     try {
@@ -182,10 +204,14 @@ export const Leaves: React.FC = () => {
 
     try {
       setSubmitting(true);
+      const fullReason = proofUrl.trim()
+        ? `${leaveReason.trim()}\n\n📎 Материалы (скрин/видео): ${proofUrl.trim()}`
+        : leaveReason.trim();
+
       await api.post('/leave', {
         startDate,
         endDate,
-        reason: leaveReason,
+        reason: fullReason,
         type: createType,
       });
 
@@ -196,6 +222,7 @@ export const Leaves: React.FC = () => {
       });
       setShowCreateModal(false);
       setLeaveReason('');
+      setProofUrl('');
       loadData();
     } catch (err: any) {
       modal.alert({
@@ -419,7 +446,7 @@ export const Leaves: React.FC = () => {
 
                       <div className="mt-3 p-2.5 rounded-lg bg-[#0B0E14] text-[11px] text-slate-300 border border-[#1E232F]">
                         <span className="text-slate-500 block text-[10px] mb-0.5">Причина:</span>
-                        {leave.reason}
+                        {renderReasonWithLinks(leave.reason)}
                       </div>
                     </div>
 
@@ -505,9 +532,9 @@ export const Leaves: React.FC = () => {
                           </span>
                         </div>
 
-                        <p className="text-xs text-slate-400 pt-1">
-                          <strong className="text-slate-300">Причина:</strong> {leave.reason}
-                        </p>
+                        <div className="text-xs text-slate-400 pt-1">
+                          <strong className="text-slate-300">Причина:</strong> {renderReasonWithLinks(leave.reason)}
+                        </div>
 
                         {leave.status === 'REJECTED' && leave.rejectionReason && (
                           <p className="text-xs text-rose-400/90 bg-rose-500/10 p-2 rounded border border-rose-500/20">
@@ -769,6 +796,20 @@ export const Leaves: React.FC = () => {
                   placeholder="Сессия, работа, ремонт компьютера, личные дела..."
                   required
                   className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500 resize-none"
+                />
+              </div>
+
+              {/* Optional Proof Link */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Ссылка на скриншот / видео <span className="text-slate-500 text-[10px] font-normal">(опционально)</span>
+                </label>
+                <input
+                  type="url"
+                  value={proofUrl}
+                  onChange={(e) => setProofUrl(e.target.value)}
+                  placeholder="https://imgur.com/... или https://youtube.com/..."
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
                 />
               </div>
 

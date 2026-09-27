@@ -387,9 +387,17 @@ export function registerInteractionHandler() {
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true);
 
+          const proofInput = new TextInputBuilder()
+            .setCustomId('timeoff_proof')
+            .setLabel('Ссылка на скрин или видео (опционально)')
+            .setPlaceholder('https://imgur.com/... или https://youtube.com/...')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+
           modal.addComponents(
             new ActionRowBuilder<TextInputBuilder>().addComponents(durationInput),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput)
+            new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(proofInput)
           );
 
           await interaction.showModal(modal);
@@ -681,7 +689,18 @@ export function registerInteractionHandler() {
         if (customId === 'modal_request_timeoff') {
           await interaction.deferReply({ ephemeral: true });
           const rawDuration = interaction.fields.getTextInputValue('timeoff_duration').trim().toLowerCase();
-          const reason = interaction.fields.getTextInputValue('timeoff_reason');
+          const reason = interaction.fields.getTextInputValue('timeoff_reason').trim();
+          let proofUrl = '';
+          try {
+            proofUrl = interaction.fields.getTextInputValue('timeoff_proof')?.trim() || '';
+          } catch {}
+
+          if (proofUrl && !proofUrl.startsWith('http://') && !proofUrl.startsWith('https://')) {
+            await interaction.editReply({
+              content: '❌ Ссылка на скриншот или видео должна начинаться с `http://` или `https://` (или оставьте это поле пустым).'
+            });
+            return;
+          }
 
           let durationMinutes = 0;
           const hoursMatch = rawDuration.match(/(\d+)\s*(ч|час|часа|часов|h|hour|hours)/);
@@ -716,6 +735,10 @@ export function registerInteractionHandler() {
             return;
           }
 
+          const fullReason = proofUrl
+            ? `${reason}\n\n📎 **Материалы (скрин/видео):** ${proofUrl}`
+            : reason;
+
           try {
             const leave = await LeaveService.requestLeave(
               targetGuildId,
@@ -723,7 +746,7 @@ export function registerInteractionHandler() {
               interaction.user.tag,
               startDate,
               endDate,
-              reason,
+              fullReason,
               'TIMEOFF'
             );
 
@@ -746,9 +769,14 @@ export function registerInteractionHandler() {
                     days: durText,
                     startDate: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
                     endDate: endDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-                    reason,
+                    reason: fullReason,
                     guild: guild.name,
                   });
+
+                  const embed = EmbedBuilder.from(rendered.embed);
+                  if (proofUrl && /^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(proofUrl)) {
+                    embed.setImage(proofUrl);
+                  }
 
                   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
                     new ButtonBuilder()
@@ -761,9 +789,20 @@ export function registerInteractionHandler() {
                       .setStyle(ButtonStyle.Danger)
                   );
 
+                  if (proofUrl) {
+                    try {
+                      actionRow.addComponents(
+                        new ButtonBuilder()
+                          .setLabel('Смотреть материалы')
+                          .setStyle(ButtonStyle.Link)
+                          .setURL(proofUrl)
+                      );
+                    } catch {}
+                  }
+
                   const sentMsg = await leaveChannel.send({
                     content: rendered.content,
-                    embeds: [rendered.embed],
+                    embeds: [embed],
                     components: [actionRow],
                   }).catch(() => null);
 
