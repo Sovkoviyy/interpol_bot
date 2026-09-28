@@ -110,17 +110,19 @@ guildRouter.get('/members', requireAuth, requirePermission('manageProfiles', 'ma
   const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
 
   if (!guild) {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
-    return res.json({ members: [], total: 0, page, limit });
+    return res.json({ members: [], total: 0, page: 1, limit: 0 });
   }
 
-  let membersCollection = guild.members.cache;
   try {
-    membersCollection = await guild.members.fetch({ time: 8000 });
-  } catch {
-    membersCollection = guild.members.cache;
+    // If not all members are cached yet, fetch all members from the Discord guild
+    if (guild.members.cache.size < guild.memberCount) {
+      await guild.members.fetch().catch(() => null);
+    }
+  } catch (err) {
+    console.error('[Guild Members Fetch Error]:', err);
   }
+
+  const membersCollection = guild.members.cache;
 
   const [trackedInvites, profiles] = await Promise.all([
     prisma.memberInviteTracking.findMany({ where: { guildId } }).catch(() => []),
@@ -147,9 +149,10 @@ guildRouter.get('/members', requireAuth, requirePermission('manageProfiles', 'ma
   const allMembers = Array.from(membersCollection.values());
   const total = allMembers.length;
 
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
-  const paginatedMembers = allMembers.slice((page - 1) * limit, page * limit);
+  const hasPaging = req.query.page !== undefined || req.query.limit !== undefined;
+  const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+  const limit = Math.max(1, parseInt(req.query.limit as string, 10) || total || 1000);
+  const paginatedMembers = hasPaging ? allMembers.slice((page - 1) * limit, page * limit) : allMembers;
 
   const memberList = paginatedMembers.map(m => {
     const roles = m.roles.cache
