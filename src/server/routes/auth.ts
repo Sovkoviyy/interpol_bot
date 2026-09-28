@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import config from '../../config';
 import prisma from '../../database/client';
 import bot from '../../bot/client';
-import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
+import { requireAuth, AuthenticatedRequest, userSessionCache } from '../middlewares/auth';
 import { UserSessionData } from '../../shared/types';
 import { PermissionFlagsBits } from 'discord.js';
 
@@ -252,8 +252,20 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       permissions,
     };
 
-    // Sign JWT token
-    const token = jwt.sign(sessionData, config.server.jwtSecret, { expiresIn: '7d' });
+    // Store in-memory session to keep JWT under 150 bytes and eliminate Nginx 502 header overflow
+    userSessionCache.set(discordUser.id, sessionData);
+
+    const compactJwtPayload = {
+      userId: discordUser.id,
+      username: discordUser.username,
+      discriminator: discordUser.discriminator || '0',
+      avatar: discordUser.avatar,
+      guildId: guildId || '',
+      isAdmin,
+    };
+
+    // Sign ultra-compact JWT token
+    const token = jwt.sign(compactJwtPayload, config.server.jwtSecret, { expiresIn: '7d' });
 
     // Cache this code exchange for 60 seconds
     exchangedCodeCache.set(code, { token, timestamp: Date.now() });
@@ -302,6 +314,7 @@ authRouter.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Respon
   } catch (err) {
     // If fetching fails, fallback to session permissions
   }
+  userSessionCache.set(user.userId, user);
   return res.json({ user });
 });
 
