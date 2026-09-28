@@ -229,7 +229,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               exit={{ opacity: 0, scale: 0.94, y: 8 }}
               transition={{ type: 'spring', duration: 0.28, bounce: 0.12 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative z-10 w-full max-w-md bg-[#0B0E14] border border-pink-500/20 rounded-2xl p-6 shadow-2xl shadow-pink-950/40 overflow-hidden"
+              className="relative z-10 w-full max-w-md bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden"
             >
               {/* Ambient Pink Glow Header */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-600 via-rose-500 to-fuchsia-600" />
@@ -265,7 +265,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 <button
                   type="button"
                   onClick={() => handleConfirmClose(false)}
-                  className="px-4 py-2 rounded-xl bg-[#151922] hover:bg-[#1E232F] text-slate-300 hover:text-white font-medium text-xs transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-300 hover:text-white font-medium text-[13px] transition-all border border-dark-700"
                 >
                   {confirmState.options.cancelText}
                 </button>
@@ -273,7 +273,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                   type="button"
                   autoFocus
                   onClick={() => handleConfirmClose(true)}
-                  className={`px-5 py-2 rounded-xl text-white font-semibold text-xs shadow-lg transition-all ${
+                  className={`px-6 py-2.5 rounded-xl text-white font-semibold text-[13px] shadow-lg transition-all ${
                     confirmState.options.type === 'danger'
                       ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-red-600/25'
                       : confirmState.options.type === 'warning'
@@ -307,7 +307,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               exit={{ opacity: 0, scale: 0.94, y: 8 }}
               transition={{ type: 'spring', duration: 0.28, bounce: 0.12 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative z-10 w-full max-w-md bg-[#0B0E14] border border-pink-500/20 rounded-2xl p-6 shadow-2xl shadow-pink-950/40 overflow-hidden"
+              className="relative z-10 w-full max-w-md bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden"
             >
               <div className={`absolute top-0 left-0 right-0 h-1 ${
                 alertState.options.type === 'error'
@@ -350,7 +350,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                   type="button"
                   autoFocus
                   onClick={handleAlertClose}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-lg shadow-pink-600/25 transition-all"
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-[13px] shadow-lg shadow-pink-600/25 transition-all"
                 >
                   {alertState.options.okText}
                 </button>
@@ -379,7 +379,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               transition={{ type: 'spring', duration: 0.28, bounce: 0.12 }}
               onSubmit={handleFormSubmit}
               onClick={(e) => e.stopPropagation()}
-              className="relative z-10 w-full max-w-lg bg-[#0B0E14] border border-pink-500/20 rounded-2xl p-6 shadow-2xl shadow-pink-950/40 overflow-hidden space-y-4"
+              className="relative z-10 w-full max-w-lg bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden space-y-4"
             >
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-600 via-rose-500 to-fuchsia-600" />
 
@@ -414,7 +414,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                         ...prev,
                         values: { ...prev.values, [field.name]: e.target.value }
                       }))}
-                      className="w-full bg-[#151922] border border-[#1E232F] rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-colors"
+                      className="w-full bg-dark-850 border border-dark-700 rounded-xl px-4 py-2.5 text-[13px] text-white placeholder-slate-500 focus:outline-none focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/15 transition-all"
                     />
                   </div>
                 ))}
@@ -425,14 +425,14 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                   type="button"
                   disabled={formState.isSubmitting}
                   onClick={() => setFormState(prev => ({ ...prev, isOpen: false }))}
-                  className="px-4 py-2 rounded-xl bg-[#151922] hover:bg-[#1E232F] text-slate-300 hover:text-white font-medium text-xs transition-colors disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-300 hover:text-white font-medium text-[13px] transition-all border border-dark-700 disabled:opacity-50"
                 >
                   {formState.options.cancelText || 'Отмена'}
                 </button>
                 <button
                   type="submit"
                   disabled={formState.isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-xs shadow-lg shadow-pink-600/25 transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-semibold text-[13px] shadow-lg shadow-pink-600/25 transition-all disabled:opacity-50"
                 >
                   {formState.isSubmitting ? 'Обработка...' : (formState.options.submitText || 'Сохранить')}
                 </button>

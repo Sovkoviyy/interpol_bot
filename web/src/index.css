@@ -2,75 +2,135 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbars with pink touch */
+/* ============================================================
+   INTERPOL BOT — Global Design System v3
+   Premium dark UI with pink/rose accent palette
+   ============================================================ */
+
+/* ---------- Custom Scrollbars ---------- */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #060709;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1E232F;
+  background: linear-gradient(180deg, #2A303F 0%, #1E232F 100%);
   border-radius: 9999px;
-  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #EC4899;
+  background: linear-gradient(180deg, #EC4899 0%, #BE185D 100%);
 }
 
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1E232F transparent;
+}
+
+/* ---------- Base Styles ---------- */
 body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
   background-color: #060709;
   color: #F8FAFC;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
-/* Ambient Radial Background */
+/* ---------- Ambient Background ---------- */
 .bg-ambient-radial {
   background-image: 
-    radial-gradient(at 0% 0%, rgba(236, 72, 153, 0.05) 0px, transparent 45%),
-    radial-gradient(at 100% 0%, rgba(190, 24, 93, 0.06) 0px, transparent 40%),
-    radial-gradient(at 50% 100%, rgba(236, 72, 153, 0.03) 0px, transparent 50%);
+    radial-gradient(ellipse at 0% 0%, rgba(236, 72, 153, 0.07) 0px, transparent 50%),
+    radial-gradient(ellipse at 100% 0%, rgba(190, 24, 93, 0.05) 0px, transparent 45%),
+    radial-gradient(ellipse at 50% 100%, rgba(236, 72, 153, 0.04) 0px, transparent 55%);
 }
 
-/* Subtle glassmorphism */
+/* ---------- Glassmorphism Panels ---------- */
 .glass-panel {
-  background: rgba(11, 14, 20, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(30, 35, 47, 0.8);
+  background: rgba(11, 14, 20, 0.7);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  border: 1px solid rgba(30, 35, 47, 0.7);
 }
 
-/* Interactive Card Effects */
+.glass-panel-light {
+  background: rgba(21, 25, 34, 0.6);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid rgba(42, 48, 63, 0.5);
+}
+
+/* ---------- Interactive Card Effects ---------- */
 .card-interactive {
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.card-interactive::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(800px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(236, 72, 153, 0.06), transparent 40%);
+  pointer-events: none;
 }
 
 .card-interactive:hover {
   transform: translateY(-2px);
-  border-color: rgba(236, 72, 153, 0.35);
-  box-shadow: 0 12px 28px -8px rgba(236, 72, 153, 0.12);
+  border-color: rgba(236, 72, 153, 0.3);
+  box-shadow: 
+    0 8px 32px -8px rgba(236, 72, 153, 0.12),
+    0 0 0 1px rgba(236, 72, 153, 0.08);
 }
 
-/* Button micro-interactions */
+.card-interactive:hover::before {
+  opacity: 1;
+}
+
+/* ---------- Form Inputs ---------- */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+textarea,
+select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.12);
+}
+
+/* ---------- Button Micro-interactions ---------- */
 button {
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
 }
 
 button:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
-/* Keyframe animations */
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ---------- Keyframe Animations ---------- */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
@@ -91,7 +151,7 @@ button:active:not(:disabled) {
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0) 0,
-    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0.04) 50%,
     rgba(255, 255, 255, 0) 100%
   );
   animation: shimmer 2s infinite;
@@ -100,27 +160,157 @@ button:active:not(:disabled) {
 @keyframes pulseGlow {
   0%, 100% {
     opacity: 1;
-    filter: drop-shadow(0 0 6px rgba(236, 72, 153, 0.6));
+    filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.5));
   }
   50% {
-    opacity: 0.6;
-    filter: drop-shadow(0 0 2px rgba(236, 72, 153, 0.2));
+    opacity: 0.7;
+    filter: drop-shadow(0 0 3px rgba(236, 72, 153, 0.2));
   }
 }
 
 .animate-pulse-glow {
-  animation: pulseGlow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: pulseGlow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes floatSlow {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-5px);
-  }
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
 }
 
 .animate-float {
   animation: floatSlow 4s ease-in-out infinite;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out forwards;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-slide-down {
+  animation: slideDown 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes skeleton {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #151922 25%, #1E232F 50%, #151922 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.8s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ---------- Progress Bar ---------- */
+.progress-bar {
+  background: linear-gradient(90deg, #EC4899, #F472B6, #EC4899);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+  border-radius: 9999px;
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---------- Status Indicators ---------- */
+@keyframes statusPulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  50% { 
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+  }
+}
+
+.status-online {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+/* ---------- Table Styles ---------- */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+tbody tr:hover {
+  background-color: rgba(21, 25, 34, 0.5);
+}
+
+/* ---------- Badge Styles ---------- */
+.badge {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider;
+}
+
+.badge-pink {
+  @apply bg-pink-500/15 text-pink-400 border border-pink-500/25;
+}
+
+.badge-green {
+  @apply bg-emerald-500/15 text-emerald-400 border border-emerald-500/25;
+}
+
+.badge-amber {
+  @apply bg-amber-500/15 text-amber-400 border border-amber-500/25;
+}
+
+.badge-red {
+  @apply bg-red-500/15 text-red-400 border border-red-500/25;
+}
+
+.badge-slate {
+  @apply bg-slate-500/15 text-slate-400 border border-slate-500/25;
+}
+
+/* ---------- Tooltip Style ---------- */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.95);
+  padding: 4px 10px;
+  background: #1E232F;
+  border: 1px solid #2A303F;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 100;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }

@@ -14,7 +14,6 @@ import {
   Sparkles,
   GraduationCap,
   Coins,
-  ShieldAlert,
   CalendarOff,
   IdCard,
   UserX,
@@ -103,62 +102,68 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
   ];
 
   return (
-    <aside className="w-64 bg-[#0B0E14] border-r border-[#1E232F] flex flex-col justify-between flex-shrink-0 h-screen sticky top-0 z-30 select-none overflow-hidden">
+    <aside className="w-64 bg-dark-900/95 backdrop-blur-xl border-r border-dark-700/60 flex flex-col justify-between flex-shrink-0 h-screen sticky top-0 z-30 select-none overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Brand Header */}
-        <div className="h-16 flex items-center px-6 border-b border-[#1E232F] gap-3 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-pink-600 via-rose-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
-            <Flame className="w-5 h-5 text-white" />
+        <div className="h-16 flex items-center px-5 border-b border-dark-700/60 gap-3 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-pink-500 via-rose-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-pink-500/25 ring-1 ring-white/10">
+            <Flame className="w-5 h-5 text-white drop-shadow-sm" />
           </div>
           <div>
-            <h1 className="font-bold text-base tracking-wide bg-gradient-to-r from-white via-pink-100 to-pink-300 bg-clip-text text-transparent">
-              INTERPOL BOT
+            <h1 className="font-bold text-[15px] tracking-wide bg-gradient-to-r from-white via-pink-100 to-pink-300 bg-clip-text text-transparent leading-tight">
+              INTERPOL
             </h1>
-            <p className="text-[10px] text-slate-400 font-medium tracking-wide">Панель управления</p>
+            <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Панель управления</p>
           </div>
         </div>
 
         {/* Categorized Navigation */}
-        <nav className="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
+        <nav className="px-3 py-4 space-y-5 overflow-y-auto flex-1">
           {categories.map((category) => {
             const visibleLinks = category.links.filter((l) => l.visible);
             if (visibleLinks.length === 0) return null;
 
             return (
-              <div key={category.title} className="space-y-1">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-1">
+              <div key={category.title}>
+                <div className="text-[10px] font-bold text-slate-500/80 uppercase tracking-[0.12em] px-3 mb-2">
                   {category.title}
                 </div>
-                {visibleLinks.map((link) => {
-                  const Icon = link.icon;
-                  return (
-                    <NavLink
-                      key={link.to}
-                      to={link.to}
-                      className={({ isActive }) =>
-                        `relative flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150 group ${
-                          isActive
-                            ? 'text-pink-400 font-semibold'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-[#151922]'
-                        }`
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && (
-                            <motion.div
-                              layoutId="activeSidebarIndicator"
-                              className="absolute inset-0 bg-pink-500/10 border border-pink-500/30 rounded-xl shadow-pink-sm"
-                              transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                            />
-                          )}
-                          <Icon className={`w-4 h-4 shrink-0 relative z-10 transition-transform duration-150 group-hover:scale-110 ${isActive ? 'text-pink-400' : 'text-slate-400 group-hover:text-pink-400'}`} />
-                          <span className="truncate relative z-10">{link.label}</span>
-                        </>
-                      )}
-                    </NavLink>
-                  );
-                })}
+                <div className="space-y-0.5">
+                  {visibleLinks.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <NavLink
+                        key={link.to}
+                        to={link.to}
+                        className={({ isActive }) =>
+                          `relative flex items-center gap-2.5 px-3 py-[7px] rounded-xl text-[13px] font-medium transition-all duration-150 group ${
+                            isActive
+                              ? 'text-white font-semibold'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-dark-800/70'
+                          }`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            {isActive && (
+                              <motion.div
+                                layoutId="activeSidebarIndicator"
+                                className="absolute inset-0 bg-gradient-to-r from-pink-500/15 to-pink-500/5 border border-pink-500/25 rounded-xl"
+                                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                              />
+                            )}
+                            <Icon className={`w-[16px] h-[16px] shrink-0 relative z-10 transition-all duration-150 ${
+                              isActive 
+                                ? 'text-pink-400 drop-shadow-[0_0_6px_rgba(236,72,153,0.4)]' 
+                                : 'text-slate-500 group-hover:text-pink-400/80'
+                            }`} />
+                            <span className="truncate relative z-10">{link.label}</span>
+                          </>
+                        )}
+                      </NavLink>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
@@ -166,15 +171,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
       </div>
 
       {/* Footer Info */}
-      <div className="p-3 border-t border-[#1E232F] text-xs text-slate-400 shrink-0 space-y-2">
-
+      <div className="p-4 border-t border-dark-700/60 shrink-0">
         <div className="flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 text-[11px]">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="inline-flex items-center gap-2 text-[11px] text-slate-400">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
             Бот онлайн
           </span>
-          <span className="text-[10px] bg-pink-500/20 text-pink-400 font-mono px-2 py-0.5 rounded border border-pink-500/30">
-            v2.0.0
+          <span className="text-[10px] bg-gradient-to-r from-pink-500/15 to-rose-500/15 text-pink-400 font-mono px-2.5 py-0.5 rounded-lg border border-pink-500/20 font-semibold tracking-wide">
+            v3.0
           </span>
         </div>
       </div>

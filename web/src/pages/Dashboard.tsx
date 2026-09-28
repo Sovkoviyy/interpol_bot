@@ -75,24 +75,30 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Top Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-pink-950/40 via-[#151921] to-[#0B0E14] border border-pink-500/20 p-8 shadow-lg shadow-pink-950/10">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-pink-950/50 via-dark-800 to-dark-900 border border-pink-500/15 p-8 shadow-card">
+        {/* Decorative grid */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }}></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/5 rounded-full blur-[80px] pointer-events-none"></div>
         <div className="relative z-10 max-w-2xl">
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-pink-500/10 text-pink-400 border border-pink-500/20 mb-4">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-pink-500/10 text-pink-400 border border-pink-500/20 mb-4 uppercase tracking-wider">
             <Shield className="w-3.5 h-3.5" />
             Панель управления семьи
           </span>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">
             {stats?.guild?.name || 'Семья Interpol'}
           </h1>
-          <p className="text-slate-300 mt-2 text-sm leading-relaxed">
-            Централизованная система управления рекрутингом, сборами на мероприятия (дропы, цеха, капты) и полным аудитом действий Discord-сервера.
+          <p className="text-slate-400 mt-2.5 text-sm leading-relaxed max-w-xl">
+            Централизованная система управления рекрутингом, сборами на мероприятия и полным аудитом Discord-сервера.
           </p>
         </div>
       </div>
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group card-interactive">
+        <div className="bg-dark-800/80 border border-dark-700/60 rounded-2xl p-6 relative overflow-hidden group card-interactive">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Участников на сервере</span>
             <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center transition-transform group-hover:scale-110">
@@ -105,7 +111,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group card-interactive">
+        <div className="bg-dark-800/80 border border-dark-700/60 rounded-2xl p-6 relative overflow-hidden group card-interactive">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Заявки в ожидании</span>
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center transition-transform group-hover:scale-110">
@@ -121,7 +127,7 @@ export const Dashboard: React.FC = () => {
           </Link>
         </div>
 
-        <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 relative overflow-hidden group card-interactive">
+        <div className="bg-dark-800/80 border border-dark-700/60 rounded-2xl p-6 relative overflow-hidden group card-interactive">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Активные сборы на МП</span>
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center transition-transform group-hover:scale-110">
@@ -147,8 +153,8 @@ export const Dashboard: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Group 1: Состав & Рекрутинг */}
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
-            <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
+          <div className="bg-dark-800/80 border border-dark-700/60 rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-dark-700/60">
               <div className="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
                 <Users className="w-4 h-4" />
               </div>
@@ -158,23 +164,23 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <Link to="/profiles" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/profiles" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Профили & Статики</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/academy" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/academy" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Академия (1-2 ранг)</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/recruitment" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/recruitment" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Заявки в семью</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/leaves" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/leaves" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Отпуска & Неактив</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/payroll" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all sm:col-span-2">
+              <Link to="/payroll" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all sm:col-span-2">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Выплаты рекрутерам (Зарплаты)</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
@@ -182,8 +188,8 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Group 2: Мероприятия & Откаты */}
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
-            <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
+          <div className="bg-dark-800/80 border border-dark-700/60 rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-dark-700/60">
               <div className="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
                 <Target className="w-4 h-4" />
               </div>
@@ -193,14 +199,14 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <Link to="/tier" className="p-3 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex flex-col justify-between group transition-all">
+              <Link to="/tier" className="p-3 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex flex-col justify-between group transition-all">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-200 group-hover:text-pink-400">Откаты с МП</span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
                 </div>
                 <span className="text-[11px] text-slate-400 mt-1">Сдача видео (Капт, MCL, ВЗЗ, РП) и разбор ошибок</span>
               </Link>
-              <Link to="/events" className="p-3 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex flex-col justify-between group transition-all">
+              <Link to="/events" className="p-3 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex flex-col justify-between group transition-all">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-200 group-hover:text-pink-400">Сборы на МП</span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
@@ -211,8 +217,8 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Group 3: Безопасность */}
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
-            <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
+          <div className="bg-dark-800/80 border border-dark-700/60 rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-dark-700/60">
               <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
                 <Shield className="w-4 h-4" />
               </div>
@@ -222,15 +228,15 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-              <Link to="/blacklist" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/blacklist" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Черный список (ЧС)</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/logs" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/logs" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Аудит сервера</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/roles" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/roles" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Уровни доступа</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
@@ -238,8 +244,8 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Group 4: Настройки & Бот */}
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-3">
-            <div className="flex items-center gap-2.5 pb-2 border-b border-[#1E232F]">
+          <div className="bg-dark-800/80 border border-dark-700/60 rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-dark-700/60">
               <div className="w-8 h-8 rounded-lg bg-fuchsia-500/10 text-fuchsia-400 flex items-center justify-center">
                 <Tag className="w-4 h-4" />
               </div>
@@ -249,15 +255,15 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <Link to="/setup" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all sm:col-span-2">
+              <Link to="/setup" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all sm:col-span-2">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Инициализация каналов & Сервер</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/messages" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/messages" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Сообщения бота</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/embeds" className="p-2.5 rounded-xl bg-[#0B0E14] hover:bg-pink-500/10 border border-[#1E232F] hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/embeds" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Embed Генератор</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
@@ -267,13 +273,13 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Modules Toggles Box */}
-      <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6">
+      <div className="bg-dark-800/80 border border-dark-700/60 rounded-2xl p-6">
         <h2 className="text-base font-bold text-white mb-1">Мгновенные переключатели модулей</h2>
         <p className="text-xs text-slate-400 mb-6">Включение и отключение функций бота в реальном времени</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Recruitment Module */}
-          <div className="p-4 rounded-xl bg-[#1E232F]/50 border border-[#1E232F] flex items-center justify-between hover:border-pink-500/30 transition-all">
+          <div className="p-4 rounded-xl bg-dark-700/40 border border-dark-700/60 flex items-center justify-between hover:border-pink-500/30 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
                 <UserPlus className="w-5 h-5" />
@@ -297,7 +303,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Events Module */}
-          <div className="p-4 rounded-xl bg-[#1E232F]/50 border border-[#1E232F] flex items-center justify-between hover:border-pink-500/30 transition-all">
+          <div className="p-4 rounded-xl bg-dark-700/40 border border-dark-700/60 flex items-center justify-between hover:border-pink-500/30 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
                 <CalendarDays className="w-5 h-5" />
@@ -321,7 +327,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Logging Module */}
-          <div className="p-4 rounded-xl bg-[#1E232F]/50 border border-[#1E232F] flex items-center justify-between hover:border-pink-500/30 transition-all">
+          <div className="p-4 rounded-xl bg-dark-700/40 border border-dark-700/60 flex items-center justify-between hover:border-pink-500/30 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
                 <ScrollText className="w-5 h-5" />
@@ -345,7 +351,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Restore Roles Module */}
-          <div className="p-4 rounded-xl bg-[#1E232F]/50 border border-[#1E232F] flex items-center justify-between hover:border-pink-500/30 transition-all">
+          <div className="p-4 rounded-xl bg-dark-700/40 border border-dark-700/60 flex items-center justify-between hover:border-pink-500/30 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
                 <Shield className="w-5 h-5" />
@@ -369,7 +375,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Restore Nicknames Module */}
-          <div className="p-4 rounded-xl bg-[#1E232F]/50 border border-[#1E232F] flex items-center justify-between hover:border-pink-500/30 transition-all">
+          <div className="p-4 rounded-xl bg-dark-700/40 border border-dark-700/60 flex items-center justify-between hover:border-pink-500/30 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
                 <Tag className="w-5 h-5" />
