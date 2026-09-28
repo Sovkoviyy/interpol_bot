@@ -10,6 +10,23 @@ import { LeaveService } from '../leave/leaveService';
 export class EventScheduler {
   private static timer: NodeJS.Timeout | null = null;
   private static sentMilestones: Map<string, Set<number>> = new Map();
+  private static lastReminderMessageIds: Map<string, string> = new Map();
+
+  public static async deleteEventReminder(guildId: string, eventId: string, channelId?: string | null) {
+    const reminderId = this.lastReminderMessageIds.get(eventId);
+    if (!reminderId) return;
+    this.lastReminderMessageIds.delete(eventId);
+    try {
+      const guild = bot.guilds.cache.get(guildId);
+      if (guild && channelId) {
+        const channel = (guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null)) as TextChannel | null;
+        if (channel && channel.isTextBased()) {
+          const msg = await channel.messages.fetch(reminderId).catch(() => null);
+          if (msg) await msg.delete().catch(() => null);
+        }
+      }
+    } catch {}
+  }
 
   public static start() {
     if (this.timer) return;
@@ -77,6 +94,14 @@ export class EventScheduler {
           confirmedCount: event.participants.length,
           guild: guild.name,
         });
+
+        // Delete previous reminder message now that event officially starts
+        const lastReminderId = this.lastReminderMessageIds.get(event.id);
+        if (lastReminderId) {
+          const oldMsg = await channel.messages.fetch(lastReminderId).catch(() => null);
+          if (oldMsg) await oldMsg.delete().catch(() => null);
+          this.lastReminderMessageIds.delete(event.id);
+        }
 
         await channel.send({
           content: renderedStart.content,
@@ -181,10 +206,20 @@ export class EventScheduler {
             guild: guild.name,
           });
 
-          await channel.send({
+          // Delete previous reminder message before sending the next one to avoid chat flooding
+          const prevReminderId = this.lastReminderMessageIds.get(event.id);
+          if (prevReminderId) {
+            const oldMsg = await channel.messages.fetch(prevReminderId).catch(() => null);
+            if (oldMsg) await oldMsg.delete().catch(() => null);
+            this.lastReminderMessageIds.delete(event.id);
+          }
+
+          const sentReminder = await channel.send({
             content: renderedPing.content || pings || undefined,
             embeds: [renderedPing.embed],
           });
+
+          this.lastReminderMessageIds.set(event.id, sentReminder.id);
 
           // Dispatch DM reminder to confirmed participants
           if (confirmedList.length > 0) {
@@ -240,6 +275,7 @@ export class EventScheduler {
               await guild.channels.fetch(event.channelId).catch(() => null)) as TextChannel | null;
 
             if (channel && channel.isTextBased()) {
+              await this.deleteEventReminder(event.guildId, event.id, event.channelId);
               const msg = await channel.messages.fetch(event.messageId).catch(() => null);
               if (msg) {
                 await msg.delete().catch(() => null);

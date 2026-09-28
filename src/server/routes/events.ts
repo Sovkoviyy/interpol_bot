@@ -238,6 +238,9 @@ eventsRouter.post('/:id/status', requireAuth, requirePermission('manageEvents'),
 
   const guild = await getDiscordGuild(event.guildId);
   if (guild) {
+    const { EventScheduler } = await import('../../bot/modules/events/eventScheduler');
+    await EventScheduler.deleteEventReminder(event.guildId, event.id, event.channelId);
+
     await EventService.refreshAnnouncement(guild, event.id);
 
     const statusText = status === 'FINISHED' ? 'завершено' : 'отменено';
