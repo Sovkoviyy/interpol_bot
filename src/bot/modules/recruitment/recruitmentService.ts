@@ -1,4 +1,5 @@
 import {
+  MessageFlags,
   Guild,
   GuildMember,
   TextChannel,
@@ -183,13 +184,13 @@ export class RecruitmentService {
         if (interaction.deferred || interaction.replied) {
           await interaction.editReply({ content: errorContent }).catch(() => null);
         } else {
-          await interaction.reply({ content: errorContent, ephemeral: true }).catch(() => null);
+          await interaction.reply({ content: errorContent, flags: MessageFlags.Ephemeral }).catch(() => null);
         }
         return;
       }
 
       if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ ephemeral: true }).catch(() => null);
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => null);
       }
 
       // Check if recruitment is enabled
@@ -584,7 +585,7 @@ export class RecruitmentService {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content: userErrorMsg }).catch(() => null);
       } else {
-        await interaction.reply({ content: userErrorMsg, ephemeral: true }).catch(() => null);
+        await interaction.reply({ content: userErrorMsg, flags: MessageFlags.Ephemeral }).catch(() => null);
       }
     }
   }
@@ -628,7 +629,7 @@ export class RecruitmentService {
   public static async handleClaim(interaction: ButtonInteraction, applicationId: string): Promise<void> {
     const member = interaction.member as GuildMember;
     if (!(await this.isRecruiter(member))) {
-      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', ephemeral: true });
+      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -636,7 +637,7 @@ export class RecruitmentService {
       where: { id: applicationId },
     });
     if (!application) {
-      await interaction.reply({ content: '❌ Заявка не найдена в базе данных.', ephemeral: true });
+      await interaction.reply({ content: '❌ Заявка не найдена в базе данных.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -692,7 +693,7 @@ export class RecruitmentService {
   public static async handleInterview(interaction: ButtonInteraction, applicationId: string): Promise<void> {
     const member = interaction.member as GuildMember;
     if (!(await this.isRecruiter(member))) {
-      await interaction.reply({ content: 'У вас нет прав рекрутера для этого действия.', ephemeral: true });
+      await interaction.reply({ content: 'У вас нет прав рекрутера для этого действия.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -700,13 +701,13 @@ export class RecruitmentService {
       where: { id: applicationId },
     });
     if (!application) {
-      await interaction.reply({ content: 'Заявка не найдена в базе данных.', ephemeral: true });
+      await interaction.reply({ content: 'Заявка не найдена в базе данных.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     const guild = await this.resolveGuild(interaction);
     if (!guild) {
-      await interaction.reply({ content: 'Сервер Discord не найден.', ephemeral: true });
+      await interaction.reply({ content: 'Сервер Discord не найден.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -865,7 +866,7 @@ export class RecruitmentService {
   public static async handleApprove(interaction: ButtonInteraction, applicationId: string): Promise<void> {
     const member = interaction.member as GuildMember;
     if (!(await this.isRecruiter(member))) {
-      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', ephemeral: true });
+      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -873,7 +874,7 @@ export class RecruitmentService {
       where: { id: applicationId },
     });
     if (!application) {
-      await interaction.reply({ content: '❌ Заявка не найдена.', ephemeral: true });
+      await interaction.reply({ content: '❌ Заявка не найдена.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -1045,7 +1046,7 @@ export class RecruitmentService {
   public static async promptRejectModal(interaction: ButtonInteraction, applicationId: string): Promise<void> {
     const member = interaction.member as GuildMember;
     if (!(await this.isRecruiter(member))) {
-      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', ephemeral: true });
+      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', flags: MessageFlags.Ephemeral });
       return;
     }
 

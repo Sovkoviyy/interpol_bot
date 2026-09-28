@@ -1,7 +1,8 @@
 import { 
   SlashCommandBuilder, 
   ChatInputCommandInteraction, 
-  PermissionFlagsBits 
+  PermissionFlagsBits,
+  MessageFlags
 } from 'discord.js';
 import bot, { Command } from '../client';
 import { AuditLogger } from '../modules/logging/auditLogger';
@@ -22,7 +23,7 @@ export const logsCommand: Command = {
     const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
 
     if (sub === 'setup') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       if (!guild) {
         await interaction.editReply({ content: '❌ Сервер Discord не найден.' });

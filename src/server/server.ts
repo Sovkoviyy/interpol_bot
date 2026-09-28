@@ -25,9 +25,12 @@ import tierRouter from './routes/tier';
 export function createServer() {
   const app = express();
 
+  // Support reverse proxies (OpenResty, Nginx, Cloudflare)
+  app.set('trust proxy', 1);
+
   // Middlewares
   app.use(cors({
-    origin: [config.server.frontendUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: true,
     credentials: true,
   }));
   app.use(express.json());
@@ -89,8 +92,9 @@ export function createServer() {
 
 export function startServer() {
   const app = createServer();
-  const server = app.listen(config.server.port, () => {
-    console.log(`🌐 [Web Server] Web Dashboard running at http://localhost:${config.server.port}`);
+  const host = '0.0.0.0';
+  const server = app.listen(config.server.port, host, () => {
+    console.log(`🌐 [Web Server] Web Dashboard running on http://${host}:${config.server.port} (port ${config.server.port})`);
   });
   return server;
 }

@@ -1,4 +1,5 @@
 import {
+  MessageFlags,
   Guild,
   TextChannel,
   EmbedBuilder,
@@ -258,12 +259,12 @@ export class EventService {
     });
 
     if (!event) {
-      await interaction.reply({ content: '❌ Мероприятие не найдено.', ephemeral: true });
+      await interaction.reply({ content: '❌ Мероприятие не найдено.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (event.status !== 'ACTIVE') {
-      await interaction.reply({ content: '❌ Данный сбор уже завершен или отменен.', ephemeral: true });
+      await interaction.reply({ content: '❌ Данный сбор уже завершен или отменен.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -273,7 +274,7 @@ export class EventService {
     if (existing) {
       await interaction.reply({
         content: `ℹ️ Вы уже записаны в список (${existing.status === 'CONFIRMED' ? 'Основной состав' : 'Резерв'}).`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -339,7 +340,7 @@ export class EventService {
       content: assignedStatus === 'CONFIRMED' 
         ? `✅ Вы успешно записались в **основной состав** на **${event.title}**!${roleInfo}${demotedUserTag ? ` (по приоритету вытеснив @${demotedUserTag} в резерв)` : ''}` 
         : `🪑 Основной состав заполнен (${confirmedParticipants.length}/${limit}). Вы добавлены в **резерв**${roleInfo}. При освобождении места приоритетные участники переводятся в основу!`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
 
     if (guild) {
@@ -374,7 +375,7 @@ export class EventService {
     });
 
     if (!event) {
-      await interaction.reply({ content: '❌ Мероприятие не найдено.', ephemeral: true });
+      await interaction.reply({ content: '❌ Мероприятие не найдено.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -382,7 +383,7 @@ export class EventService {
     const existing = event.participants.find(p => p.userId === userId);
 
     if (!existing) {
-      await interaction.reply({ content: 'ℹ️ Вас нет в списке участников этого мероприятия.', ephemeral: true });
+      await interaction.reply({ content: 'ℹ️ Вас нет в списке участников этого мероприятия.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -434,7 +435,7 @@ export class EventService {
 
     await interaction.reply({
       content: `🚪 Вы отказались от участия в мероприятии.${promotedUserTag ? `\n⬆️ Из резерва на ваше место переведен: <@${promotedUserId}>.` : ''}`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
 
     const guild = await this.resolveGuild(interaction);
@@ -868,7 +869,7 @@ export class EventService {
     });
 
     if (!event) {
-      await interaction.reply({ content: '❌ Мероприятие не найдено.', ephemeral: true });
+      await interaction.reply({ content: '❌ Мероприятие не найдено.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -881,7 +882,7 @@ export class EventService {
     if (!isOwner && !isAdmin) {
       await interaction.reply({
         content: '❌ Только организатор мероприятия или администратор может управлять составом.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -896,7 +897,7 @@ export class EventService {
       await interaction.reply({
         content: 'ℹ️ В списке участников пока никого нет.',
         components: [finishBtnRow],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -952,7 +953,7 @@ export class EventService {
         `• Чтобы исключить — выберите во втором меню.\n` +
         `• Кнопка «Сбалансировать по ролям» автоматически распределит основу и резерв по иерархии ролей!`,
       components,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -975,7 +976,7 @@ export class EventService {
     }
 
     if (!targetUserId || !eventId) {
-      await interaction.reply({ content: '❌ Ошибка параметров перемещения.', ephemeral: true });
+      await interaction.reply({ content: '❌ Ошибка параметров перемещения.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -999,10 +1000,10 @@ export class EventService {
 
       await interaction.reply({
         content: `✅ <@${targetUserId}> успешно перемещён в **${statusName}**!${extra}`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      await interaction.reply({ content: `❌ Ошибка: ${err.message}`, ephemeral: true });
+      await interaction.reply({ content: `❌ Ошибка: ${err.message}`, flags: MessageFlags.Ephemeral });
     }
   }
 
@@ -1016,10 +1017,10 @@ export class EventService {
         content: `⚖️ Состав успешно сбалансирован по иерархии ролей!\n` +
           `👥 В основном составе: **${res.confirmedCount}** чел.\n` +
           `🪑 В резерве: **${res.reserveCount}** чел.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      await interaction.reply({ content: `❌ Ошибка балансировки: ${err.message}`, ephemeral: true });
+      await interaction.reply({ content: `❌ Ошибка балансировки: ${err.message}`, flags: MessageFlags.Ephemeral });
     }
   }
 
@@ -1029,7 +1030,7 @@ export class EventService {
   public static async handleAdminFinish(interaction: ButtonInteraction, eventId: string): Promise<void> {
     const event = await prisma.eventGathering.findUnique({ where: { id: eventId } });
     if (!event) {
-      await interaction.reply({ content: '❌ Мероприятие не найдено.', ephemeral: true });
+      await interaction.reply({ content: '❌ Мероприятие не найдено.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -1050,7 +1051,7 @@ export class EventService {
       await AuditLogger.sendLog(guild, 'EVENTS', finishEmbed);
     }
 
-    await interaction.reply({ content: '🏁 Сбор успешно завершен.', ephemeral: true });
+    await interaction.reply({ content: '🏁 Сбор успешно завершен.', flags: MessageFlags.Ephemeral });
   }
 
   /**
@@ -1080,13 +1081,13 @@ export class EventService {
     });
 
     if (!event) {
-      await interaction.reply({ content: '❌ Мероприятие не найдено.', ephemeral: true });
+      await interaction.reply({ content: '❌ Мероприятие не найдено.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     const targetParticipant = event.participants.find(p => p.userId === targetUserId);
     if (!targetParticipant) {
-      await interaction.reply({ content: '❌ Участник уже не в списке.', ephemeral: true });
+      await interaction.reply({ content: '❌ Участник уже не в списке.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -1128,7 +1129,7 @@ export class EventService {
 
     await interaction.reply({
       content: `✅ <@${targetUserId}> был исключен из состава.${promotedUserId ? `\n⬆️ Из резерва добавлен: <@${promotedUserId}>.` : ''}`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
 
     const guild = await this.resolveGuild(interaction);

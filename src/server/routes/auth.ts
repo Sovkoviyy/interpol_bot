@@ -52,49 +52,143 @@ export function buildUserPermissions(isAdmin: boolean, rolePermissions: any[]) {
   };
 }
 
+// Short-term cache for recently exchanged authorization codes (handles double-clicks, browser reloads, reverse proxy retries)
+const exchangedCodeCache = new Map<string, { token: string; timestamp: number }>();
+
+function cleanupCodeCache() {
+  const now = Date.now();
+  for (const [c, item] of exchangedCodeCache.entries()) {
+    if (now - item.timestamp > 60000) {
+      exchangedCodeCache.delete(c);
+    }
+  }
+}
+
+export function getBaseUrl(req: Request): string {
+  // If explicitly configured in .env and not default localhost:5173
+  if (
+    config.server.frontendUrl &&
+    !config.server.frontendUrl.includes('5173') &&
+    !config.server.frontendUrl.includes('localhost')
+  ) {
+    return config.server.frontendUrl.replace(/\/+$/, '');
+  }
+
+  const host = req.get('x-forwarded-host') || req.get('host');
+  const proto = (req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+
+  if (host) {
+    return `${proto}://${host}`.replace(/\/+$/, '');
+  }
+
+  return (config.server.frontendUrl || 'http://localhost:5173').replace(/\/+$/, '');
+}
+
+export function getEffectiveRedirectUri(req: Request): string {
+  const reqHost = req.get('x-forwarded-host') || req.get('host') || '';
+  const isLocalRequest = reqHost.includes('localhost') || reqHost.includes('127.0.0.1');
+
+  // If DISCORD_REDIRECT_URI in .env is configured and is not default localhost, or request is local
+  if (config.discord.redirectUri && (!config.discord.redirectUri.includes('localhost') || isLocalRequest)) {
+    return config.discord.redirectUri.trim();
+  }
+
+  // Deployed behind reverse proxy (e.g. OpenResty) with domain or public IP
+  if (!isLocalRequest && reqHost) {
+    const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+    return `${proto}://${reqHost}/api/auth/callback`;
+  }
+
+  return (config.discord.redirectUri || 'http://localhost:3001/api/auth/callback').trim();
+}
+
+function createSignedState(nonce: string, redirectUri: string): string {
+  const payload = JSON.stringify({ n: nonce, r: redirectUri, t: Date.now() });
+  const sig = crypto.createHmac('sha256', config.server.jwtSecret).update(payload).digest('hex');
+  return Buffer.from(JSON.stringify({ p: payload, s: sig })).toString('base64url');
+}
+
+function parseSignedState(rawState: string): { nonce?: string; redirectUri?: string; isValid: boolean } {
+  try {
+    const parsed = JSON.parse(Buffer.from(rawState, 'base64url').toString('utf-8'));
+    if (parsed.p && parsed.s) {
+      const expected = crypto.createHmac('sha256', config.server.jwtSecret).update(parsed.p).digest('hex');
+      if (crypto.timingSafeEqual(Buffer.from(parsed.s, 'hex'), Buffer.from(expected, 'hex'))) {
+        const payload = JSON.parse(parsed.p);
+        if (Date.now() - payload.t < 15 * 60 * 1000) {
+          return { nonce: payload.n, redirectUri: payload.r, isValid: true };
+        }
+      }
+    }
+  } catch {}
+  return { isValid: false };
+}
+
 // 1. Get Discord OAuth2 Login URL
 authRouter.get('/login', (req: Request, res: Response) => {
   if (!config.discord.clientId) {
     return res.status(500).json({ error: 'CLIENT_ID not configured in .env' });
   }
 
-  const state = crypto.randomBytes(16).toString('hex');
-  res.cookie('oauth_state', state, {
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const redirectUri = getEffectiveRedirectUri(req);
+  const state = createSignedState(nonce, redirectUri);
+
+  const isSecure = Boolean(req.secure || req.get('x-forwarded-proto') === 'https');
+
+  res.cookie('oauth_state', nonce, {
     httpOnly: true,
-    secure: !config.isDev,
+    secure: isSecure && !config.isDev,
     sameSite: 'lax',
     maxAge: 10 * 60 * 1000, // 10 minutes
   });
 
-  const redirectUri = encodeURIComponent(config.discord.redirectUri);
+  res.cookie('oauth_redirect_uri', redirectUri, {
+    httpOnly: true,
+    secure: isSecure && !config.isDev,
+    sameSite: 'lax',
+    maxAge: 10 * 60 * 1000,
+  });
+
   const scope = encodeURIComponent('identify guilds guilds.members.read');
-  const url = `https://discord.com/api/oauth2/authorize?client_id=${config.discord.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
+  const url = `https://discord.com/api/oauth2/authorize?client_id=${config.discord.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${encodeURIComponent(state)}`;
 
   return res.json({ url });
 });
 
 // 2. OAuth2 Callback
 authRouter.get('/callback', async (req: Request, res: Response) => {
-  const code = req.query.code as string;
-  const reqHost = req.get('host');
-  let redirectBase = config.server.frontendUrl;
+  cleanupCodeCache();
 
-  // When frontend is served directly by Express (e.g. localhost:3001 or VPS), redirect to current host
-  if (reqHost && config.server.frontendUrl.includes('5173') && !reqHost.includes('5173')) {
-    redirectBase = `${req.protocol}://${reqHost}`;
-  }
+  const code = (req.query.code as string)?.trim();
+  const rawState = (req.query.state as string)?.trim();
+  const redirectBase = getBaseUrl(req);
 
   if (!code) {
     return res.redirect(`${redirectBase}/login?error=no_code`);
   }
 
-  const state = req.query.state as string;
-  const storedState = req.cookies?.oauth_state;
-  
-  if (!state || !storedState || state !== storedState) {
+  // Handle replayed code (e.g. browser refreshed or proxy retried)
+  if (exchangedCodeCache.has(code)) {
+    const cached = exchangedCodeCache.get(code)!;
+    return res.redirect(`${redirectBase}/dashboard?token=${cached.token}`);
+  }
+
+  const { nonce: stateNonce, redirectUri: stateRedirectUri, isValid: isSignatureValid } = rawState
+    ? parseSignedState(rawState)
+    : { isValid: false };
+
+  const storedNonce = req.cookies?.oauth_state;
+  const isCookieMatch = Boolean(storedNonce && (rawState === storedNonce || stateNonce === storedNonce));
+
+  if (!isSignatureValid && !isCookieMatch && !config.isDev) {
     return res.redirect(`${redirectBase}/login?error=invalid_state`);
   }
+
   res.clearCookie('oauth_state');
+  res.clearCookie('oauth_redirect_uri');
+
+  const effectiveRedirectUri = stateRedirectUri || req.cookies?.oauth_redirect_uri || getEffectiveRedirectUri(req);
 
   try {
     // Exchange code for token
@@ -105,10 +199,11 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         client_secret: config.discord.clientSecret,
         grant_type: 'authorization_code',
         code,
-        redirect_uri: config.discord.redirectUri,
+        redirect_uri: effectiveRedirectUri,
       }).toString(),
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 10000,
       }
     );
 
@@ -117,6 +212,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     // Fetch user profile
     const userRes = await axios.get('https://discord.com/api/users/@me', {
       headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 10000,
     });
     const discordUser = userRes.data;
 
@@ -159,18 +255,24 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     // Sign JWT token
     const token = jwt.sign(sessionData, config.server.jwtSecret, { expiresIn: '7d' });
 
+    // Cache this code exchange for 60 seconds
+    exchangedCodeCache.set(code, { token, timestamp: Date.now() });
+
     // Set cookie and redirect to frontend dashboard
+    const isSecure = Boolean(req.secure || req.get('x-forwarded-proto') === 'https');
     res.cookie('token', token, {
       httpOnly: true,
-      secure: !config.isDev,
+      secure: isSecure && !config.isDev,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.redirect(`${redirectBase}/dashboard?token=${token}`);
   } catch (error: any) {
-    console.error('[OAuth2 Error]:', error.response?.data || error.message);
-    return res.redirect(`${redirectBase}/login?error=auth_failed`);
+    const errorData = error.response?.data || error.message;
+    console.error('[OAuth2 Error]:', errorData);
+    const errorParam = typeof errorData === 'object' ? (errorData.error || errorData.message || 'auth_failed') : 'auth_failed';
+    return res.redirect(`${redirectBase}/login?error=${encodeURIComponent(errorParam)}`);
   }
 });
 

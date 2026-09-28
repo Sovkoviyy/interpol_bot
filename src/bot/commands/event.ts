@@ -3,6 +3,7 @@ import {
   ChatInputCommandInteraction,
   ChannelType,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import bot from '../client';
 import prisma from '../../database/client';
@@ -110,12 +111,12 @@ export const eventCommand: Command = {
     const sub = interaction.options.getSubcommand();
     const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
     if (!guild) {
-      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (sub === 'create') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const title = interaction.options.getString('title', true);
       const map = interaction.options.getString('map') || 'Не выбрана';

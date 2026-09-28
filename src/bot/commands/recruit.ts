@@ -1,4 +1,5 @@
-import { 
+import {
+  MessageFlags, 
   SlashCommandBuilder, 
   ChatInputCommandInteraction, 
   PermissionFlagsBits, 
@@ -53,14 +54,14 @@ export const recruitCommand: Command = {
     const sub = interaction.options.getSubcommand();
     const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
     if (!guild) {
-      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (sub === 'post') {
       const channel = (interaction.options.getChannel('channel') || interaction.channel) as any;
       if (!channel || !channel.isTextBased()) {
-        await interaction.reply({ content: '❌ Неверный текстовый канал.', ephemeral: true });
+        await interaction.reply({ content: '❌ Неверный текстовый канал.', flags: MessageFlags.Ephemeral });
         return;
       }
 
@@ -90,7 +91,7 @@ export const recruitCommand: Command = {
 
       await interaction.reply({
         content: `✅ Форма набора успешно опубликована в канале <#${channel.id}>!`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } else if (sub === 'config') {
       const memberRole = interaction.options.getRole('member_role');
@@ -134,7 +135,7 @@ export const recruitCommand: Command = {
           (category ? `• Категория тикетов: <#${category.id}>\n` : '') +
           (logChannel ? `• Канал транскриптов: <#${logChannel.id}>\n` : '') +
           `\n*Все подробные настройки и вопросы формы также доступны в веб-панели.*`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

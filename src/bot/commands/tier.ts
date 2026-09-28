@@ -1,4 +1,5 @@
 import {
+  MessageFlags,
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   PermissionFlagsBits,
@@ -34,14 +35,14 @@ export const tierCommand = {
   async execute(interaction: ChatInputCommandInteraction) {
     const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
     if (!guild) {
-      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === 'setup') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       try {
         const res = await TierService.setupTierStructure(guild);
         await interaction.editReply({
@@ -54,7 +55,7 @@ export const tierCommand = {
     }
 
     if (subcommand === 'panel') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       try {
         const targetChannel = (interaction.options.getChannel('channel') as TextChannel) || (interaction.channel as TextChannel);
         if (!targetChannel || !targetChannel.isTextBased()) {

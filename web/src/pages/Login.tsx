@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Flame, LogIn, Shield } from 'lucide-react';
 import api from '../api/client';
@@ -11,9 +11,29 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('error');
+    if (err) {
+      if (err === 'invalid_grant') {
+        setError('Срок действия кода авторизации истек или он уже был использован. Попробуйте войти снова.');
+      } else if (err === 'invalid_state') {
+        setError('Сессия авторизации недействительна (ошибка state). Попробуйте снова.');
+      } else if (err === 'no_code') {
+        setError('Код авторизации не был получен от Discord.');
+      } else if (err === 'auth_failed') {
+        setError('Не удалось пройти авторизацию через Discord. Проверьте настройки Discord OAuth2 (Redirect URI).');
+      } else {
+        setError(`Ошибка авторизации: ${decodeURIComponent(err)}`);
+      }
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   const handleDiscordLogin = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await api.get('/auth/login');
       if (res.data?.url) {
         window.location.href = res.data.url;

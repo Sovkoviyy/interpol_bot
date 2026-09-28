@@ -1,4 +1,5 @@
-import { 
+import {
+  MessageFlags, 
   SlashCommandBuilder, 
   ChatInputCommandInteraction, 
   EmbedBuilder, 
@@ -47,7 +48,7 @@ export const profileCommand = {
       if (!isHighRank && !allowed) {
         await interaction.reply({
           content: '❌ Просмотр чужих профилей разрешен только руководству (Хайки, Рекрутеры, Депки, Лидер).',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -137,7 +138,7 @@ export const setStaticCommand = {
       ].join('\n'),
     });
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };
 
@@ -193,7 +194,7 @@ export const penaltyCommand = {
     });
 
     if (!isHighRank && !allowed) {
-      await interaction.reply({ content: '❌ У вас нет прав назначать штрафы.', ephemeral: true });
+      await interaction.reply({ content: '❌ У вас нет прав назначать штрафы.', flags: MessageFlags.Ephemeral });
       return;
     }
 

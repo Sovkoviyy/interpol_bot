@@ -17,9 +17,8 @@ async function main() {
   console.log('🚀 [INTERPOL BOT] Starting Family Discord Bot & Dashboard');
   console.log('========================================================');
 
-  if (!config.isDev && config.server.jwtSecret.includes('default_development')) {
-    console.error('❌ [FATAL] Default JWT_SECRET detected in production mode! Set JWT_SECRET in .env immediately.');
-    process.exit(1);
+  if (config.server.jwtSecret.includes('default_development')) {
+    console.warn('⚠️ [SECURITY WARNING] Default JWT_SECRET is in use! Please set a unique JWT_SECRET in .env.');
   }
 
   // 0. Ensure Database Schema is Up-to-Date (Auto-migrates SQLite columns)

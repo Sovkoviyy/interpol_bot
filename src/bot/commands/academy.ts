@@ -2,7 +2,8 @@ import {
   SlashCommandBuilder, 
   ChatInputCommandInteraction, 
   PermissionFlagsBits,
-  GuildMember
+  GuildMember,
+  MessageFlags
 } from 'discord.js';
 import bot from '../client';
 import { AcademyService } from '../modules/academy/academyService';
@@ -26,17 +27,17 @@ export const academyCommand = {
 
     const guild = interaction.guild || (interaction.guildId ? (bot.guilds.cache.get(interaction.guildId) || await bot.guilds.fetch(interaction.guildId).catch(() => null)) : null);
     if (!guild) {
-      await interaction.reply({ content: '❌ Сервер Discord не найден.', ephemeral: true });
+      await interaction.reply({ content: '❌ Сервер Discord не найден.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     const targetMember = await guild.members.fetch(targetUser.id).catch(() => null);
     if (!targetMember) {
-      await interaction.reply({ content: '❌ Участник не найден на сервере.', ephemeral: true });
+      await interaction.reply({ content: '❌ Участник не найден на сервере.', flags: MessageFlags.Ephemeral });
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const { channel } = await AcademyService.createAcademyChannel(

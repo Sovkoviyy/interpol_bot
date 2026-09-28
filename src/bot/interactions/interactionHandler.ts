@@ -1,4 +1,5 @@
-import { 
+import {
+  MessageFlags, 
   Interaction, 
   Events, 
   ModalBuilder, 
@@ -44,7 +45,7 @@ export function registerInteractionHandler() {
       if (interaction.isChatInputCommand()) {
         await interaction.reply({
           content: 'ℹ️ Слэш-команды в боте отключены. Всё управление осуществляется через интерактивные кнопки в каналах сервера и веб-панель управления.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         }).catch(() => null);
         return;
       }
@@ -101,7 +102,7 @@ export function registerInteractionHandler() {
           });
 
           if (!academy) {
-            await interaction.reply({ content: '❌ Данные академии не найдены.', ephemeral: true });
+            await interaction.reply({ content: '❌ Данные академии не найдены.', flags: MessageFlags.Ephemeral });
             return;
           }
 
@@ -127,7 +128,7 @@ export function registerInteractionHandler() {
             footerText: 'INTERPOL Academy • Личный прогресс',
           });
 
-          await interaction.reply({ embeds: [progressEmbed], ephemeral: true });
+          await interaction.reply({ embeds: [progressEmbed], flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -171,7 +172,7 @@ export function registerInteractionHandler() {
             : customId.startsWith('academy_promo_confirm_')
             ? customId.replace('academy_promo_confirm_', '')
             : customId.replace('academy_promote_', '');
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           try {
             await AcademyService.promoteAcademician(academyChannelId, member, true);
             await interaction.editReply({ content: `🎖️ Академик успешно повышен на 2 ранг рекрутером ${member}! Канал академии удаляется.` }).catch(() => null);
@@ -406,7 +407,7 @@ export function registerInteractionHandler() {
 
         if (customId.startsWith('leave_approve_')) {
           const leaveId = customId.replace('leave_approve_', '');
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           try {
             const isLeaderOrAdmin = member.permissions && typeof member.permissions.has === 'function'
               ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
@@ -435,7 +436,7 @@ export function registerInteractionHandler() {
             ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild))
             : false;
           if (!isLeaderOrAdmin) {
-            await interaction.reply({ content: '❌ Только руководство может отклонять отпуска.', ephemeral: true });
+            await interaction.reply({ content: '❌ Только руководство может отклонять отпуска.', flags: MessageFlags.Ephemeral });
             return;
           }
 
@@ -466,7 +467,7 @@ export function registerInteractionHandler() {
         }
 
         if (customId === 'academy_report_modal') {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const mpType = interaction.fields.getTextInputValue('report_mp_type');
           const rawScreenshots = interaction.fields.getTextInputValue('report_screenshots');
           const comment = interaction.fields.getTextInputValue('report_comment') || undefined;
@@ -540,7 +541,7 @@ export function registerInteractionHandler() {
         }
 
         if (customId.startsWith('modal_leave_reject_')) {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const leaveId = customId.replace('modal_leave_reject_', '');
           const reason = interaction.fields.getTextInputValue('rejection_reason');
           try {
@@ -556,7 +557,7 @@ export function registerInteractionHandler() {
 
         // --- Panel Modals ---
         if (customId === 'modal_bind_static') {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const staticId = interaction.fields.getTextInputValue('static_id');
           const characterName = interaction.fields.getTextInputValue('character_name') || undefined;
           const targetGuildId = interaction.guildId || (guild ? guild.id : '');
@@ -583,7 +584,7 @@ export function registerInteractionHandler() {
         }
 
         if (customId === 'modal_request_leave') {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const rawStart = interaction.fields.getTextInputValue('leave_start_date');
           const rawEnd = interaction.fields.getTextInputValue('leave_end_date');
           const reason = interaction.fields.getTextInputValue('leave_reason');
@@ -687,7 +688,7 @@ export function registerInteractionHandler() {
         }
 
         if (customId === 'modal_request_timeoff') {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const rawDuration = interaction.fields.getTextInputValue('timeoff_duration').trim().toLowerCase();
           const reason = interaction.fields.getTextInputValue('timeoff_reason').trim();
           let proofUrl = '';
@@ -874,13 +875,12 @@ export function registerInteractionHandler() {
       console.error('[InteractionHandler Error]:', error);
       if (interaction.isRepliable()) {
         const errorText = '❌ Произошла непредвиденная ошибка при выполнении действия. Проверьте права бота или повторите попытку позже.';
-        const replyOptions = { content: errorText, ephemeral: true };
         if (interaction.deferred || interaction.replied) {
-          await interaction.editReply(replyOptions).catch(async () => {
-            await interaction.followUp(replyOptions).catch(() => null);
+          await interaction.editReply({ content: errorText }).catch(async () => {
+            await interaction.followUp({ content: errorText, flags: MessageFlags.Ephemeral }).catch(() => null);
           });
         } else {
-          await interaction.reply(replyOptions).catch(() => null);
+          await interaction.reply({ content: errorText, flags: MessageFlags.Ephemeral }).catch(() => null);
         }
       }
     }

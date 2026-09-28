@@ -4,7 +4,8 @@ import {
   PermissionFlagsBits, 
   TextChannel, 
   NewsChannel,
-  Message
+  Message,
+  MessageFlags
 } from 'discord.js';
 import { AuditLogger } from '../modules/logging/auditLogger';
 import { THEME, createThemedEmbed } from '../utils/theme';
@@ -26,7 +27,7 @@ export const clearChannelCommand = {
 
   async execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild || !interaction.channel) {
-      await interaction.reply({ content: '❌ Команда доступна только на сервере Discord.', ephemeral: true });
+      await interaction.reply({ content: '❌ Команда доступна только на сервере Discord.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -35,7 +36,7 @@ export const clearChannelCommand = {
     if (!hasAdmin) {
       await interaction.reply({ 
         content: '❌ У вас нет прав Администратора для выполнения этой команды!', 
-        ephemeral: true 
+        flags: MessageFlags.Ephemeral 
       });
       return;
     }
@@ -44,7 +45,7 @@ export const clearChannelCommand = {
     if (!channel.isTextBased() || channel.isThread() || channel.isDMBased()) {
       await interaction.reply({ 
         content: '❌ Очистка поддерживается только в обычных текстовых каналах сервера.', 
-        ephemeral: true 
+        flags: MessageFlags.Ephemeral 
       });
       return;
     }
@@ -54,7 +55,7 @@ export const clearChannelCommand = {
 
     // Partial bulk delete
     if (amount) {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       try {
         const deleted = await textChannel.bulkDelete(amount, true);
         await interaction.editReply({
@@ -82,7 +83,7 @@ export const clearChannelCommand = {
 
     // Full channel purge (nuke) via clone
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const originalPosition = textChannel.position;
       const originalTopic = textChannel.topic;

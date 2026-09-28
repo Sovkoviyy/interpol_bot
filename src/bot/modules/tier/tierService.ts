@@ -1,4 +1,5 @@
 import {
+  MessageFlags,
   Guild,
   GuildMember,
   TextChannel,
@@ -212,11 +213,11 @@ export class TierService {
   public static async handleRequestChannel(interaction: ButtonInteraction): Promise<void> {
     const guild = interaction.guild;
     if (!guild) {
-      await interaction.reply({ content: '❌ Сервер не найден.', ephemeral: true });
+      await interaction.reply({ content: '❌ Сервер не найден.', flags: MessageFlags.Ephemeral });
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const config = await this.getConfig(guild.id);
@@ -460,11 +461,11 @@ export class TierService {
   ): Promise<void> {
     const guild = interaction.guild;
     if (!guild) {
-      await interaction.reply({ content: '❌ Сервер не найден.', ephemeral: true });
+      await interaction.reply({ content: '❌ Сервер не найден.', flags: MessageFlags.Ephemeral });
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const clipUrl = interaction.fields.getTextInputValue('clip_url').trim();
@@ -614,7 +615,7 @@ export class TierService {
     const member = interaction.member as GuildMember;
 
     if (!guild || !member) {
-      await interaction.reply({ content: '❌ Ошибка определения пользователя.', ephemeral: true });
+      await interaction.reply({ content: '❌ Ошибка определения пользователя.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -626,7 +627,7 @@ export class TierService {
     if (!hasCheckerRole && !isAdmin) {
       await interaction.reply({
         content: '❌ Только проверяющие с ролью **Тир чекер** или Администраторы могут проверять отчеты.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -636,7 +637,7 @@ export class TierService {
     });
 
     if (!submission) {
-      await interaction.reply({ content: '❌ Отчет не найден в базе данных.', ephemeral: true });
+      await interaction.reply({ content: '❌ Отчет не найден в базе данных.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -667,11 +668,11 @@ export class TierService {
   ): Promise<void> {
     const guild = interaction.guild;
     if (!guild) {
-      await interaction.reply({ content: '❌ Сервер не найден.', ephemeral: true });
+      await interaction.reply({ content: '❌ Сервер не найден.', flags: MessageFlags.Ephemeral });
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const reviewerComment = interaction.fields.getTextInputValue('reviewer_comment').trim();
@@ -812,7 +813,7 @@ export class TierService {
     const member = interaction.member as GuildMember;
 
     if (!guild || !member) {
-      await interaction.reply({ content: '❌ Ошибка определения пользователя.', ephemeral: true });
+      await interaction.reply({ content: '❌ Ошибка определения пользователя.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -823,7 +824,7 @@ export class TierService {
     if (!hasCheckerRole && !isAdmin) {
       await interaction.reply({
         content: '❌ Только проверяющие с ролью **Тир чекер** или Администраторы могут отклонять отчеты.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -833,7 +834,7 @@ export class TierService {
     });
 
     if (!submission) {
-      await interaction.reply({ content: '❌ Отчет не найден в базе данных.', ephemeral: true });
+      await interaction.reply({ content: '❌ Отчет не найден в базе данных.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -859,7 +860,7 @@ export class TierService {
     interaction: ModalSubmitInteraction,
     submissionId: string
   ): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const guild = interaction.guild;
