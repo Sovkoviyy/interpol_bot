@@ -65,20 +65,32 @@ export class HoneypotManager {
       throw new Error('Discord бот не подключен');
     }
 
-    const guild = targetGuildId 
-      ? bot.guilds.cache.get(targetGuildId)
-      : bot.guilds.cache.first();
-
-    if (!guild) {
-      throw new Error('Сервер Discord не найден');
+    let guild: Guild | null = null;
+    if (targetGuildId && targetGuildId !== 'default') {
+      guild = bot.guilds.cache.get(targetGuildId) || await bot.guilds.fetch(targetGuildId).catch(() => null);
     }
 
     const config = await this.getConfig();
+    if (!guild && config.guildId && config.guildId !== 'default') {
+      guild = bot.guilds.cache.get(config.guildId) || await bot.guilds.fetch(config.guildId).catch(() => null);
+    }
+
+    if (!guild) {
+      guild = bot.guilds.cache.first() || null;
+    }
+
+    if (!guild) {
+      throw new Error('Сервер Discord не найден или бот не добавлен на сервер');
+    }
+
     let channel: TextChannel | null = null;
 
     // Check if channel already exists
     if (config.channelId) {
       channel = (guild.channels.cache.get(config.channelId) as TextChannel) || null;
+      if (!channel) {
+        channel = await guild.channels.fetch(config.channelId).catch(() => null) as TextChannel | null;
+      }
     }
 
     // If channel doesn't exist, create it
@@ -86,7 +98,7 @@ export class HoneypotManager {
       channel = await guild.channels.create({
         name: config.channelName || 'канал-ловушка',
         type: ChannelType.GuildText,
-        topic: '🛡️ Автомодерация: ловушка для спам-ботов. Сообщения запрещены.',
+        topic: '🛡️ Автомодерация: ловушка для спам-ботов. Сообщения строго запрещены.',
         permissionOverwrites: [
           {
             id: guild.roles.everyone.id,
@@ -109,8 +121,6 @@ export class HoneypotManager {
               PermissionFlagsBits.ManageMessages,
               PermissionFlagsBits.EmbedLinks,
               PermissionFlagsBits.ReadMessageHistory,
-              PermissionFlagsBits.BanMembers,
-              PermissionFlagsBits.KickMembers,
             ],
           },
         ],
@@ -140,10 +150,17 @@ export class HoneypotManager {
       }
     }
 
-    // Save channel and message ID
-    const updated = await prisma.honeypotConfig.update({
+    // Save channel and message ID safely via upsert
+    const updated = await prisma.honeypotConfig.upsert({
       where: { id: 'default' },
-      data: {
+      update: {
+        guildId: guild.id,
+        channelId: channel.id,
+        channelName: channel.name,
+        messageId: warningMsg.id,
+      },
+      create: {
+        id: 'default',
         guildId: guild.id,
         channelId: channel.id,
         channelName: channel.name,

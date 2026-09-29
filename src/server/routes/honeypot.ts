@@ -37,31 +37,68 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const guild = (config.guildId ? bot.guilds.cache.get(config.guildId) : null) || bot.guilds.cache.first();
-    const channels = guild
-      ? Array.from(guild.channels.cache.values()).map((c) => ({
+    const requestedGuildId = (req.query.guildId as string) || (req.headers['x-guild-id'] as string) || config.guildId;
+    let guild = requestedGuildId && requestedGuildId !== 'default'
+      ? (bot.guilds.cache.get(requestedGuildId) || await bot.guilds.fetch(requestedGuildId).catch(() => null))
+      : null;
+
+    if (!guild && bot.guilds.cache.size > 0) {
+      guild = bot.guilds.cache.first() || null;
+    }
+
+    let channels: any[] = [];
+    let roles: any[] = [];
+
+    if (guild) {
+      try {
+        const fetchedChannels = await guild.channels.fetch();
+        channels = Array.from(fetchedChannels.values())
+          .filter((c): c is any => c !== null)
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            type: c.type,
+            parentId: c.parentId,
+          }));
+      } catch (err: any) {
+        console.warn('⚠️ [Honeypot] Channel fetch error, fallback to cache:', err?.message);
+        channels = Array.from(guild.channels.cache.values()).map((c) => ({
           id: c.id,
           name: c.name,
           type: c.type,
           parentId: c.parentId,
-        }))
-      : [];
+        }));
+      }
 
-    const roles = guild
-      ? Array.from(guild.roles.cache.values())
+      try {
+        const fetchedRoles = await guild.roles.fetch();
+        roles = Array.from(fetchedRoles.values())
           .filter((r) => r.name !== '@everyone')
           .sort((a, b) => b.position - a.position)
           .map((r) => ({
             id: r.id,
             name: r.name,
-            color: r.hexColor,
+            color: r.color,
             position: r.position,
-          }))
-      : [];
+          }));
+      } catch (err: any) {
+        console.warn('⚠️ [Honeypot] Role fetch error, fallback to cache:', err?.message);
+        roles = Array.from(guild.roles.cache.values())
+          .filter((r) => r.name !== '@everyone')
+          .sort((a, b) => b.position - a.position)
+          .map((r) => ({
+            id: r.id,
+            name: r.name,
+            color: r.color,
+            position: r.position,
+          }));
+      }
+    }
 
     const guilds = Array.from(bot.guilds.cache.values()).map((g) => ({
       id: g.id,
       name: g.name,
+      icon: g.iconURL(),
     }));
 
     res.json({
@@ -72,6 +109,7 @@ router.get('/', async (req, res) => {
       channels,
       roles,
       guilds,
+      selectedGuildId: guild?.id || null,
       isBotOnline: bot.isReady(),
     });
   } catch (err: any) {
@@ -144,7 +182,8 @@ router.put('/', requirePermission('manageSettings'), async (req, res) => {
  */
 router.post('/setup-channel', requirePermission('manageSettings'), async (req, res) => {
   try {
-    const result = await honeypotManager.setupChannel(req.body.guildId);
+    const targetGuildId = req.body.guildId || (req.headers['x-guild-id'] as string);
+    const result = await honeypotManager.setupChannel(targetGuildId);
     res.json(result);
   } catch (err: any) {
     console.error('[API Honeypot] Error setting up channel:', err);

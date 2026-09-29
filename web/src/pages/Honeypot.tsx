@@ -72,6 +72,8 @@ export const Honeypot: React.FC = () => {
     embedDescription: '⚠️ **НЕ ПИШИТЕ СООБЩЕНИЯ В ЭТОТ КАНАЛ**\n\nЭтот канал используется для выявления спам-ботов.\nЛюбое сообщение здесь приведёт к немедленной блокировке.',
   });
 
+  const [guilds, setGuilds] = useState<any[]>([]);
+  const [selectedGuildId, setSelectedGuildId] = useState<string>('');
   const [whitelistRoleIds, setWhitelistRoleIds] = useState<string[]>([]);
   const [channels, setChannels] = useState<DiscordChannelItem[]>([]);
   const [roles, setRoles] = useState<DiscordRoleItem[]>([]);
@@ -79,10 +81,12 @@ export const Honeypot: React.FC = () => {
   const [totalLogs, setTotalLogs] = useState(0);
   const [isBotOnline, setIsBotOnline] = useState(false);
 
-  const loadData = async (silent = false) => {
+  const loadData = async (silent = false, guildIdOverride?: string) => {
     try {
       if (!silent) setLoading(true);
-      const res = await api.get('/api/honeypot');
+      const activeGId = guildIdOverride !== undefined ? guildIdOverride : selectedGuildId;
+      const url = activeGId ? `/api/honeypot?guildId=${activeGId}` : '/api/honeypot';
+      const res = await api.get(url);
       if (res.data) {
         const conf = res.data.config;
         setConfig(conf);
@@ -96,6 +100,10 @@ export const Honeypot: React.FC = () => {
         setRecentLogs(res.data.recentLogs || []);
         setTotalLogs(res.data.totalLogs || 0);
         setIsBotOnline(Boolean(res.data.isBotOnline));
+        if (res.data.guilds) setGuilds(res.data.guilds);
+        if (res.data.selectedGuildId && !activeGId) {
+          setSelectedGuildId(res.data.selectedGuildId);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load honeypot config:', err);
@@ -114,6 +122,11 @@ export const Honeypot: React.FC = () => {
     }, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleGuildChange = (newGId: string) => {
+    setSelectedGuildId(newGId);
+    loadData(false, newGId);
+  };
 
   const handleSave = async () => {
     try {
@@ -145,10 +158,12 @@ export const Honeypot: React.FC = () => {
 
     try {
       setSettingUp(true);
-      const res = await api.post('/api/honeypot/setup-channel');
+      const res = await api.post('/api/honeypot/setup-channel', {
+        guildId: selectedGuildId || config.guildId,
+      });
       if (res.data?.success) {
         modal.success(`Канал #${res.data.channelName} успешно создан и активирован в Discord!`);
-        await loadData(true);
+        await loadData(true, selectedGuildId || res.data.guildId);
       }
     } catch (err: any) {
       console.error('Failed to setup honeypot channel:', err);
@@ -287,6 +302,26 @@ export const Honeypot: React.FC = () => {
         </div>
       </div>
 
+      {guilds.length > 1 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-dark-900/60 backdrop-blur-xl p-4 rounded-2xl border border-dark-700/60">
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
+            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+            Активный сервер Discord:
+          </div>
+          <select
+            value={selectedGuildId}
+            onChange={(e) => handleGuildChange(e.target.value)}
+            className="px-3 py-2 rounded-xl bg-dark-800 border border-dark-700 text-white text-xs font-semibold focus:outline-none focus:border-rose-500"
+          >
+            {guilds.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} ({g.id})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Quick Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Caught Bots */}
@@ -396,10 +431,17 @@ export const Honeypot: React.FC = () => {
 
             {/* Target Channel Selector */}
             <div>
-              <label className="text-xs font-medium text-zinc-400 mb-1.5 flex items-center justify-between">
-                <span>Канал-ловушка в Discord:</span>
-                <span className="text-[11px] text-zinc-500">Должен быть виден всем участникам</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-zinc-400">Канал-ловушка в Discord:</span>
+                <button
+                  type="button"
+                  onClick={() => loadData(false, selectedGuildId)}
+                  className="text-[11px] text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Обновить список каналов ({channels.length})
+                </button>
+              </div>
               <ChannelSelect
                 channels={channels}
                 value={config.channelId || ''}
@@ -407,9 +449,16 @@ export const Honeypot: React.FC = () => {
                 channelType="text"
                 placeholder="Выберите текстовый канал для ловушки..."
               />
-              <p className="text-[11px] text-zinc-500 mt-1">
-                Или нажмите сверху кнопку <b>«Создать канал-ловушку в Discord»</b> для автоматического создания.
-              </p>
+              {channels.length === 0 ? (
+                <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Каналы не загружены. Нажмите «Обновить список каналов» или нажмите вверху кнопку «Создать канал-ловушку в Discord».</span>
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  Или нажмите вверху кнопку <b>«Создать канал-ловушку в Discord»</b> для автоматического создания.
+                </p>
+              )}
             </div>
 
             {/* Action Type Selection */}
