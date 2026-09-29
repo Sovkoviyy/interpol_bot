@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   GraduationCap, 
   CheckCircle2, 
@@ -655,10 +656,16 @@ export const Academy: React.FC = () => {
       )}
 
       {/* Modal: View Member Reports */}
-      {viewingReportsMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50">
+      {viewingReportsMember && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setViewingReportsMember(null)}
+        >
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50 shrink-0">
               <div className="flex items-center gap-2.5">
                 <FileText className="w-5 h-5 text-pink-500" />
                 <div>
@@ -671,6 +678,7 @@ export const Academy: React.FC = () => {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setViewingReportsMember(null)}
                 className="p-1 rounded-lg hover:bg-[#1E232F] text-slate-400 hover:text-white transition-colors"
               >
@@ -678,7 +686,7 @@ export const Academy: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+            <div className="p-5 overflow-y-auto space-y-4 flex-1 custom-scrollbar min-h-0">
               {!viewingReportsMember.reports || viewingReportsMember.reports.length === 0 ? (
                 <div className="py-12 text-center text-slate-500">
                   У этого академика пока нет сданных отчетов
@@ -762,8 +770,9 @@ export const Academy: React.FC = () => {
               )}
             </div>
 
-            <div className="p-4 border-t border-[#1E232F] bg-[#1A1F2B]/30 flex justify-end">
+            <div className="p-4 border-t border-[#1E232F] bg-[#1A1F2B]/30 flex justify-end shrink-0">
               <button
+                type="button"
                 onClick={() => setViewingReportsMember(null)}
                 className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#252B3B] text-slate-300 text-xs font-semibold transition-colors"
               >
@@ -771,19 +780,27 @@ export const Academy: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Edit Student Profile */}
-      {editingStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      {editingStudent && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setEditingStudent(null)}
+        >
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Pencil className="w-4 h-4 text-pink-400" />
                 Редактировать профиль академика
               </h3>
               <button
+                type="button"
                 onClick={() => setEditingStudent(null)}
                 className="text-slate-400 hover:text-white"
               >
@@ -881,7 +898,8 @@ export const Academy: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

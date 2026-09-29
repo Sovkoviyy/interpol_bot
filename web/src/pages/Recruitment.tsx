@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   UserPlus, 
   Send, 
@@ -605,15 +606,22 @@ export const Recruitment: React.FC = () => {
       )}
 
       {/* Application Details Modal */}
-      {selectedApp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
+      {selectedApp && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setSelectedApp(null)}
+        >
+          <div 
+            className="w-full max-w-lg bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4 my-auto animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#1E232F] pb-3 shrink-0">
               <div>
                 <h3 className="font-bold text-white text-base">Анкета кандидата</h3>
                 <p className="text-xs text-slate-400">{selectedApp.userTag || selectedApp.userId}</p>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedApp(null)}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-[#1E232F]"
               >
@@ -621,7 +629,7 @@ export const Recruitment: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-1 text-xs">
+            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 min-h-0 pr-1 text-xs">
               {Object.entries(selectedApp.answers || {}).map(([key, val]: any) => (
                 <div key={key} className="p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F]">
                   <p className="text-slate-400 font-medium mb-1">{key}</p>
@@ -637,8 +645,9 @@ export const Recruitment: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-2 flex justify-between items-center">
+            <div className="pt-2 flex justify-between items-center border-t border-[#1E232F] shrink-0">
               <button
+                type="button"
                 onClick={() => handleDeleteApp(selectedApp)}
                 className="px-3.5 py-2 rounded-xl bg-red-600/15 hover:bg-red-600/25 text-red-400 hover:text-red-300 text-xs font-semibold border border-red-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
               >
@@ -647,6 +656,7 @@ export const Recruitment: React.FC = () => {
               </button>
 
               <button
+                type="button"
                 onClick={() => setSelectedApp(null)}
                 className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#252B3B] text-slate-300 hover:text-white text-xs font-medium cursor-pointer transition-all"
               >
@@ -654,7 +664,8 @@ export const Recruitment: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

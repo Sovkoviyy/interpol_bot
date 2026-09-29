@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   IdCard, 
   Search, 
@@ -100,6 +101,27 @@ export const Profiles: React.FC = () => {
   useEffect(() => {
     fetchProfiles();
   }, [search, sortBy, order]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (manualModalOpen) setManualModalOpen(false);
+        if (nickModalOpen) setNickModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [manualModalOpen, nickModalOpen]);
+
+  useEffect(() => {
+    if (manualModalOpen || nickModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [manualModalOpen, nickModalOpen]);
 
   const toggleSort = (field: string) => {
     if (sortBy === field) {
@@ -712,15 +734,22 @@ export const Profiles: React.FC = () => {
         </div>
 
       {/* Manual Profile & Characters Modal (Up to 3 characters) */}
-      {manualModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-lg bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4 my-8">
+      {manualModalOpen && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setManualModalOpen(false)}
+        >
+          <div 
+            className="w-full max-w-lg bg-[#151921] border border-[#1E232F] rounded-2xl p-6 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <IdCard className="w-4 h-4 text-pink-500" />
                 Ручной ввод данных и статики персонажей
               </h3>
               <button
+                type="button"
                 onClick={() => setManualModalOpen(false)}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-[#1E232F]"
               >
@@ -892,13 +921,20 @@ export const Profiles: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Nickname Management */}
-      {nickModalOpen && nickTargetProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl">
+      {nickModalOpen && nickTargetProfile && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setNickModalOpen(false)}
+        >
+          <div 
+            className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-[#1E232F]">
               <div className="flex items-center gap-2.5">
                 <AtSign className="w-5 h-5 text-cyan-400" />
@@ -907,6 +943,7 @@ export const Profiles: React.FC = () => {
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setNickModalOpen(false)}
                 className="text-slate-400 hover:text-white text-sm"
               >
@@ -977,7 +1014,8 @@ export const Profiles: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

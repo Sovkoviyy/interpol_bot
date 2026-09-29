@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, XCircle, Info, Sparkles, HelpCircle, FormInput } from 'lucide-react';
 
@@ -213,8 +214,8 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       {/* Confirmation Modal */}
       <AnimatePresence>
-        {confirmState.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {confirmState.isOpen && createPortal(
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -229,7 +230,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               exit={{ opacity: 0, scale: 0.94, y: 8 }}
               transition={{ type: 'spring', duration: 0.28, bounce: 0.12 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative z-10 w-full max-w-md bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden"
+              className="relative z-10 w-full max-w-md bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden my-auto"
             >
               {/* Ambient Pink Glow Header */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-600 via-rose-500 to-fuchsia-600" />
@@ -285,14 +286,15 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 </button>
               </div>
             </motion.div>
-          </div>
+          </div>,
+          document.body
         )}
       </AnimatePresence>
 
       {/* Alert / Notification Modal */}
       <AnimatePresence>
-        {alertState.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {alertState.isOpen && createPortal(
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -307,7 +309,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               exit={{ opacity: 0, scale: 0.94, y: 8 }}
               transition={{ type: 'spring', duration: 0.28, bounce: 0.12 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative z-10 w-full max-w-md bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden"
+              className="relative z-10 w-full max-w-md bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden my-auto"
             >
               <div className={`absolute top-0 left-0 right-0 h-1 ${
                 alertState.options.type === 'error'
@@ -356,14 +358,15 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 </button>
               </div>
             </motion.div>
-          </div>
+          </div>,
+          document.body
         )}
       </AnimatePresence>
 
       {/* Form Dialog Modal */}
       <AnimatePresence>
-        {formState.isOpen && formState.options && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {formState.isOpen && formState.options && createPortal(
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -379,7 +382,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               transition={{ type: 'spring', duration: 0.28, bounce: 0.12 }}
               onSubmit={handleFormSubmit}
               onClick={(e) => e.stopPropagation()}
-              className="relative z-10 w-full max-w-lg bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden space-y-4"
+              className="relative z-10 w-full max-w-lg bg-dark-900/95 backdrop-blur-2xl border border-dark-700/60 rounded-3xl p-7 shadow-modal overflow-hidden space-y-4 my-auto"
             >
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-600 via-rose-500 to-fuchsia-600" />
 
@@ -438,7 +441,8 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 </button>
               </div>
             </motion.form>
-          </div>
+          </div>,
+          document.body
         )}
       </AnimatePresence>
     </ModalContext.Provider>

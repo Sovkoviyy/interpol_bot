@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Users, 
   Search, 
@@ -136,6 +137,27 @@ export const Members: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (editingMember) setEditingMember(null);
+        if (roleMember) setRoleMember(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingMember, roleMember]);
+
+  useEffect(() => {
+    if (editingMember || roleMember) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [editingMember, roleMember]);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -743,16 +765,17 @@ export const Members: React.FC = () => {
       {/* ========================================================= */}
       {/* 1. Modal: Edit User Profile (Character, Static, Rank, etc.) */}
       {/* ========================================================= */}
-      {editingMember && (
+      {editingMember && createPortal(
         <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setEditingMember(null);
-          }}
+          className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setEditingMember(null)}
         >
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden my-auto">
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden my-auto flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
-            <div className="p-5 border-b border-[#1E232F] flex items-center justify-between bg-[#11141B]">
+            <div className="p-5 border-b border-[#1E232F] flex items-center justify-between bg-[#11141B] shrink-0">
               <div className="flex items-center gap-3">
                 <img
                   src={editingMember.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}
@@ -787,7 +810,7 @@ export const Members: React.FC = () => {
             </div>
 
             {/* Modal Body / Form */}
-            <form onSubmit={handleSaveProfile} className="p-5 space-y-4">
+            <form onSubmit={handleSaveProfile} className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1 min-h-0">
               <div className="grid grid-cols-2 gap-3">
                 {/* Character Name */}
                 <div>
@@ -944,17 +967,24 @@ export const Members: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================= */}
       {/* 2. Modal: Manage Discord Roles for Member                  */}
       {/* ========================================================= */}
-      {roleMember && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+      {roleMember && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setRoleMember(null)}
+        >
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
-            <div className="p-4 border-b border-[#1E232F] flex items-center justify-between">
+            <div className="p-4 border-b border-[#1E232F] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <ShieldCheck className="w-5 h-5 text-indigo-400" />
                 <div>
@@ -968,6 +998,7 @@ export const Members: React.FC = () => {
               </div>
 
               <button
+                type="button"
                 onClick={() => setRoleMember(null)}
                 className="p-1.5 rounded-xl hover:bg-[#1E232F] text-slate-400 hover:text-white transition-colors"
               >
@@ -976,7 +1007,7 @@ export const Members: React.FC = () => {
             </div>
 
             {/* Role Search */}
-            <div className="p-3 border-b border-[#1E232F] bg-[#0B0E14]">
+            <div className="p-3 border-b border-[#1E232F] bg-[#0B0E14] shrink-0">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -990,7 +1021,7 @@ export const Members: React.FC = () => {
             </div>
 
             {/* Roles List */}
-            <div className="p-3 overflow-y-auto space-y-1 flex-1 custom-scrollbar">
+            <div className="p-3 overflow-y-auto space-y-1 flex-1 custom-scrollbar min-h-0">
               {roles
                 .filter((r) => r.name.toLowerCase().includes(roleSearch.toLowerCase()))
                 .map((r) => {
@@ -1040,7 +1071,7 @@ export const Members: React.FC = () => {
             </div>
 
             {/* Modal Actions */}
-            <div className="p-3 border-t border-[#1E232F] bg-[#151921] flex items-center justify-end gap-2">
+            <div className="p-3 border-t border-[#1E232F] bg-[#151921] flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setRoleMember(null)}
@@ -1059,7 +1090,8 @@ export const Members: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Coins, 
   Settings2, 
@@ -615,10 +616,16 @@ export const RecruiterPayroll: React.FC = () => {
       )}
 
       {/* MASS EXPORT MODAL */}
-      {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50">
+      {showExportModal && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setShowExportModal(false)}
+        >
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50 shrink-0">
               <div className="flex items-center gap-2.5">
                 <FileText className="w-5 h-5 text-pink-500" />
                 <div>
@@ -627,6 +634,7 @@ export const RecruiterPayroll: React.FC = () => {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowExportModal(false)}
                 className="p-1 rounded-lg hover:bg-[#1E232F] text-slate-400 hover:text-white"
               >
@@ -634,7 +642,7 @@ export const RecruiterPayroll: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+            <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1 min-h-0">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="block text-slate-400 mb-1 font-medium">Комментарий к выплате</label>
@@ -684,13 +692,14 @@ export const RecruiterPayroll: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-4 border-t border-[#1E232F] bg-[#1A1F2B]/40 flex items-center justify-between gap-3">
+            <div className="p-4 border-t border-[#1E232F] bg-[#1A1F2B]/40 flex items-center justify-between gap-3 shrink-0">
               <span className="text-xs text-slate-400 font-mono">
                 Итого строк: <strong>{getExportLines().length}</strong>
               </span>
 
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={handleCopyExport}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1E232F] hover:bg-[#252B3B] text-slate-200 rounded-xl text-xs font-semibold transition-all border border-[#1E232F]"
                 >
@@ -699,6 +708,7 @@ export const RecruiterPayroll: React.FC = () => {
                 </button>
 
                 <button
+                  type="button"
                   onClick={handleDownloadTxt}
                   className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white rounded-xl text-xs font-semibold shadow-md shadow-pink-600/25 transition-all"
                 >
@@ -708,14 +718,21 @@ export const RecruiterPayroll: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* RECRUITER APPLICATIONS MODAL (VIEW & DELETE) */}
-      {selectedRecruiterForApps && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50">
+      {selectedRecruiterForApps && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setSelectedRecruiterForApps(null)}
+        >
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50 shrink-0">
               <div className="flex items-center gap-2.5">
                 <FileText className="w-5 h-5 text-pink-500" />
                 <div>
@@ -728,6 +745,7 @@ export const RecruiterPayroll: React.FC = () => {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedRecruiterForApps(null)}
                 className="p-1 rounded-lg hover:bg-[#1E232F] text-slate-400 hover:text-white"
               >
@@ -736,7 +754,7 @@ export const RecruiterPayroll: React.FC = () => {
             </div>
 
             {/* Filter and Bulk Action Bar */}
-            <div className="p-4 border-b border-[#1E232F] bg-[#0B0E14]/40 flex flex-wrap items-center justify-between gap-3">
+            <div className="p-4 border-b border-[#1E232F] bg-[#0B0E14]/40 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex gap-1.5">
                 {[
                   { id: 'ALL', label: `Все (${recruiterApps.length})` },
@@ -762,6 +780,7 @@ export const RecruiterPayroll: React.FC = () => {
               <div className="flex items-center gap-2">
                 {recruiterApps.some(a => a.status === 'ACCEPTED') && (
                   <button
+                    type="button"
                     onClick={() => handleBulkDeleteRecruiterApps('ACCEPTED')}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 text-[11px] font-medium transition-all"
                   >
@@ -771,6 +790,7 @@ export const RecruiterPayroll: React.FC = () => {
                 )}
                 {recruiterApps.some(a => a.status === 'REJECTED') && (
                   <button
+                    type="button"
                     onClick={() => handleBulkDeleteRecruiterApps('REJECTED')}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 text-[11px] font-medium transition-all"
                   >
@@ -782,7 +802,7 @@ export const RecruiterPayroll: React.FC = () => {
             </div>
 
             {/* List */}
-            <div className="p-4 space-y-3 overflow-y-auto flex-1 text-xs">
+            <div className="p-4 space-y-3 overflow-y-auto custom-scrollbar flex-1 min-h-0 text-xs">
               {recruiterAppsLoading ? (
                 <div className="py-12 text-center text-slate-500">Загрузка заявок...</div>
               ) : recruiterApps
@@ -834,6 +854,7 @@ export const RecruiterPayroll: React.FC = () => {
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => handleDeleteAppFromStats(app.id, app.userTag || app.userId)}
                         title="Удалить заявку из базы и статистики"
                         className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 transition-all shrink-0 flex items-center gap-1 text-xs font-semibold cursor-pointer"
@@ -846,11 +867,12 @@ export const RecruiterPayroll: React.FC = () => {
               )}
             </div>
 
-            <div className="p-4 border-t border-[#1E232F] bg-[#1A1F2B]/40 flex items-center justify-between">
+            <div className="p-4 border-t border-[#1E232F] bg-[#1A1F2B]/40 flex items-center justify-between shrink-0">
               <span className="text-xs text-slate-400">
                 При удалении заявки она убирается из базы и пересчитывает ведомость
               </span>
               <button
+                type="button"
                 onClick={() => setSelectedRecruiterForApps(null)}
                 className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#252B3B] text-slate-200 text-xs font-semibold transition-all cursor-pointer"
               >
@@ -858,7 +880,8 @@ export const RecruiterPayroll: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   CalendarOff, 
   Check, 
@@ -686,15 +687,22 @@ export const Leaves: React.FC = () => {
       )}
 
       {/* CREATE LEAVE / TIMEOFF MODAL */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50">
+      {showCreateModal && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setShowCreateModal(false)}
+        >
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden my-auto animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-[#1E232F] bg-[#1A1F2B]/50 shrink-0">
               <div className="flex items-center gap-2">
                 <CalendarOff className="w-5 h-5 text-pink-500" />
                 <h3 className="font-bold text-white text-sm">Оформить заявку на отсутствие</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowCreateModal(false)}
                 className="p-1 rounded-lg hover:bg-[#1E232F] text-slate-400 hover:text-white"
               >
@@ -702,7 +710,7 @@ export const Leaves: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleCreateSubmit} className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1 min-h-0">
               {/* Type Switcher */}
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Тип отсутствия</label>
@@ -813,7 +821,7 @@ export const Leaves: React.FC = () => {
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-2 flex justify-end gap-2 border-t border-[#1E232F]">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
@@ -831,7 +839,8 @@ export const Leaves: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Target, 
   Video, 
@@ -533,15 +534,22 @@ export const Tier: React.FC = () => {
       )}
 
       {/* Edit Submission Modal */}
-      {editingSub && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      {editingSub && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setEditingSub(null)}
+        >
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Pencil className="w-4 h-4 text-pink-400" />
                 Редактировать разбор отката
               </h3>
               <button
+                type="button"
                 onClick={() => setEditingSub(null)}
                 className="text-slate-400 hover:text-white"
               >
@@ -593,7 +601,7 @@ export const Tier: React.FC = () => {
                   value={subComment}
                   onChange={(e) => setSubComment(e.target.value)}
                   placeholder="например: Хороший аим, но на 1:20 не заходи в упор без укрытия..."
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl p-3 text-white placeholder-slate-600 focus:outline-none focus:border-pink-500"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl p-3 text-white placeholder-slate-600 focus:outline-none focus:border-pink-500 resize-none"
                 />
               </div>
             </div>
@@ -617,19 +625,27 @@ export const Tier: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit Ticket Modal */}
-      {editingTicket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+      {editingTicket && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setEditingTicket(null)}
+        >
+          <div 
+            className="bg-[#151921] border border-[#1E232F] rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-[#1E232F] pb-3">
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Ticket className="w-4 h-4 text-pink-400" />
                 Статус тикета участника
               </h3>
               <button
+                type="button"
                 onClick={() => setEditingTicket(null)}
                 className="text-slate-400 hover:text-white"
               >
@@ -690,7 +706,8 @@ export const Tier: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

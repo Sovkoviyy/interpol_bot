@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   AtSign, 
   Save, 
@@ -870,9 +871,15 @@ export const Nicknames: React.FC = () => {
       </div>
 
       {/* Modal: Add / Edit Binding */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl">
+      {isModalOpen && createPortal(
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div 
+            className="bg-[#0B0E14] border border-[#1E232F] rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl my-auto animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-[#1E232F]">
               <div className="flex items-center gap-2.5">
                 <Layers className="w-5 h-5 text-pink-400" />
@@ -881,6 +888,7 @@ export const Nicknames: React.FC = () => {
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="text-slate-400 hover:text-white text-sm"
               >
@@ -974,7 +982,8 @@ export const Nicknames: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
