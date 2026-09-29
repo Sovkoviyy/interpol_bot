@@ -56,6 +56,7 @@ export const Honeypot: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sendingEmbed, setSendingEmbed] = useState(false);
+  const [settingUp, setSettingUp] = useState(false);
 
   const [config, setConfig] = useState<HoneypotConfig>({
     id: 'default',
@@ -110,6 +111,14 @@ export const Honeypot: React.FC = () => {
         setChannels(chList);
         if (conf.channelId) {
           setManualChannelId(conf.channelId);
+        } else if (chList.length > 0) {
+          const autoCh = chList.find((c: any) => c.name === 'канал-ловушка' || c.name === conf.channelName || c.name?.includes('ловушк'));
+          if (autoCh) {
+            conf.channelId = autoCh.id;
+            conf.channelName = autoCh.name;
+            setManualChannelId(autoCh.id);
+            api.put('/api/honeypot', { ...conf, channelId: autoCh.id, channelName: autoCh.name, guildId: activeGId || conf.guildId }).catch(() => {});
+          }
         }
         setRoles(res.data.roles || []);
         setRecentLogs(res.data.recentLogs || []);
@@ -195,6 +204,37 @@ export const Honeypot: React.FC = () => {
       modal.error(err.response?.data?.error || 'Ошибка сохранения привязки канала');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSetupChannel = async () => {
+    const ok = await modal.confirm({
+      title: 'Автоматическая настройка канала-ловушки?',
+      message: 'Бот автоматически проверит сервер Discord, найдет или создаст текстовый канал «канал-ловушка», настроит права доступа и закрепит официальный предупреждающий эмбед автомодерации.',
+      confirmText: 'Настроить канал',
+      cancelText: 'Отмена',
+      type: 'pink',
+    });
+    if (!ok) return;
+
+    try {
+      setSettingUp(true);
+      const res = await api.post('/api/honeypot/setup-channel', {
+        guildId: selectedGuildId || config.guildId,
+      });
+      if (res.data?.success) {
+        if (res.data.config) {
+          setConfig(res.data.config);
+          setManualChannelId(res.data.config.channelId || '');
+        }
+        modal.success(`Канал #${res.data.channelName} успешно настроен и активирован!`);
+        await loadData(true, selectedGuildId || res.data.guildId);
+      }
+    } catch (err: any) {
+      console.error('Failed to setup honeypot channel:', err);
+      modal.error(err.response?.data?.error || 'Ошибка настройки канала-ловушки');
+    } finally {
+      setSettingUp(false);
     }
   };
 
@@ -340,12 +380,26 @@ export const Honeypot: React.FC = () => {
         </div>
 
         {/* Global Action Buttons */}
-        <div className="flex items-center gap-3 self-end md:self-auto">
+        <div className="flex flex-wrap items-center gap-3 self-end md:self-auto">
+          <button
+            onClick={handleSetupChannel}
+            disabled={settingUp}
+            className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-dark-800 hover:bg-dark-700 text-zinc-300 border border-dark-600 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+            title="Автоматически найти или создать канал «канал-ловушка» в Discord и привязать его"
+          >
+            {settingUp ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-rose-400" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-rose-400" />
+            )}
+            Автонастройка
+          </button>
+
           <button
             onClick={() => handleSendEmbed()}
-            disabled={sendingEmbed || !config.channelId}
+            disabled={sendingEmbed || (!config.channelId && !manualChannelId)}
             className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-dark-800 hover:bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:border-rose-500 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
-            title={!config.channelId ? 'Сначала привяжите канал ниже' : 'Отправить закрепленный эмбед автомодерации в выбранный канал'}
+            title={!config.channelId && !manualChannelId ? 'Сначала привяжите канал ниже' : 'Отправить закрепленный эмбед автомодерации в выбранный канал'}
           >
             {sendingEmbed ? (
               <RefreshCw className="w-4 h-4 animate-spin text-rose-400" />
@@ -794,10 +848,18 @@ export const Honeypot: React.FC = () => {
             </div>
 
             {/* Hint Box */}
-            <div className="p-3 rounded-xl bg-dark-800/80 border border-dark-700/60 text-xs text-zinc-400 flex items-start gap-2.5">
-              <HelpCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <div>
-                Обычные участники видят канал и предупреждение, но не пишут. Спам-боты и рейдеры рассылают сообщения по всем доступным каналам и моментально попадаются в ловушку.
+            <div className="p-3.5 rounded-xl bg-dark-800/80 border border-dark-700/60 text-xs text-zinc-400 space-y-2">
+              <div className="flex items-start gap-2.5">
+                <HelpCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <b>Принцип работы:</b> Обычные участники видят закрепленный эмбед и не пишут в канал. Спам-боты и рейдеры рассылают спам по всем каналам подряд и моментально исключаются ботом с очисткой сообщений за 10 минут.
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 pt-2 border-t border-dark-700/50 text-zinc-300">
+                <Shield className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <b>Безопасное тестирование:</b> Администраторы сервера защищены от бана/кика. При отправке любого сообщения в канал бот сразу удалит его, выведет временное уведомление и зафиксирует событие в журнале ниже.
+                </div>
               </div>
             </div>
           </div>
@@ -882,12 +944,26 @@ export const Honeypot: React.FC = () => {
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span
                           className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                            log.actionTaken === 'BAN'
+                            log.actionTaken.includes('БАН') || log.actionTaken === 'BAN'
                               ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              : log.actionTaken.includes('КИК') || log.actionTaken === 'KICK'
+                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              : log.actionTaken.includes('АДМИН')
+                              ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                              : log.actionTaken.includes('WHITELIST')
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
                           }`}
                         >
-                          {log.actionTaken === 'BAN' ? 'Забанен (10м)' : 'Кикнут (10м)'}
+                          {log.actionTaken.includes('БАН') || log.actionTaken === 'BAN'
+                            ? 'Забанен (10м)'
+                            : log.actionTaken.includes('КИК') || log.actionTaken === 'KICK'
+                            ? 'Кикнут (10м)'
+                            : log.actionTaken.includes('АДМИН')
+                            ? 'Иммунитет (Админ)'
+                            : log.actionTaken.includes('WHITELIST')
+                            ? 'Иммунитет (Whitelist)'
+                            : log.actionTaken}
                         </span>
                       </td>
                       <td className="py-3 px-4 max-w-md truncate text-zinc-300 font-mono text-[11px]">

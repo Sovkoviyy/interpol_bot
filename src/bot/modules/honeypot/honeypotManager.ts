@@ -59,6 +59,148 @@ export class HoneypotManager {
   }
 
   /**
+   * Auto-sync Honeypot channel on bot startup or gateway reconnection
+   */
+  public async autoSync(): Promise<void> {
+    if (!bot.isReady()) return;
+
+    try {
+      const config = await this.getConfig();
+      if (!config.enabled) {
+        console.log('ℹ️ [Honeypot] Trap channel is disabled in configuration.');
+        return;
+      }
+
+      let channel: TextChannel | null = null;
+
+      // 1. Try to fetch existing channel by ID
+      if (config.channelId) {
+        channel = (bot.channels.cache.get(config.channelId) as TextChannel) || null;
+        if (!channel) {
+          channel = (await bot.channels.fetch(config.channelId).catch(() => null)) as TextChannel | null;
+        }
+      }
+
+      // 2. If channel not found by ID, auto-discover across guilds by name
+      if (!channel) {
+        const targetName = (config.channelName || 'канал-ловушка').toLowerCase();
+        for (const guild of bot.guilds.cache.values()) {
+          try {
+            const fetched = await guild.channels.fetch().catch(() => null);
+            const channelList = fetched ? Array.from(fetched.values()) : Array.from(guild.channels.cache.values());
+            const found = channelList.find(
+              (c: any) =>
+                c &&
+                (c.name?.toLowerCase() === targetName ||
+                  c.name?.toLowerCase() === 'канал-ловушка' ||
+                  c.name?.toLowerCase().includes('ловушк')) &&
+                (c.type === ChannelType.GuildText || Number(c.type) === 0)
+            ) as TextChannel | undefined;
+
+            if (found) {
+              channel = found;
+              console.log(`🛡️ [Honeypot Auto-Sync] Auto-discovered #${found.name} (${found.id}) in "${guild.name}"`);
+
+              await prisma.honeypotConfig.upsert({
+                where: { id: 'default' },
+                update: {
+                  guildId: guild.id,
+                  channelId: found.id,
+                  channelName: found.name,
+                },
+                create: {
+                  id: 'default',
+                  guildId: guild.id,
+                  channelId: found.id,
+                  channelName: found.name,
+                },
+              });
+              config.channelId = found.id;
+              config.guildId = guild.id;
+              config.channelName = found.name;
+              break;
+            }
+          } catch (e: any) {
+            console.warn(`⚠️ [Honeypot Auto-Sync] Guild channels fetch error (${guild.id}):`, e?.message);
+          }
+        }
+      }
+
+      // 3. Ensure warning embed is posted & pinned in the channel
+      if (channel) {
+        await this.ensureWarningEmbedInChannel(channel, config);
+        console.log(`✅ [Honeypot Auto-Sync] Active & monitoring #${channel.name} (${channel.id})`);
+      } else {
+        console.log('ℹ️ [Honeypot Auto-Sync] No honeypot channel bound or found in connected guilds.');
+      }
+    } catch (err: any) {
+      console.warn('⚠️ [Honeypot Auto-Sync] Error during auto-sync:', err?.message);
+    }
+  }
+
+  /**
+   * Helper to ensure the official warning embed is sent and pinned in the channel
+   */
+  private async ensureWarningEmbedInChannel(channel: TextChannel, config: any): Promise<void> {
+    try {
+      let warningMsg: Message | null = null;
+      if (config.messageId) {
+        warningMsg = await channel.messages.fetch(config.messageId).catch(() => null);
+      }
+
+      const embed = this.buildTrapEmbed(config);
+
+      if (warningMsg) {
+        await warningMsg.edit({ embeds: [embed] }).catch(() => null);
+      } else {
+        // Look for any existing warning embed by the bot in recent messages
+        const recent = await channel.messages.fetch({ limit: 10 }).catch(() => null);
+        if (recent) {
+          const existingBotEmbed = recent.find(
+            (m) => m.author.id === bot.user?.id && m.embeds.length > 0 && (m.embeds[0].title?.includes('ловушка') || m.embeds[0].title?.includes('Автомодерация'))
+          );
+          if (existingBotEmbed) {
+            warningMsg = existingBotEmbed;
+            await warningMsg.edit({ embeds: [embed] }).catch(() => null);
+            await warningMsg.pin().catch(() => {});
+          }
+        }
+
+        if (!warningMsg) {
+          warningMsg = await channel.send({ embeds: [embed] });
+          await warningMsg.pin().catch(() => {});
+          await this.cleanSystemMessages(channel);
+        }
+
+        if (warningMsg) {
+          await prisma.honeypotConfig.update({
+            where: { id: 'default' },
+            data: { messageId: warningMsg.id },
+          }).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ [Honeypot] ensureWarningEmbedInChannel error:`, err?.message);
+    }
+  }
+
+  /**
+   * Remove any Discord system messages (e.g. "pinned a message") to keep channel clean
+   */
+  private async cleanSystemMessages(channel: TextChannel): Promise<void> {
+    try {
+      const recent = await channel.messages.fetch({ limit: 10 }).catch(() => null);
+      if (recent) {
+        for (const m of recent.values()) {
+          if (m.system || Number(m.type) !== 0) {
+            await m.delete().catch(() => {});
+          }
+        }
+      }
+    } catch {}
+  }
+
+  /**
    * Automatically create or reconfigure the honeypot channel on Discord guild
    */
   public async setupChannel(targetGuildId?: string) {
@@ -98,13 +240,18 @@ export class HoneypotManager {
       }
     }
 
-    // Check if channel with name 'канал-ловушка' already exists in guild
+    // Check if channel with target name already exists in guild
     if (!channel) {
-      if (guild.channels.cache.size === 0) {
-        await guild.channels.fetch().catch(() => null);
-      }
-      const existing = guild.channels.cache.find(
-        (c) => c.name === (config.channelName || 'канал-ловушка') && (c.type === ChannelType.GuildText || Number(c.type) === 0)
+      const fetchedChannels = await guild.channels.fetch().catch(() => null);
+      const channelList = fetchedChannels ? Array.from(fetchedChannels.values()) : Array.from(guild.channels.cache.values());
+      const targetName = (config.channelName || 'канал-ловушка').toLowerCase();
+      const existing = channelList.find(
+        (c: any) =>
+          c &&
+          (c.name?.toLowerCase() === targetName ||
+            c.name?.toLowerCase() === 'канал-ловушка' ||
+            c.name?.toLowerCase().includes('ловушк')) &&
+          (c.type === ChannelType.GuildText || Number(c.type) === 0)
       ) as TextChannel | undefined;
       if (existing) {
         channel = existing;
@@ -163,6 +310,7 @@ export class HoneypotManager {
       warningMsg = await channel.send({ embeds: [embed] });
       try {
         await warningMsg.pin();
+        await this.cleanSystemMessages(channel);
       } catch {
         // ignore pin limit error
       }
@@ -251,6 +399,7 @@ export class HoneypotManager {
 
     // Pin the message
     await msg.pin().catch(() => {});
+    await this.cleanSystemMessages(channel);
 
     // Save channelId, channelName, guildId, and messageId to database permanently
     const updated = await prisma.honeypotConfig.upsert({
@@ -316,16 +465,29 @@ export class HoneypotManager {
    */
   public async refreshWarningMessage(): Promise<void> {
     const config = await this.getConfig();
-    if (!config.channelId || !config.messageId || !bot.isReady()) return;
+    if (!config.channelId || !bot.isReady()) return;
 
     try {
       const channel = (await bot.channels.fetch(config.channelId).catch(() => null)) as TextChannel | null;
       if (!channel) return;
 
-      const msg = await channel.messages.fetch(config.messageId).catch(() => null);
+      let msg: Message | null = null;
+      if (config.messageId) {
+        msg = await channel.messages.fetch(config.messageId).catch(() => null);
+      }
+
+      const embed = this.buildTrapEmbed(config);
       if (msg) {
-        const embed = this.buildTrapEmbed(config);
-        await msg.edit({ embeds: [embed] });
+        await msg.edit({ embeds: [embed] }).catch(() => null);
+      } else {
+        const newMsg = await channel.send({ embeds: [embed] }).catch(() => null);
+        if (newMsg) {
+          await newMsg.pin().catch(() => {});
+          await prisma.honeypotConfig.update({
+            where: { id: 'default' },
+            data: { messageId: newMsg.id },
+          }).catch(() => {});
+        }
       }
     } catch (err: any) {
       console.warn('⚠️ [Honeypot] Failed to refresh warning message:', err?.message);
@@ -338,13 +500,62 @@ export class HoneypotManager {
   public async handleMessage(message: Message): Promise<void> {
     if (!message.guild || message.author.bot) return;
 
+    // Must be a text-based channel
+    if (!message.channel.isTextBased()) return;
+
     const config = await this.getConfig();
-    if (!config.enabled || !config.channelId) return;
+    if (!config.enabled) return;
 
-    // Check if message was sent in honeypot channel
-    if (message.channelId !== config.channelId) return;
+    const channel = message.channel as TextChannel;
+    const chName = channel.name?.toLowerCase() || '';
+    const targetName = (config.channelName || 'канал-ловушка').toLowerCase();
 
-    // Check whitelist roles
+    // Check if message belongs to trap channel (either by bound ID or matching name)
+    const isTrapChannel =
+      (Boolean(config.channelId) && message.channelId === config.channelId) ||
+      chName === targetName ||
+      chName === 'канал-ловушка' ||
+      chName.includes('ловушк');
+
+    if (!isTrapChannel) return;
+
+    // Auto-heal / Auto-bind channel ID if not set or mismatched
+    if (config.channelId !== message.channelId) {
+      config.channelId = message.channelId;
+      config.guildId = message.guild.id;
+      config.channelName = channel.name;
+      await prisma.honeypotConfig.upsert({
+        where: { id: 'default' },
+        update: {
+          guildId: message.guild.id,
+          channelId: message.channelId,
+          channelName: channel.name,
+        },
+        create: {
+          id: 'default',
+          guildId: message.guild.id,
+          channelId: message.channelId,
+          channelName: channel.name,
+        },
+      }).catch(() => {});
+      console.log(`🛡️ [Honeypot] Auto-bound trap channel to #${channel.name} (${message.channelId})`);
+    }
+
+    // Clean up system messages (such as "pinned a message to this channel")
+    if (message.system) {
+      await message.delete().catch(() => {});
+      return;
+    }
+
+    const spamContent = message.content ? message.content.substring(0, 500) : '[Без текста / Вложение]';
+    console.log(`🚨 [Honeypot TRAP TRIGGERED] User ${message.author.tag} (${message.author.id}) posted in #${channel.name}: "${spamContent}"`);
+
+    // 1. Delete triggering message IMMEDIATELY so the trap channel stays completely clean
+    await message.delete().catch((err) => {
+      console.warn('⚠️ [Honeypot] Failed to delete message:', err?.message);
+    });
+
+    // 2. Check whitelist roles and admin privileges
     let whitelist: string[] = [];
     try {
       whitelist = JSON.parse(config.whitelistRoles || '[]');
@@ -352,34 +563,49 @@ export class HoneypotManager {
       whitelist = [];
     }
 
-    const member = message.member;
-    if (member) {
-      // Exempt administrators and owners
-      if (member.permissions.has(PermissionFlagsBits.Administrator) || message.guild.ownerId === member.id) {
-        console.log(`🛡️ [Honeypot] Admin ${message.author.tag} typed in trap channel, ignoring.`);
-        return;
+    const member = message.member || (await message.guild.members.fetch(message.author.id).catch(() => null));
+    const isAdmin =
+      member?.permissions.has(PermissionFlagsBits.Administrator) ||
+      message.guild.ownerId === message.author.id;
+    const isWhitelisted = member?.roles.cache.some((r) => whitelist.includes(r.id));
+
+    // Admin & Whitelist safety:
+    // Do NOT ban/kick server admins or whitelisted members when they test or accidentally post!
+    // Instead: delete their message, record in HoneypotLog so dashboard displays the incident,
+    // and show a temporary auto-deleting confirmation notice in the channel.
+    if (isAdmin || isWhitelisted) {
+      const roleType = isAdmin ? 'права Администратора' : 'роль из белого списка';
+      console.log(`🛡️ [Honeypot] User ${message.author.tag} has ${roleType}. Message deleted without ban/kick.`);
+
+      await prisma.honeypotLog.create({
+        data: {
+          guildId: message.guild.id,
+          userId: message.author.id,
+          userTag: message.author.tag,
+          userAvatar: message.author.displayAvatarURL(),
+          actionTaken: isAdmin ? 'ИММУНИТЕТ (АДМИНИСТРАТОР)' : 'ИММУНИТЕТ (WHITELIST)',
+          messageContent: spamContent,
+        },
+      }).catch(() => {});
+
+      const notice = await channel.send({
+        content: `⚠️ <@${message.author.id}>, **это канал-ловушка автомодерации!**\nВаше сообщение удалено. Вы не были исключены с сервера, так как обладаете (${roleType}).\n*Обычные пользователи и спам-боты за любое сообщение здесь получают немедленный ${config.action === 'BAN' ? 'бан' : 'кик'} с сервера.*`,
+      }).catch(() => null);
+
+      if (notice) {
+        setTimeout(() => notice.delete().catch(() => null), 7000);
       }
 
-      // Exempt whitelisted roles
-      const hasWhitelistedRole = member.roles.cache.some((r) => whitelist.includes(r.id));
-      if (hasWhitelistedRole) {
-        console.log(`🛡️ [Honeypot] Whitelisted user ${message.author.tag} typed in trap channel, ignoring.`);
-        return;
-      }
+      return;
     }
 
-    const spamContent = message.content ? message.content.substring(0, 500) : '[Без текста / Вложение]';
-    console.log(`🚨 [Honeypot TRAP TRIGGERED] User ${message.author.tag} (${message.author.id}) posted in honeypot: "${spamContent}"`);
-
-    // 1. Delete triggering message immediately
-    await message.delete().catch(() => {});
-
-    // 2. Punish: Ban with 10-minute message deletion (and unban if KICK/Softban)
+    // 3. Punish non-exempt violators (spammers, raid bots, unverified members)
     const action = config.action || 'KICK';
     const deleteSec = config.deleteSeconds || 600; // 10 minutes
+    let punished = false;
 
     try {
-      // Banning with deleteMessageSeconds deletes ALL messages across the server for the past 10 minutes
+      // Banning with deleteMessageSeconds purges all messages across the guild for the past 10 minutes
       await message.guild.members.ban(message.author.id, {
         deleteMessageSeconds: deleteSec,
         reason: 'Автомодерация: ловушка спам-ботов (канал-ловушка)',
@@ -393,26 +619,28 @@ export class HoneypotManager {
         ).catch(() => {});
       }
 
+      punished = true;
       console.log(`🛡️ [Honeypot] Successfully executed ${action} on ${message.author.tag}`);
     } catch (err: any) {
       console.error(`❌ [Honeypot] Failed to ban/kick ${message.author.tag}:`, err?.message);
       // Fallback: try regular kick
-      await member?.kick('Автомодерация: ловушка спам-ботов').catch(() => {});
+      if (member && member.kickable) {
+        await member.kick('Автомодерация: ловушка спам-ботов').catch(() => {});
+        punished = true;
+      }
     }
 
-    // 3. Increment counter in DB
-    let newTotal = config.totalCaught + 1;
+    // 4. Increment counter in DB
     try {
-      const updated = await prisma.honeypotConfig.update({
+      await prisma.honeypotConfig.update({
         where: { id: 'default' },
         data: { totalCaught: { increment: 1 } },
       });
-      newTotal = updated.totalCaught;
     } catch (e) {
       // ignore
     }
 
-    // 4. Record incident in HoneypotLog
+    // 5. Record incident in HoneypotLog
     try {
       await prisma.honeypotLog.create({
         data: {
@@ -420,7 +648,7 @@ export class HoneypotManager {
           userId: message.author.id,
           userTag: message.author.tag,
           userAvatar: message.author.displayAvatarURL(),
-          actionTaken: action,
+          actionTaken: punished ? (action === 'BAN' ? 'БАН (10М ОЧИСТКА)' : 'КИК (СОФТБАН 10М)') : 'ОШИБКА_НАКАЗАНИЯ',
           messageContent: spamContent,
         },
       });
@@ -428,8 +656,8 @@ export class HoneypotManager {
       // ignore
     }
 
-    // 5. Update warning embed in the channel with updated count
-    await this.refreshWarningMessage();
+    // 6. Update warning embed in the channel with updated count
+    await this.refreshWarningMessage().catch(() => {});
   }
 }
 

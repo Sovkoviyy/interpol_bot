@@ -59,6 +59,11 @@ export async function startBot() {
         create: { guildId, guildName: guild.name },
       }).catch(err => console.error(`Failed to sync guild ${guildId}:`, err));
     }
+
+    // Auto-sync & ensure Honeypot trap channel
+    await honeypotManager.autoSync().catch((err) => {
+      console.error('⚠️ [Honeypot] Auto-sync error on ready:', err);
+    });
   });
 
   try {

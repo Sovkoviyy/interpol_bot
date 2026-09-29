@@ -27,9 +27,41 @@ router.get('/', async (req, res) => {
       prisma.honeypotLog.count(),
     ]);
 
+    // Auto-discover channel if not set
+    if (!config.channelId && bot.isReady() && bot.guilds.cache.size > 0) {
+      for (const g of bot.guilds.cache.values()) {
+        try {
+          const chs = await g.channels.fetch().catch(() => null);
+          const channelList = chs ? Array.from(chs.values()) : Array.from(g.channels.cache.values());
+          const targetName = (config.channelName || 'канал-ловушка').toLowerCase();
+          const found = channelList.find(
+            (c: any) =>
+              c &&
+              (c.name?.toLowerCase() === targetName ||
+                c.name?.toLowerCase() === 'канал-ловушка' ||
+                c.name?.toLowerCase().includes('ловушк')) &&
+              (c.type === 0 || Number(c.type) === 0)
+          );
+          if (found) {
+            config.channelId = found.id;
+            config.guildId = g.id;
+            config.channelName = found.name;
+            await prisma.honeypotConfig.update({
+              where: { id: 'default' },
+              data: { guildId: g.id, channelId: found.id, channelName: found.name },
+            }).catch(() => {});
+            break;
+          }
+        } catch {}
+      }
+    }
+
     let channelDetails: any = null;
     if (config.channelId && bot.isReady()) {
-      const ch = bot.channels.cache.get(config.channelId);
+      let ch = bot.channels.cache.get(config.channelId);
+      if (!ch) {
+        ch = (await bot.channels.fetch(config.channelId).catch(() => null)) as any;
+      }
       if (ch) {
         channelDetails = {
           id: ch.id,
