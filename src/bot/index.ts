@@ -7,6 +7,7 @@ import { registerInteractionHandler } from './interactions/interactionHandler';
 import { initializeLoggingModule } from './modules/logging';
 import { EventScheduler } from './modules/events/eventScheduler';
 import { registerEventMessageListener } from './modules/events/eventMessageListener';
+import { botActivityManager } from './modules/activity/activityManager';
 import prisma from '../database/client';
 
 export async function startBot() {
@@ -29,6 +30,11 @@ export async function startBot() {
     
     // Start background event scheduler
     EventScheduler.start();
+
+    // Initialize bot presence & activity
+    await botActivityManager.applyActivity().catch(err => {
+      console.error('Failed to apply initial bot activity:', err);
+    });
 
     // Clear any slash commands from Discord API
     await clearSlashCommands();
@@ -58,6 +64,7 @@ export async function restartBot() {
 
   try {
     EventScheduler.stop();
+    botActivityManager.stop();
   } catch (err) {
     // ignore
   }

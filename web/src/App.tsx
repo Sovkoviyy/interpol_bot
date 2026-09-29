@@ -22,6 +22,7 @@ import { Profiles } from './pages/Profiles';
 import { ServerSetup } from './pages/ServerSetup';
 import { Nicknames } from './pages/Nicknames';
 import { Tier } from './pages/Tier';
+import { BotActivity } from './pages/BotActivity';
 import { ModalProvider } from './context/ModalContext';
 import { ShieldAlert } from 'lucide-react';
 
@@ -69,6 +70,7 @@ const AnimatedPageRoutes: React.FC<AnimatedPageRoutesProps> = ({ userPermissions
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/setup" element={<ProtectedRoute allowed={canSettings}><ServerSetup /></ProtectedRoute>} />
+          <Route path="/activity" element={<ProtectedRoute allowed={canSettings || canBotMessages}><BotActivity /></ProtectedRoute>} />
           <Route path="/profiles" element={<ProtectedRoute allowed={canProfiles}><Profiles /></ProtectedRoute>} />
           <Route path="/nicknames" element={<ProtectedRoute allowed={canSettings}><Nicknames /></ProtectedRoute>} />
           <Route path="/academy" element={<ProtectedRoute allowed={canAcademy}><Academy /></ProtectedRoute>} />

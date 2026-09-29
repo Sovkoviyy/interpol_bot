@@ -198,6 +198,26 @@ model BotMessagesConfig {
   createdAt           DateTime @default(now())
 }
 
+model BotActivityConfig {
+  id               String   @id @default("default")
+  enabled          Boolean  @default(true)
+  status           String   @default("online") // online, idle, dnd, invisible
+  mode             String   @default("STATIC") // STATIC, ROTATING
+  rotationInterval Int      @default(30)       // seconds: 15, 30, 60, 120, 300
+  
+  // Static activity fields
+  activityType     String   @default("PLAYING") // PLAYING, STREAMING, LISTENING, WATCHING, COMPETING, CUSTOM
+  activityName     String   @default("Majestic RP • INTERPOL")
+  activityState    String?  @default("Сервер Dallas")
+  streamingUrl     String?  @default("https://twitch.tv/interpol")
+  
+  // Rotating activities: JSON string of array
+  activitiesJson   String   @default("[]")
+  
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+}
+
 model CustomEmbedTemplate {
   id              String    @id @default(cuid())
   guildId         String

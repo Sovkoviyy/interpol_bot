@@ -21,6 +21,7 @@ import botManagementRouter from './routes/botManagement';
 import serverSetupRouter from './routes/serverSetup';
 import nicknamesRouter from './routes/nicknames';
 import tierRouter from './routes/tier';
+import botActivityRouter from './routes/botActivity';
 
 export function createServer() {
   const app = express();
@@ -56,6 +57,7 @@ export function createServer() {
   app.use('/api/setup', serverSetupRouter);
   app.use('/api/nicknames', nicknamesRouter);
   app.use('/api/tier', tierRouter);
+  app.use('/api/activity', botActivityRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {

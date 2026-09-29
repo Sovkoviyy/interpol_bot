@@ -19,7 +19,8 @@ import {
   UserX,
   FolderTree,
   AtSign,
-  Target
+  Target,
+  Gamepad2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -95,6 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
       title: 'Настройки & Бот',
       links: [
         { to: '/setup', label: 'Каналы & Сервер', icon: FolderTree, visible: canSettings },
+        { to: '/activity', label: 'Активность бота', icon: Gamepad2, visible: canSettings || canBotMessages },
         { to: '/messages', label: 'Сообщения бота', icon: MessageSquare, visible: canBotMessages },
         { to: '/embeds', label: 'Embed Генератор', icon: Sparkles, visible: canBotMessages },
       ],
