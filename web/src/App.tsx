@@ -23,6 +23,7 @@ import { ServerSetup } from './pages/ServerSetup';
 import { Nicknames } from './pages/Nicknames';
 import { Tier } from './pages/Tier';
 import { BotActivity } from './pages/BotActivity';
+import { Honeypot } from './pages/Honeypot';
 import { ModalProvider } from './context/ModalContext';
 import { ShieldAlert } from 'lucide-react';
 
@@ -79,6 +80,7 @@ const AnimatedPageRoutes: React.FC<AnimatedPageRoutesProps> = ({ userPermissions
           <Route path="/tier" element={<ProtectedRoute allowed={canTier}><Tier /></ProtectedRoute>} />
           <Route path="/leaves" element={<ProtectedRoute allowed={canLeaves}><Leaves /></ProtectedRoute>} />
           <Route path="/payroll" element={<ProtectedRoute allowed={canPayroll}><RecruiterPayroll /></ProtectedRoute>} />
+          <Route path="/honeypot" element={<ProtectedRoute allowed={canSettings}><Honeypot /></ProtectedRoute>} />
           <Route path="/blacklist" element={<ProtectedRoute allowed={canRecruit || canSettings}><Blacklist /></ProtectedRoute>} />
           <Route path="/members" element={<ProtectedRoute allowed={canMembers}><Members /></ProtectedRoute>} />
           <Route path="/messages" element={<ProtectedRoute allowed={canBotMessages}><BotMessages /></ProtectedRoute>} />

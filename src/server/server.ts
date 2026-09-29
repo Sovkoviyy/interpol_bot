@@ -22,6 +22,7 @@ import serverSetupRouter from './routes/serverSetup';
 import nicknamesRouter from './routes/nicknames';
 import tierRouter from './routes/tier';
 import botActivityRouter from './routes/botActivity';
+import honeypotRouter from './routes/honeypot';
 
 export function createServer() {
   const app = express();
@@ -58,6 +59,7 @@ export function createServer() {
   app.use('/api/nicknames', nicknamesRouter);
   app.use('/api/tier', tierRouter);
   app.use('/api/activity', botActivityRouter);
+  app.use('/api/honeypot', honeypotRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {

@@ -153,17 +153,22 @@ class BotActivityManager {
     const activities: any[] = [];
 
     if (type === ActivityType.Custom) {
-      // Custom status in Discord shows the `state` field directly in the member list
-      const customText = parsedState || parsedName || 'INTERPOL • Majestic RP';
+      // User explicitly selected Custom Status bubble
+      const customText = parsedName || parsedState || 'INTERPOL • Majestic RP';
       activities.push({
         name: 'Custom Status',
         type: ActivityType.Custom,
         state: customText,
       });
     } else {
-      // Primary Activity: PLAYING, STREAMING, LISTENING, WATCHING, COMPETING
+      // Pure Game Activity: PLAYING, STREAMING, LISTENING, WATCHING, COMPETING
+      // In Discord, this renders in the rich "Playing a game" activity box!
+      const displayName = parsedState && !parsedName.includes(parsedState)
+        ? `${parsedName} • ${parsedState}`
+        : parsedName || parsedState || 'Majestic RP • Dallas';
+
       const primaryActivity: any = {
-        name: parsedName || parsedState || 'Majestic RP • Dallas',
+        name: displayName,
         type,
       };
 
@@ -171,22 +176,7 @@ class BotActivityManager {
         primaryActivity.url = streamingUrl || 'https://twitch.tv/interpol';
       }
 
-      if (parsedState && parsedState.length > 0) {
-        primaryActivity.state = parsedState;
-      }
-
       activities.push(primaryActivity);
-
-      // Also add Custom Status: in modern Discord, this guarantees the status text
-      // appears right under the bot's name in the server member list without needing to click it!
-      const statusText = parsedState || parsedName;
-      if (statusText && statusText.length > 0) {
-        activities.push({
-          name: 'Custom Status',
-          type: ActivityType.Custom,
-          state: statusText,
-        });
-      }
     }
 
     return { activities, parsedName, parsedState, type };

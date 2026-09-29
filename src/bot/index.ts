@@ -8,6 +8,7 @@ import { initializeLoggingModule } from './modules/logging';
 import { EventScheduler } from './modules/events/eventScheduler';
 import { registerEventMessageListener } from './modules/events/eventMessageListener';
 import { botActivityManager } from './modules/activity/activityManager';
+import { honeypotManager } from './modules/honeypot/honeypotManager';
 import prisma from '../database/client';
 
 export async function startBot() {
@@ -22,8 +23,13 @@ export async function startBot() {
   registerEventMessageListener();
   initializeLoggingModule();
 
-  // Register prefix command listener for !clear_channel
-  bot.on(Events.MessageCreate, handleClearChannelMessageCommand);
+  // Register prefix command listener for !clear_channel and Honeypot trap
+  bot.on(Events.MessageCreate, async (message) => {
+    handleClearChannelMessageCommand(message);
+    await honeypotManager.handleMessage(message).catch((err) => {
+      console.error('Error handling honeypot trap message:', err);
+    });
+  });
 
   bot.once(Events.ClientReady, async () => {
     console.log(`🤖 [Bot Ready] Logged in as ${bot.user?.tag} (${bot.user?.id})!`);

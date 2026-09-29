@@ -20,7 +20,8 @@ import {
   FolderTree,
   AtSign,
   Target,
-  Gamepad2
+  Gamepad2,
+  ShieldAlert
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -87,6 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
     {
       title: 'Безопасность',
       links: [
+        { to: '/honeypot', label: 'Канал-ловушка', icon: ShieldAlert, visible: canSettings },
         { to: '/blacklist', label: 'Черный список (ЧС)', icon: UserX, visible: canRecruit || canSettings },
         { to: '/logs', label: 'Аудит сервера', icon: ScrollText, visible: canLogs },
         { to: '/roles', label: 'Уровни доступа', icon: ShieldCheck, visible: canRoles },

@@ -41,11 +41,6 @@ class ExtendedClient extends Client {
             name: 'Majestic RP • Dallas',
             type: 0,
           },
-          {
-            name: 'Custom Status',
-            type: 4,
-            state: 'Majestic RP • Dallas | INTERPOL',
-          },
         ],
       },
     });

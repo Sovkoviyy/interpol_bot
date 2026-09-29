@@ -218,6 +218,34 @@ model BotActivityConfig {
   createdAt        DateTime @default(now())
 }
 
+model HoneypotConfig {
+  id               String   @id @default("default")
+  guildId          String?
+  channelId        String?
+  channelName      String   @default("канал-ловушка")
+  messageId        String?
+  enabled          Boolean  @default(true)
+  action           String   @default("KICK") // KICK or BAN
+  deleteSeconds    Int      @default(600)    // 10 minutes = 600 seconds
+  totalCaught      Int      @default(0)
+  whitelistRoles   String   @default("[]")   // JSON string of role IDs
+  embedTitle       String   @default("🛡️ Канал-ловушка автомодерации")
+  embedDescription String   @default("⚠️ **НЕ ПИШИТЕ СООБЩЕНИЯ В ЭТОТ КАНАЛ**\n\nЭтот канал используется для выявления спам-ботов.\nЛюбое сообщение здесь приведёт к немедленной блокировке.")
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+}
+
+model HoneypotLog {
+  id             String   @id @default(cuid())
+  guildId        String?
+  userId         String
+  userTag        String
+  userAvatar     String?
+  actionTaken    String   @default("KICK")
+  messageContent String?
+  caughtAt       DateTime @default(now())
+}
+
 model CustomEmbedTemplate {
   id              String    @id @default(cuid())
   guildId         String
