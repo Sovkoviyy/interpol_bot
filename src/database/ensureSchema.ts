@@ -60,6 +60,40 @@ export async function ensureDatabaseSchema(): Promise<void> {
       ON "ManualNicknameLock"("guildId", "userId");
     `).catch(() => {});
 
+    // 4. Ensure HoneypotConfig table exists
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "HoneypotConfig" (
+        "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
+        "guildId" TEXT,
+        "channelId" TEXT,
+        "channelName" TEXT NOT NULL DEFAULT 'канал-ловушка',
+        "messageId" TEXT,
+        "enabled" BOOLEAN NOT NULL DEFAULT 1,
+        "action" TEXT NOT NULL DEFAULT 'KICK',
+        "deleteSeconds" INTEGER NOT NULL DEFAULT 600,
+        "totalCaught" INTEGER NOT NULL DEFAULT 0,
+        "whitelistRoles" TEXT NOT NULL DEFAULT '[]',
+        "embedTitle" TEXT NOT NULL DEFAULT '🛡️ Канал-ловушка автомодерации',
+        "embedDescription" TEXT NOT NULL DEFAULT '⚠️ **НЕ ПИШИТЕ СООБЩЕНИЯ В ЭТОТ КАНАЛ**\n\nЭтот канал используется для выявления спам-ботов.\nЛюбое сообщение здесь приведёт к немедленной блокировке.',
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `).catch(() => {});
+
+    // 5. Ensure HoneypotLog table exists
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "HoneypotLog" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "guildId" TEXT,
+        "userId" TEXT NOT NULL,
+        "userTag" TEXT NOT NULL,
+        "userAvatar" TEXT,
+        "actionTaken" TEXT NOT NULL DEFAULT 'KICK',
+        "messageContent" TEXT,
+        "caughtAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `).catch(() => {});
+
     console.log('✅ [DB Self-Heal] Database schema verified and in sync.');
   } catch (err: any) {
     console.warn('⚠️ [DB Self-Heal Warning]:', err?.message || err);

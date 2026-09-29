@@ -156,6 +156,7 @@ router.put('/', requirePermission('manageSettings'), async (req, res) => {
       whitelistRoles,
       embedTitle,
       embedDescription,
+      guildId,
     } = req.body;
 
     const whitelistStr = Array.isArray(whitelistRoles)
@@ -164,13 +165,26 @@ router.put('/', requirePermission('manageSettings'), async (req, res) => {
       ? whitelistRoles
       : '[]';
 
+    const cleanChannelId = channelId ? String(channelId).trim() : null;
+    let resolvedName = channelName || 'канал-ловушка';
+    let resolvedGuildId = guildId || (req.headers['x-guild-id'] as string) || resolveGuildId(req as AuthenticatedRequest);
+
+    if (cleanChannelId && bot.isReady()) {
+      const ch = bot.channels.cache.get(cleanChannelId) || await bot.channels.fetch(cleanChannelId).catch(() => null);
+      if (ch) {
+        if ((ch as any).name) resolvedName = (ch as any).name;
+        if ((ch as any).guildId) resolvedGuildId = (ch as any).guildId;
+      }
+    }
+
     const updated = await prisma.honeypotConfig.upsert({
       where: { id: 'default' },
       update: {
+        guildId: resolvedGuildId || undefined,
         enabled: typeof enabled === 'boolean' ? enabled : true,
         action: action === 'BAN' ? 'BAN' : 'KICK',
-        channelId: channelId || null,
-        channelName: channelName || 'канал-ловушка',
+        channelId: cleanChannelId,
+        channelName: resolvedName,
         deleteSeconds: Number(deleteSeconds) || 600,
         whitelistRoles: whitelistStr,
         embedTitle: embedTitle || '🛡️ Канал-ловушка автомодерации',
@@ -178,10 +192,11 @@ router.put('/', requirePermission('manageSettings'), async (req, res) => {
       },
       create: {
         id: 'default',
+        guildId: resolvedGuildId || undefined,
         enabled: typeof enabled === 'boolean' ? enabled : true,
         action: action === 'BAN' ? 'BAN' : 'KICK',
-        channelId: channelId || null,
-        channelName: channelName || 'канал-ловушка',
+        channelId: cleanChannelId,
+        channelName: resolvedName,
         deleteSeconds: Number(deleteSeconds) || 600,
         whitelistRoles: whitelistStr,
         embedTitle: embedTitle || '🛡️ Канал-ловушка автомодерации',
@@ -189,13 +204,38 @@ router.put('/', requirePermission('manageSettings'), async (req, res) => {
       },
     });
 
-    // Refresh warning message if channel is configured
-    await honeypotManager.refreshWarningMessage();
+    // Refresh warning message if channel and message are configured
+    if (updated.channelId && updated.messageId) {
+      await honeypotManager.refreshWarningMessage().catch(() => null);
+    }
 
     res.json({ success: true, config: updated });
   } catch (err: any) {
     console.error('[API Honeypot] Error updating config:', err);
     res.status(500).json({ error: err.message || 'Ошибка сохранения настроек' });
+  }
+});
+
+/**
+ * POST /api/honeypot/send-embed
+ * Send warning embed directly into the selected channel and pin it
+ */
+router.post('/send-embed', requirePermission('manageSettings'), async (req, res) => {
+  try {
+    const targetChannelId = req.body.channelId;
+    if (!targetChannelId || !String(targetChannelId).trim()) {
+      return res.status(400).json({ error: 'Пожалуйста, выберите канал или введите его ID' });
+    }
+    const targetGuildId = req.body.guildId || (req.headers['x-guild-id'] as string) || resolveGuildId(req as AuthenticatedRequest);
+    const result = await honeypotManager.sendEmbedToChannel(String(targetChannelId).trim(), targetGuildId);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[API Honeypot] Error sending embed:', err);
+    let msg = err?.message || 'Ошибка отправки сообщения в канал';
+    if (msg.includes('Missing Permissions') || err?.code === 50013) {
+      msg = 'У бота нет прав на отправку сообщений или встраивание ссылок (Embed Links) в выбранном канале Discord.';
+    }
+    res.status(500).json({ error: msg });
   }
 });
 

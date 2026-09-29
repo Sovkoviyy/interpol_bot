@@ -19,7 +19,7 @@ import {
   MessageSquare,
   HelpCircle,
   Hash,
-  FolderPlus
+  Send
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -55,7 +55,7 @@ export const Honeypot: React.FC = () => {
   const modal = useModal();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [settingUp, setSettingUp] = useState(false);
+  const [sendingEmbed, setSendingEmbed] = useState(false);
 
   const [config, setConfig] = useState<HoneypotConfig>({
     id: 'default',
@@ -161,30 +161,83 @@ export const Honeypot: React.FC = () => {
     }
   };
 
-  const handleSetupChannel = async () => {
+  const handleBindChannel = async (newChannelId: string) => {
+    if (!newChannelId || !newChannelId.trim()) return;
+    const cleanId = newChannelId.trim();
+    const matched = channels.find((c) => c.id === cleanId);
+    const channelName = matched?.name || config.channelName;
+
+    // Immediately update local state
+    setConfig((prev) => ({
+      ...prev,
+      channelId: cleanId,
+      channelName,
+    }));
+    setManualChannelId(cleanId);
+
+    // Immediately persist to backend so refresh NEVER resets it!
+    try {
+      setSaving(true);
+      const payload = {
+        ...config,
+        channelId: cleanId,
+        channelName,
+        guildId: selectedGuildId || config.guildId,
+        whitelistRoles: whitelistRoleIds,
+      };
+      const res = await api.put('/api/honeypot', payload);
+      if (res.data?.config) {
+        setConfig(res.data.config);
+      }
+      modal.success(`Канал ${matched ? `#${matched.name}` : cleanId} успешно привязан и сохранен в базе данных!`);
+    } catch (err: any) {
+      console.error('Failed to auto-save channel binding:', err);
+      modal.error(err.response?.data?.error || 'Ошибка сохранения привязки канала');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendEmbed = async (targetChId?: string) => {
+    const chId = targetChId || config.channelId || manualChannelId;
+    if (!chId) {
+      modal.error('Пожалуйста, сначала выберите или укажите ID канала для ловушки!');
+      return;
+    }
+
+    const matched = channels.find((c) => c.id === chId);
+    const channelDisplay = matched ? `#${matched.name}` : `ID: ${chId}`;
+
     const ok = await modal.confirm({
-      title: 'Создать канал-ловушку?',
-      message: 'Бот автоматически создаст текстовый канал "канал-ловушка" на сервере Discord, настроит правильные права доступа для @everyone и отправит закрепленное предупреждающее сообщение.',
-      confirmText: 'Создать канал',
+      title: 'Отправить предупреждающий эмбед?',
+      message: `Бот отправит официальный закрепленный эмбед автомодерации в канал ${channelDisplay} и привяжет этот канал как ловушку.\n\nВсе сообщения в этом канале будут моментально удаляться, а нарушители исключаться с сервера.`,
+      confirmText: 'Отправить эмбед в канал',
       cancelText: 'Отмена',
       type: 'pink',
     });
     if (!ok) return;
 
     try {
-      setSettingUp(true);
-      const res = await api.post('/api/honeypot/setup-channel', {
+      setSendingEmbed(true);
+      const res = await api.post('/api/honeypot/send-embed', {
+        channelId: chId,
         guildId: selectedGuildId || config.guildId,
       });
       if (res.data?.success) {
-        modal.success(`Канал #${res.data.channelName} успешно создан и активирован в Discord!`);
+        if (res.data.config) {
+          setConfig(res.data.config);
+          setManualChannelId(res.data.config.channelId || chId);
+        }
+        modal.success(
+          `Предупреждающий эмбед успешно отправлен и закреплен в канале #${res.data.channelName || chId}! Ловушка активна.`
+        );
         await loadData(true, selectedGuildId || res.data.guildId);
       }
     } catch (err: any) {
-      console.error('Failed to setup honeypot channel:', err);
-      modal.error(err.response?.data?.error || 'Ошибка создания канала-ловушки в Discord');
+      console.error('Failed to send honeypot embed:', err);
+      modal.error(err.response?.data?.error || 'Ошибка отправки эмбеда в канал');
     } finally {
-      setSettingUp(false);
+      setSendingEmbed(false);
     }
   };
 
@@ -289,16 +342,17 @@ export const Honeypot: React.FC = () => {
         {/* Global Action Buttons */}
         <div className="flex items-center gap-3 self-end md:self-auto">
           <button
-            onClick={handleSetupChannel}
-            disabled={settingUp}
-            className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-dark-800 text-rose-300 border border-rose-500/30 hover:bg-rose-500/10 transition-all flex items-center gap-2"
+            onClick={() => handleSendEmbed()}
+            disabled={sendingEmbed || !config.channelId}
+            className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-dark-800 hover:bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:border-rose-500 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+            title={!config.channelId ? 'Сначала привяжите канал ниже' : 'Отправить закрепленный эмбед автомодерации в выбранный канал'}
           >
-            {settingUp ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
+            {sendingEmbed ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-rose-400" />
             ) : (
-              <FolderPlus className="w-4 h-4 text-rose-400" />
+              <Send className="w-4 h-4 text-rose-400" />
             )}
-            Создать канал-ловушку в Discord
+            Отправить эмбед в канал
           </button>
 
           <button
@@ -471,13 +525,11 @@ export const Honeypot: React.FC = () => {
                   channels={channels}
                   value={config.channelId || ''}
                   onChange={(val) => {
-                    const matched = channels.find((c) => c.id === val);
-                    setConfig((prev) => ({
-                      ...prev,
-                      channelId: val || null,
-                      channelName: matched?.name || prev.channelName,
-                    }));
-                    if (val) setManualChannelId(val);
+                    if (val) handleBindChannel(val);
+                    else {
+                      setConfig((prev) => ({ ...prev, channelId: null }));
+                      setManualChannelId('');
+                    }
                   }}
                   channelType="text"
                   placeholder="Выберите текстовый канал для ловушки..."
@@ -494,13 +546,11 @@ export const Honeypot: React.FC = () => {
                   value={config.channelId || ''}
                   onChange={(e) => {
                     const chId = e.target.value;
-                    const matched = channels.find((c) => c.id === chId);
-                    setConfig((prev) => ({
-                      ...prev,
-                      channelId: chId || null,
-                      channelName: matched?.name || prev.channelName,
-                    }));
-                    if (chId) setManualChannelId(chId);
+                    if (chId) handleBindChannel(chId);
+                    else {
+                      setConfig((prev) => ({ ...prev, channelId: null }));
+                      setManualChannelId('');
+                    }
                   }}
                   className="w-full bg-dark-900 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
                 >
@@ -530,41 +580,60 @@ export const Honeypot: React.FC = () => {
                     type="button"
                     onClick={() => {
                       if (!manualChannelId) return;
-                      const matched = channels.find((c) => c.id === manualChannelId);
-                      setConfig((prev) => ({
-                        ...prev,
-                        channelId: manualChannelId,
-                        channelName: matched?.name || prev.channelName,
-                      }));
-                      modal.success(`Канал ${matched ? `#${matched.name}` : manualChannelId} выбран! Нажмите «Сохранить настройки».`);
+                      handleBindChannel(manualChannelId);
                     }}
                     className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-semibold transition-colors shrink-0"
                   >
-                    Применить ID
+                    Применить и сохранить ID
                   </button>
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-1">
-                  Скопируйте ID любого текстового канала в Discord (ПКМ по каналу ➔ «Скопировать ID канала») и нажмите «Применить ID».
+                  Скопируйте ID любого текстового канала в Discord (ПКМ по каналу ➔ «Скопировать ID канала») и нажмите «Применить и сохранить ID».
                 </p>
               </div>
 
-              {/* 4. Instant Confirmation Card & Direct Save */}
+              {/* 4. Instant Confirmation Card & Action Buttons */}
               {config.channelId && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-xs text-emerald-300 min-w-0">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="truncate">
-                      Выбран канал: <b>#{selectedChannel?.name || config.channelName || config.channelId}</b> (ID: {config.channelId})
+                <div className="p-3.5 rounded-xl bg-dark-900/90 border border-emerald-500/30 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-white/5">
+                    <div className="flex items-center gap-2 text-xs text-emerald-300 min-w-0">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span className="truncate">
+                        Привязанный канал: <b>#{selectedChannel?.name || config.channelName || config.channelId}</b> (ID: {config.channelId})
+                      </span>
+                    </div>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 self-start sm:self-auto font-medium">
+                      Сохранено в базе данных ✓
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="px-3.5 py-1.5 rounded-lg bg-emerald-500 text-white font-semibold text-xs hover:bg-emerald-600 transition-colors shrink-0 self-end sm:self-auto shadow-sm"
-                  >
-                    {saving ? 'Сохранение...' : 'Сохранить этот канал'}
-                  </button>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="text-[11px] text-zinc-400 flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${config.messageId ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                      {config.messageId
+                        ? `Предупреждающий эмбед закреплен в канале (ID сообщения: ${config.messageId})`
+                        : 'Эмбед с предупреждением еще не отправлен в канал'}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSendEmbed(config.channelId || undefined)}
+                      disabled={sendingEmbed}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-semibold text-xs shadow-md shadow-rose-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+                    >
+                      {sendingEmbed ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Отправка эмбеда...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          {config.messageId ? 'Обновить эмбед в канале' : 'Отправить эмбед в канал'}
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -199,6 +199,90 @@ export class HoneypotManager {
   }
 
   /**
+   * Send the warning trap embed message directly into a chosen Discord channel and pin it
+   */
+  public async sendEmbedToChannel(targetChannelId: string, targetGuildId?: string) {
+    if (!bot.isReady()) {
+      throw new Error('Discord бот не подключен к сети');
+    }
+
+    if (!targetChannelId || !targetChannelId.trim()) {
+      throw new Error('ID канала Discord не указан');
+    }
+
+    const cleanChannelId = targetChannelId.trim();
+
+    // Fetch the channel from Discord
+    const channel = (await bot.channels.fetch(cleanChannelId).catch((err: any) => {
+      console.warn('⚠️ [Honeypot] Channel fetch error:', err?.message);
+      return null;
+    })) as TextChannel | null;
+
+    if (!channel) {
+      throw new Error(`Канал с ID ${cleanChannelId} не найден в Discord или бот не имеет к нему доступа`);
+    }
+
+    if (!channel.isTextBased()) {
+      throw new Error('Указанный канал не является текстовым каналом Discord');
+    }
+
+    // Check bot permissions in this channel
+    if (channel.guild) {
+      const me = channel.guild.members.me;
+      if (me) {
+        const perms = channel.permissionsFor(me);
+        if (!perms.has(PermissionFlagsBits.ViewChannel)) {
+          throw new Error(`У бота нет прав на просмотр канала #${channel.name}`);
+        }
+        if (!perms.has(PermissionFlagsBits.SendMessages)) {
+          throw new Error(`У бота нет прав на отправку сообщений в канал #${channel.name}`);
+        }
+        if (!perms.has(PermissionFlagsBits.EmbedLinks)) {
+          throw new Error(`У бота нет прав на встраивание ссылок (Embed Links) в канале #${channel.name}`);
+        }
+      }
+    }
+
+    const config = await this.getConfig();
+    const embed = this.buildTrapEmbed(config);
+
+    // Send the embed message
+    const msg = await channel.send({ embeds: [embed] });
+
+    // Pin the message
+    await msg.pin().catch(() => {});
+
+    // Save channelId, channelName, guildId, and messageId to database permanently
+    const updated = await prisma.honeypotConfig.upsert({
+      where: { id: 'default' },
+      update: {
+        guildId: channel.guildId || targetGuildId || config.guildId,
+        channelId: channel.id,
+        channelName: channel.name,
+        messageId: msg.id,
+      },
+      create: {
+        id: 'default',
+        guildId: channel.guildId || targetGuildId || config.guildId,
+        channelId: channel.id,
+        channelName: channel.name,
+        messageId: msg.id,
+      },
+    });
+
+    console.log(`🛡️ [Honeypot] Embed successfully sent to #${channel.name} (${channel.id}), msg ID: ${msg.id}`);
+
+    return {
+      success: true,
+      channelId: channel.id,
+      channelName: channel.name,
+      guildId: channel.guildId,
+      messageId: msg.id,
+      config: updated,
+    };
+  }
+
+  /**
    * Build the official warning embed with live counter
    */
   public buildTrapEmbed(config: any): EmbedBuilder {
