@@ -24,7 +24,7 @@ export async function startBot() {
   // Register prefix command listener for !clear_channel
   bot.on(Events.MessageCreate, handleClearChannelMessageCommand);
 
-  bot.once('ready', async () => {
+  bot.once(Events.ClientReady, async () => {
     console.log(`🤖 [Bot Ready] Logged in as ${bot.user?.tag} (${bot.user?.id})!`);
     
     // Start background event scheduler

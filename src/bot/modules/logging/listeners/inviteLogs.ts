@@ -95,7 +95,7 @@ export async function trackMemberJoinInvite(member: GuildMember): Promise<{ code
 
 export function registerInviteLogs() {
   // Cache invites on bot ready
-  bot.once('ready', async () => {
+  bot.once(Events.ClientReady, async () => {
     for (const [guildId] of bot.guilds.cache) {
       await cacheGuildInvites(guildId);
     }
