@@ -80,6 +80,7 @@ export const Honeypot: React.FC = () => {
   const [recentLogs, setRecentLogs] = useState<HoneypotLogItem[]>([]);
   const [totalLogs, setTotalLogs] = useState(0);
   const [isBotOnline, setIsBotOnline] = useState(false);
+  const [manualChannelId, setManualChannelId] = useState<string>('');
 
   const loadData = async (silent = false, guildIdOverride?: string) => {
     try {
@@ -95,7 +96,21 @@ export const Honeypot: React.FC = () => {
         } catch {
           setWhitelistRoleIds([]);
         }
-        setChannels(res.data.channels || []);
+        let chList = res.data.channels || [];
+        if (chList.length === 0) {
+          try {
+            const fallbackCh = await api.get('/guild/channels');
+            if (fallbackCh.data?.channels?.length > 0) {
+              chList = fallbackCh.data.channels;
+            }
+          } catch (e) {
+            console.warn('Fallback channels fetch error:', e);
+          }
+        }
+        setChannels(chList);
+        if (conf.channelId) {
+          setManualChannelId(conf.channelId);
+        }
         setRoles(res.data.roles || []);
         setRecentLogs(res.data.recentLogs || []);
         setTotalLogs(res.data.totalLogs || 0);
@@ -238,6 +253,10 @@ export const Honeypot: React.FC = () => {
   }
 
   const selectedChannel = channels.find((c) => c.id === config.channelId);
+  const textChannels = channels.filter((c) => {
+    const t = Number(c.type);
+    return t === 0 || t === 5 || t === 15 || c.type === 'GUILD_TEXT' || c.type === 'GUILD_NEWS';
+  });
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -430,34 +449,123 @@ export const Honeypot: React.FC = () => {
             </div>
 
             {/* Target Channel Selector */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-zinc-400">Канал-ловушка в Discord:</span>
+            <div className="space-y-3 p-4 rounded-xl bg-dark-800/50 border border-dark-700/80">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                  <Hash className="w-4 h-4 text-rose-400" />
+                  Канал-ловушка в Discord:
+                </span>
                 <button
                   type="button"
                   onClick={() => loadData(false, selectedGuildId)}
                   className="text-[11px] text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
                 >
                   <RefreshCw className="w-3 h-3" />
-                  Обновить список каналов ({channels.length})
+                  Обновить список ({channels.length})
                 </button>
               </div>
-              <ChannelSelect
-                channels={channels}
-                value={config.channelId || ''}
-                onChange={(val) => setConfig((prev) => ({ ...prev, channelId: val }))}
-                channelType="text"
-                placeholder="Выберите текстовый канал для ловушки..."
-              />
-              {channels.length === 0 ? (
-                <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>Каналы не загружены. Нажмите «Обновить список каналов» или нажмите вверху кнопку «Создать канал-ловушку в Discord».</span>
+
+              {/* 1. Rich Searchable Dropdown */}
+              <div>
+                <ChannelSelect
+                  channels={channels}
+                  value={config.channelId || ''}
+                  onChange={(val) => {
+                    const matched = channels.find((c) => c.id === val);
+                    setConfig((prev) => ({
+                      ...prev,
+                      channelId: val || null,
+                      channelName: matched?.name || prev.channelName,
+                    }));
+                    if (val) setManualChannelId(val);
+                  }}
+                  channelType="text"
+                  placeholder="Выберите текстовый канал для ловушки..."
+                />
+              </div>
+
+              {/* 2. Standard Native Select (100% Reliable Fallback) */}
+              <div className="pt-2 border-t border-dark-700/50">
+                <div className="text-[11px] text-zinc-400 mb-1 flex items-center justify-between">
+                  <span>Стандартный список каналов:</span>
+                  <span className="text-zinc-500 text-[10px]">Всего: {textChannels.length > 0 ? textChannels.length : channels.length}</span>
                 </div>
-              ) : (
-                <p className="text-[11px] text-zinc-500 mt-1">
-                  Или нажмите вверху кнопку <b>«Создать канал-ловушку в Discord»</b> для автоматического создания.
+                <select
+                  value={config.channelId || ''}
+                  onChange={(e) => {
+                    const chId = e.target.value;
+                    const matched = channels.find((c) => c.id === chId);
+                    setConfig((prev) => ({
+                      ...prev,
+                      channelId: chId || null,
+                      channelName: matched?.name || prev.channelName,
+                    }));
+                    if (chId) setManualChannelId(chId);
+                  }}
+                  className="w-full bg-dark-900 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
+                >
+                  <option value="">-- Выберите канал из списка ({textChannels.length > 0 ? textChannels.length : channels.length}) --</option>
+                  {(textChannels.length > 0 ? textChannels : channels).map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      #{ch.name} (ID: {ch.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 3. Manual Channel ID Input */}
+              <div className="pt-2 border-t border-dark-700/50">
+                <div className="text-[11px] text-zinc-400 mb-1">
+                  Или укажите ID канала вручную:
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={manualChannelId}
+                    onChange={(e) => setManualChannelId(e.target.value.trim())}
+                    placeholder="Например: 1382895682406449323"
+                    className="flex-1 bg-dark-900 border border-dark-700 rounded-xl px-3 py-2 text-xs text-white font-mono placeholder:text-zinc-600 focus:outline-none focus:border-rose-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!manualChannelId) return;
+                      const matched = channels.find((c) => c.id === manualChannelId);
+                      setConfig((prev) => ({
+                        ...prev,
+                        channelId: manualChannelId,
+                        channelName: matched?.name || prev.channelName,
+                      }));
+                      modal.success(`Канал ${matched ? `#${matched.name}` : manualChannelId} выбран! Нажмите «Сохранить настройки».`);
+                    }}
+                    className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-semibold transition-colors shrink-0"
+                  >
+                    Применить ID
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Скопируйте ID любого текстового канала в Discord (ПКМ по каналу ➔ «Скопировать ID канала») и нажмите «Применить ID».
                 </p>
+              </div>
+
+              {/* 4. Instant Confirmation Card & Direct Save */}
+              {config.channelId && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-emerald-300 min-w-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="truncate">
+                      Выбран канал: <b>#{selectedChannel?.name || config.channelName || config.channelId}</b> (ID: {config.channelId})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-500 text-white font-semibold text-xs hover:bg-emerald-600 transition-colors shrink-0 self-end sm:self-auto shadow-sm"
+                  >
+                    {saving ? 'Сохранение...' : 'Сохранить этот канал'}
+                  </button>
+                </div>
               )}
             </div>
 

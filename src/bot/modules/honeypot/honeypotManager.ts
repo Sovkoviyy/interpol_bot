@@ -3,11 +3,12 @@ import {
   PermissionFlagsBits, 
   EmbedBuilder, 
   Message, 
-  TextChannel,
-  Guild
+  TextChannel, 
+  Guild 
 } from 'discord.js';
 import bot from '../../client';
 import prisma from '../../../database/client';
+import appConfig from '../../../config';
 
 export class HoneypotManager {
   /**
@@ -62,7 +63,7 @@ export class HoneypotManager {
    */
   public async setupChannel(targetGuildId?: string) {
     if (!bot.isReady()) {
-      throw new Error('Discord бот не подключен');
+      throw new Error('Discord бот не подключен к сети');
     }
 
     let guild: Guild | null = null;
@@ -75,6 +76,10 @@ export class HoneypotManager {
       guild = bot.guilds.cache.get(config.guildId) || await bot.guilds.fetch(config.guildId).catch(() => null);
     }
 
+    if (!guild && appConfig.discord.guildId) {
+      guild = bot.guilds.cache.get(appConfig.discord.guildId) || await bot.guilds.fetch(appConfig.discord.guildId).catch(() => null);
+    }
+
     if (!guild) {
       guild = bot.guilds.cache.first() || null;
     }
@@ -85,11 +90,24 @@ export class HoneypotManager {
 
     let channel: TextChannel | null = null;
 
-    // Check if channel already exists
+    // Check if channel already exists by ID
     if (config.channelId) {
       channel = (guild.channels.cache.get(config.channelId) as TextChannel) || null;
       if (!channel) {
         channel = await guild.channels.fetch(config.channelId).catch(() => null) as TextChannel | null;
+      }
+    }
+
+    // Check if channel with name 'канал-ловушка' already exists in guild
+    if (!channel) {
+      if (guild.channels.cache.size === 0) {
+        await guild.channels.fetch().catch(() => null);
+      }
+      const existing = guild.channels.cache.find(
+        (c) => c.name === (config.channelName || 'канал-ловушка') && (c.type === ChannelType.GuildText || Number(c.type) === 0)
+      ) as TextChannel | undefined;
+      if (existing) {
+        channel = existing;
       }
     }
 

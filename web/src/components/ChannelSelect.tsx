@@ -50,14 +50,42 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
 
   // Filter by requested type
   const filteredByType = channels.filter((c) => {
-    if (channelType === 'text') return c.type === 0 || c.type === 'GUILD_TEXT';
-    if (channelType === 'voice') return c.type === 2 || c.type === 'GUILD_VOICE';
-    if (channelType === 'category') return c.type === 4 || c.type === 'GUILD_CATEGORY';
+    const t = Number(c.type);
+    if (channelType === 'text') {
+      return (
+        t === 0 ||
+        t === 5 ||
+        t === 15 ||
+        c.type === 'GUILD_TEXT' ||
+        c.type === 'GUILD_NEWS' ||
+        c.type === 'GUILD_ANNOUNCEMENT' ||
+        c.type === 'GUILD_FORUM'
+      );
+    }
+    if (channelType === 'voice') {
+      return (
+        t === 2 ||
+        t === 13 ||
+        c.type === 'GUILD_VOICE' ||
+        c.type === 'GUILD_STAGE_VOICE'
+      );
+    }
+    if (channelType === 'category') {
+      return t === 4 || c.type === 'GUILD_CATEGORY';
+    }
     return true;
   });
 
+  // Fallback: If filtered list is empty but channels exist, show all non-category channels so user is never stuck
+  const activeChannelList =
+    filteredByType.length > 0 || channels.length === 0
+      ? filteredByType
+      : channelType === 'text'
+      ? channels.filter((c) => Number(c.type) !== 4 && c.type !== 'GUILD_CATEGORY')
+      : channels;
+
   // Filter by search keyword
-  const filteredChannels = filteredByType.filter(
+  const filteredChannels = activeChannelList.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.id.includes(search)

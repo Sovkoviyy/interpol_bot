@@ -1,9 +1,11 @@
 import { Router } from 'express';
-import { requireAuth } from '../middlewares/auth';
+import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import prisma from '../../database/client';
 import honeypotManager from '../../bot/modules/honeypot/honeypotManager';
 import bot from '../../bot/client';
+import appConfig from '../../config';
+import { resolveGuildId, getDiscordGuild } from '../utils/guild';
 
 const router = Router();
 
@@ -37,11 +39,15 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const requestedGuildId = (req.query.guildId as string) || (req.headers['x-guild-id'] as string) || config.guildId;
-    let guild = requestedGuildId && requestedGuildId !== 'default'
-      ? (bot.guilds.cache.get(requestedGuildId) || await bot.guilds.fetch(requestedGuildId).catch(() => null))
-      : null;
+    const requestedGuildId = (req.query.guildId as string) || (req.headers['x-guild-id'] as string) || resolveGuildId(req as AuthenticatedRequest) || config.guildId;
+    let guild = requestedGuildId ? await getDiscordGuild(requestedGuildId) : null;
 
+    if (!guild && config.guildId) {
+      guild = await getDiscordGuild(config.guildId);
+    }
+    if (!guild && appConfig.discord.guildId) {
+      guild = await getDiscordGuild(appConfig.discord.guildId);
+    }
     if (!guild && bot.guilds.cache.size > 0) {
       guild = bot.guilds.cache.first() || null;
     }
@@ -50,6 +56,9 @@ router.get('/', async (req, res) => {
     let roles: any[] = [];
 
     if (guild) {
+      if (guild.channels.cache.size === 0) {
+        await guild.channels.fetch().catch(() => null);
+      }
       try {
         const fetchedChannels = await guild.channels.fetch();
         channels = Array.from(fetchedChannels.values())
@@ -57,7 +66,7 @@ router.get('/', async (req, res) => {
           .map((c) => ({
             id: c.id,
             name: c.name,
-            type: c.type,
+            type: Number(c.type),
             parentId: c.parentId,
           }));
       } catch (err: any) {
@@ -65,33 +74,47 @@ router.get('/', async (req, res) => {
         channels = Array.from(guild.channels.cache.values()).map((c) => ({
           id: c.id,
           name: c.name,
-          type: c.type,
+          type: Number(c.type),
           parentId: c.parentId,
         }));
       }
 
-      try {
-        const fetchedRoles = await guild.roles.fetch();
-        roles = Array.from(fetchedRoles.values())
-          .filter((r) => r.name !== '@everyone')
-          .sort((a, b) => b.position - a.position)
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            color: r.color,
-            position: r.position,
-          }));
-      } catch (err: any) {
-        console.warn('⚠️ [Honeypot] Role fetch error, fallback to cache:', err?.message);
-        roles = Array.from(guild.roles.cache.values())
-          .filter((r) => r.name !== '@everyone')
-          .sort((a, b) => b.position - a.position)
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            color: r.color,
-            position: r.position,
-          }));
+      if (guild.roles.cache.size <= 1) {
+        await guild.roles.fetch().catch(() => null);
+      }
+      roles = Array.from(guild.roles.cache.values())
+        .filter((r) => r.name !== '@everyone')
+        .sort((a, b) => b.position - a.position)
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          color: r.color,
+          position: r.position,
+        }));
+    }
+
+    // Safety fallback: if channels is STILL empty, aggregate from any connected guild
+    if (channels.length === 0 && bot.guilds.cache.size > 0) {
+      for (const g of bot.guilds.cache.values()) {
+        try {
+          const gChs = await g.channels.fetch().catch(() => g.channels.cache);
+          for (const c of gChs.values()) {
+            if (c) {
+              channels.push({
+                id: c.id,
+                name: c.name,
+                type: Number(c.type),
+                parentId: c.parentId,
+              });
+            }
+          }
+          if (channels.length > 0) {
+            if (!guild) guild = g;
+            break;
+          }
+        } catch {
+          // ignore
+        }
       }
     }
 
@@ -182,12 +205,16 @@ router.put('/', requirePermission('manageSettings'), async (req, res) => {
  */
 router.post('/setup-channel', requirePermission('manageSettings'), async (req, res) => {
   try {
-    const targetGuildId = req.body.guildId || (req.headers['x-guild-id'] as string);
+    const targetGuildId = req.body.guildId || (req.headers['x-guild-id'] as string) || resolveGuildId(req as AuthenticatedRequest);
     const result = await honeypotManager.setupChannel(targetGuildId);
     res.json(result);
   } catch (err: any) {
     console.error('[API Honeypot] Error setting up channel:', err);
-    res.status(500).json({ error: err.message || 'Ошибка создания канала-ловушки' });
+    let msg = err?.message || 'Ошибка создания канала-ловушки';
+    if (msg.includes('Missing Permissions') || err?.code === 50013) {
+      msg = 'У бота нет прав «Управлять каналами» (Manage Channels) на сервере Discord. Выдайте боту роль с этим правом или создайте канал в Discord вручную и выберите его в выпадающем списке ниже.';
+    }
+    res.status(500).json({ error: msg });
   }
 });
 

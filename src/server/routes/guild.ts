@@ -21,6 +21,10 @@ guildRouter.get('/roles', requireAuth, async (req: AuthenticatedRequest, res: Re
     return res.json({ roles: [] });
   }
 
+  if (guild.roles.cache.size <= 1) {
+    await guild.roles.fetch().catch(() => null);
+  }
+
   const botMember = guild.members.me;
   const botHighestRolePos = botMember?.roles.highest.position ?? 0;
 
@@ -45,6 +49,10 @@ guildRouter.get('/channels', requireAuth, async (req: AuthenticatedRequest, res:
 
   if (!guild) {
     return res.json({ channels: [] });
+  }
+
+  if (guild.channels.cache.size === 0) {
+    await guild.channels.fetch().catch(() => null);
   }
 
   const channels = guild.channels.cache
