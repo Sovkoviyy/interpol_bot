@@ -94,6 +94,24 @@ export async function ensureDatabaseSchema(): Promise<void> {
       );
     `).catch(() => {});
 
+    // 6. Ensure BotActivityConfig table exists
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "BotActivityConfig" (
+        "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
+        "enabled" BOOLEAN NOT NULL DEFAULT 1,
+        "status" TEXT NOT NULL DEFAULT 'online',
+        "mode" TEXT NOT NULL DEFAULT 'STATIC',
+        "rotationInterval" INTEGER NOT NULL DEFAULT 30,
+        "activityType" TEXT NOT NULL DEFAULT 'PLAYING',
+        "activityName" TEXT NOT NULL DEFAULT 'Majestic RP • Dallas',
+        "activityState" TEXT DEFAULT 'Семья INTERPOL • {members} бойцов',
+        "streamingUrl" TEXT DEFAULT 'https://twitch.tv/interpol',
+        "activitiesJson" TEXT NOT NULL DEFAULT '[]',
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `).catch(() => {});
+
     console.log('✅ [DB Self-Heal] Database schema verified and in sync.');
   } catch (err: any) {
     console.warn('⚠️ [DB Self-Heal Warning]:', err?.message || err);

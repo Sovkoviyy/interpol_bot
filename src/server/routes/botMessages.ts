@@ -115,19 +115,7 @@ botMessagesRouter.post('/', requireAuth, requirePermission('manageSettings'), as
     },
   });
 
-  // Dynamically update Discord bot presence / activity
-  try {
-    if (bot.user && botStatusText) {
-      let actType = ActivityType.Playing;
-      if (botStatusActivity === 'WATCHING') actType = ActivityType.Watching;
-      else if (botStatusActivity === 'LISTENING') actType = ActivityType.Listening;
-      else if (botStatusActivity === 'COMPETING') actType = ActivityType.Competing;
 
-      bot.user.setActivity(botStatusText, { type: actType });
-    }
-  } catch (err) {
-    console.error('[BotMessages] Error setting bot presence:', err);
-  }
 
   const updatedCustom = await BotMessageManager.getGuildCustomMessages(guildId);
 

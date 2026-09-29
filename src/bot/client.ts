@@ -36,12 +36,7 @@ class ExtendedClient extends Client {
       ],
       presence: {
         status: 'online',
-        activities: [
-          {
-            name: 'Majestic RP • Dallas',
-            type: 0,
-          },
-        ],
+        activities: [],
       },
     });
 

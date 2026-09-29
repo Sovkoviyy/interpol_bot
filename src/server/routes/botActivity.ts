@@ -105,4 +105,19 @@ router.post('/reset', requirePermission('manageSettings'), async (req, res) => {
   }
 });
 
+/**
+ * POST /api/activity/apply
+ * Force immediately re-apply current activity to Discord Gateway
+ */
+router.post('/apply', requirePermission('manageSettings'), async (req, res) => {
+  try {
+    await botActivityManager.applyActivity();
+    const snapshot = await botActivityManager.getDashboardSnapshot();
+    res.json({ success: true, message: 'Активность успешно применена в Discord', snapshot });
+  } catch (err: any) {
+    console.error('[API Activity] Failed to apply activity:', err);
+    res.status(500).json({ error: err.message || 'Ошибка применения активности' });
+  }
+});
+
 export default router;

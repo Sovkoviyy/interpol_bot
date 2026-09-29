@@ -206,6 +206,25 @@ export const BotActivity: React.FC = () => {
     }
   };
 
+  // Force Apply immediately
+  const handleApplyNow = async () => {
+    try {
+      setSaving(true);
+      await api.put('/api/activity', config);
+      const res = await api.post('/api/activity/apply');
+      if (res.data?.snapshot) {
+        setLiveSnapshot(res.data.snapshot.live);
+        setLiveVariables(res.data.snapshot.variables || {});
+      }
+      modal.success('Активность бота моментально отправлена в Discord Gateway!');
+    } catch (err: any) {
+      console.error('Failed to apply activity:', err);
+      modal.error(err.response?.data?.error || 'Ошибка применения активности');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Reset / Clear activity
   const handleReset = async () => {
     const ok = await modal.confirm({
@@ -390,6 +409,16 @@ export const BotActivity: React.FC = () => {
           </button>
 
           <button
+            onClick={handleApplyNow}
+            disabled={saving || !config.enabled}
+            className="px-4 py-2.5 rounded-xl text-sm font-medium bg-dark-800 text-pink-300 border border-pink-500/30 hover:bg-pink-500/10 hover:border-pink-500/50 transition-all flex items-center gap-2 disabled:opacity-50"
+            title="Применить текущую активность в Discord прямо сейчас"
+          >
+            <Sparkles className="w-4 h-4 text-pink-400" />
+            Применить сейчас
+          </button>
+
+          <button
             onClick={handleSave}
             disabled={saving}
             className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white shadow-lg shadow-pink-500/25 transition-all flex items-center gap-2 disabled:opacity-50"
@@ -397,12 +426,12 @@ export const BotActivity: React.FC = () => {
             {saving ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                Применяю...
+                Сохранение...
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                Сохранить и применить
+                Сохранить настройки
               </>
             )}
           </button>
