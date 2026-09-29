@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
  * PUT /api/activity
  * Update bot activity configuration and immediately apply it to Discord
  */
-router.put('/', requirePermission('manageSettings'), async (req, res) => {
+router.put('/', requirePermission('manageSettings', 'settings.botMessages', 'settings.activity'), async (req, res) => {
   try {
     const {
       enabled,
@@ -88,7 +88,7 @@ router.put('/', requirePermission('manageSettings'), async (req, res) => {
  * POST /api/activity/reset
  * Disable and clear bot presence
  */
-router.post('/reset', requirePermission('manageSettings'), async (req, res) => {
+router.post('/reset', requirePermission('manageSettings', 'settings.botMessages', 'settings.activity'), async (req, res) => {
   try {
     await prisma.botActivityConfig.upsert({
       where: { id: 'default' },
@@ -109,7 +109,7 @@ router.post('/reset', requirePermission('manageSettings'), async (req, res) => {
  * POST /api/activity/apply
  * Force immediately re-apply current activity to Discord Gateway
  */
-router.post('/apply', requirePermission('manageSettings'), async (req, res) => {
+router.post('/apply', requirePermission('manageSettings', 'settings.botMessages', 'settings.activity'), async (req, res) => {
   try {
     await botActivityManager.applyActivity();
     const snapshot = await botActivityManager.getDashboardSnapshot();

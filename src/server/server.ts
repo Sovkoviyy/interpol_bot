@@ -38,6 +38,14 @@ export function createServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
+ 
+  // Rewrite /api/api/* -> /api/* for reverse-proxy resilience
+  app.use((req, res, next) => {
+    if (req.url.startsWith('/api/api/')) {
+      req.url = req.url.replace(/^\/api\/api\//, '/api/');
+    }
+    next();
+  });
 
   // Dashboard Backend Routes
   app.use('/api/auth', authRouter);

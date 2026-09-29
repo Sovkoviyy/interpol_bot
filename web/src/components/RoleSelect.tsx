@@ -4,7 +4,7 @@ import { ChevronDown, Check, X, Search, AtSign } from 'lucide-react';
 export interface DiscordRoleItem {
   id: string;
   name: string;
-  color?: number;
+  color?: number | string;
 }
 
 interface RoleSelectProps {
@@ -15,9 +15,17 @@ interface RoleSelectProps {
   placeholder?: string;
 }
 
-export function roleColorToHex(colorNum?: number): string {
-  if (!colorNum || colorNum === 0) return '#94a3b8'; // default slate-400
-  return '#' + colorNum.toString(16).padStart(6, '0');
+export function roleColorToHex(color?: number | string): string {
+  if (!color || color === 0 || color === '0') return '#94a3b8'; // default slate-400
+  if (typeof color === 'string') {
+    if (color.startsWith('#')) return color;
+    const num = parseInt(color, 10);
+    if (!isNaN(num) && num > 0) {
+      return '#' + num.toString(16).padStart(6, '0');
+    }
+    return '#' + color;
+  }
+  return '#' + color.toString(16).padStart(6, '0');
 }
 
 export const RoleSelect: React.FC<RoleSelectProps> = ({
@@ -29,25 +37,58 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [openUpwards, setOpenUpwards] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Normalize selected IDs
-  const selectedIds: string[] = Array.isArray(value)
-    ? value
-    : value
-    ? [value]
-    : [];
+  // Normalize selected IDs safely
+  const selectedIds: string[] = React.useMemo(() => {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (typeof value === 'string' && value.trim()) {
+      if (value.startsWith('[') && value.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+        } catch {}
+      }
+      return [value];
+    }
+    return [];
+  }, [value]);
 
-  // Close dropdown on outside click
+  // Handle position flipping
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    if (!isOpen || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    if (spaceBelow < 280 && spaceAbove > spaceBelow) {
+      setOpenUpwards(true);
+    } else {
+      setOpenUpwards(false);
+    }
+  }, [isOpen]);
+
+  // Close dropdown on outside click or escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Focus search input when opened
@@ -58,11 +99,14 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
     if (!isOpen) setSearch('');
   }, [isOpen]);
 
-  const filteredRoles = roles.filter(
-    (r) =>
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.id.includes(search)
-  );
+  const safeRoles = Array.isArray(roles) ? roles : [];
+  const searchLower = search.trim().toLowerCase();
+  const filteredRoles = safeRoles.filter((r) => {
+    if (!r) return false;
+    const nameMatch = (r.name || '').toLowerCase().includes(searchLower);
+    const idMatch = (r.id || '').includes(searchLower);
+    return nameMatch || idMatch;
+  });
 
   const handleToggleRole = (roleId: string) => {
     if (isMulti) {
@@ -96,7 +140,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
   };
 
   return (
-    <div className="relative w-full" ref={containerRef}>
+    <div className={`relative w-full ${isOpen ? 'z-50' : 'z-auto'}`} ref={containerRef}>
       {/* Trigger Box */}
       <div
         onClick={() => setIsOpen(!isOpen)}
@@ -175,7 +219,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-2 bg-dark-850 border border-dark-700/80 rounded-2xl shadow-dropdown overflow-hidden animate-slide-down">
+        <div className={`absolute z-[100] left-0 right-0 ${openUpwards ? 'bottom-full mb-2' : 'top-full mt-2'} bg-dark-850 border border-dark-700/80 rounded-2xl shadow-dropdown overflow-hidden animate-slide-down`}>
           {/* Search Header */}
           <div className="p-2.5 border-b border-dark-700/60 space-y-2">
             <div className="relative">

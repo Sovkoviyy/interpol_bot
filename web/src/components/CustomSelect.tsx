@@ -28,38 +28,65 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   className = '',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpwards, setOpenUpwards] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Close on outside click or touch
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
+  // Keyboard navigation & escape to close
   useEffect(() => {
-    if (isOpen && searchInputRef.current) {
-      searchInputRef.current.focus();
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  // Smart direction detection (upwards if near bottom of viewport)
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setOpenUpwards(spaceBelow < 280 && spaceAbove > 280);
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
     }
     if (!isOpen) setSearch('');
   }, [isOpen]);
 
-  const filtered = options.filter(
-    (opt) =>
-      opt.label.toLowerCase().includes(search.toLowerCase()) ||
-      (opt.sublabel && opt.sublabel.toLowerCase().includes(search.toLowerCase())) ||
-      opt.value.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = options.filter((opt) => {
+    if (!opt) return false;
+    const s = search.toLowerCase();
+    const labelMatch = (opt.label || '').toLowerCase().includes(s);
+    const sublabelMatch = (opt.sublabel || '').toLowerCase().includes(s);
+    const valueMatch = String(opt.value ?? '').toLowerCase().includes(s);
+    return labelMatch || sublabelMatch || valueMatch;
+  });
 
   const selectedOption = options.find((opt) => opt.value === value);
 
   return (
-    <div className={`relative w-full ${className}`} ref={containerRef}>
+    <div className={`relative w-full ${isOpen ? 'z-50' : 'z-auto'} ${className}`} ref={containerRef}>
       {/* Trigger Box */}
       <div
         onClick={() => setIsOpen(!isOpen)}
@@ -103,7 +130,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-2 bg-dark-850 border border-dark-700/80 rounded-2xl shadow-dropdown overflow-hidden animate-slide-down">
+        <div className={`absolute z-[100] left-0 right-0 ${openUpwards ? 'bottom-full mb-2' : 'top-full mt-2'} bg-dark-850 border border-dark-700/80 rounded-2xl shadow-dropdown overflow-hidden animate-slide-down`}>
           {searchable && options.length > 5 && (
             <div className="p-2.5 border-b border-dark-700/60">
               <div className="relative">

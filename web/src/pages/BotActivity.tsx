@@ -153,7 +153,7 @@ export const BotActivity: React.FC = () => {
   const loadData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const res = await api.get('/api/activity');
+      const res = await api.get('/activity');
       if (res.data) {
         const { config: conf, live, variables } = res.data;
         setConfig({
@@ -192,7 +192,7 @@ export const BotActivity: React.FC = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const res = await api.put('/api/activity', config);
+      const res = await api.put('/activity', config);
       if (res.data?.snapshot) {
         setLiveSnapshot(res.data.snapshot.live);
         setLiveVariables(res.data.snapshot.variables || {});
@@ -210,8 +210,8 @@ export const BotActivity: React.FC = () => {
   const handleApplyNow = async () => {
     try {
       setSaving(true);
-      await api.put('/api/activity', config);
-      const res = await api.post('/api/activity/apply');
+      await api.put('/activity', config);
+      const res = await api.post('/activity/apply');
       if (res.data?.snapshot) {
         setLiveSnapshot(res.data.snapshot.live);
         setLiveVariables(res.data.snapshot.variables || {});
@@ -238,7 +238,7 @@ export const BotActivity: React.FC = () => {
 
     try {
       setSaving(true);
-      await api.post('/api/activity/reset');
+      await api.post('/activity/reset');
       setConfig((prev) => ({ ...prev, enabled: false }));
       await loadData(true);
       modal.success('Активность бота отключена и очищена');

@@ -26,30 +26,55 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
   allowClear = true,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpwards, setOpenUpwards] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Close on outside click
+  // Close on outside click or touch
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
+  // Keyboard navigation & escape to close
   useEffect(() => {
-    if (isOpen && searchInputRef.current) {
-      searchInputRef.current.focus();
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  // Smart direction detection (upwards if near bottom of viewport)
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setOpenUpwards(spaceBelow < 280 && spaceAbove > 280);
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
     }
     if (!isOpen) setSearch('');
   }, [isOpen]);
 
   // Filter by requested type
-  const filteredByType = channels.filter((c) => {
+  const filteredByType = (channels || []).filter((c) => {
+    if (!c) return false;
     const t = Number(c.type);
     if (channelType === 'text') {
       return (
@@ -78,22 +103,24 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
 
   // Fallback: If filtered list is empty but channels exist, show all non-category channels so user is never stuck
   const activeChannelList =
-    filteredByType.length > 0 || channels.length === 0
+    filteredByType.length > 0 || (channels || []).length === 0
       ? filteredByType
       : channelType === 'text'
-      ? channels.filter((c) => Number(c.type) !== 4 && c.type !== 'GUILD_CATEGORY')
-      : channels;
+      ? (channels || []).filter((c) => c && Number(c.type) !== 4 && c.type !== 'GUILD_CATEGORY')
+      : channels || [];
 
-  // Filter by search keyword
-  const filteredChannels = activeChannelList.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.id.includes(search)
-  );
+  // Filter by search keyword safely
+  const filteredChannels = activeChannelList.filter((c) => {
+    if (!c) return false;
+    const s = search.toLowerCase();
+    const nameMatch = (c.name || '').toLowerCase().includes(s);
+    const idMatch = (c.id || '').includes(s);
+    return nameMatch || idMatch;
+  });
 
-  const selectedChannel = channels.find((c) => c.id === value);
+  const selectedChannel = (channels || []).find((c) => c?.id === value);
   const parentCategory = selectedChannel?.parentId
-    ? channels.find((c) => c.id === selectedChannel.parentId)
+    ? (channels || []).find((c) => c?.id === selectedChannel.parentId)
     : null;
 
   const renderIcon = (type: number | string) => {
@@ -107,7 +134,7 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
   };
 
   return (
-    <div className="relative w-full" ref={containerRef}>
+    <div className={`relative w-full ${isOpen ? 'z-50' : 'z-auto'}`} ref={containerRef}>
       {/* Trigger Box */}
       <div
         onClick={() => setIsOpen(!isOpen)}
@@ -167,7 +194,7 @@ export const ChannelSelect: React.FC<ChannelSelectProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-2 bg-dark-850 border border-dark-700/80 rounded-2xl shadow-dropdown overflow-hidden animate-slide-down">
+        <div className={`absolute z-[100] left-0 right-0 ${openUpwards ? 'bottom-full mb-2' : 'top-full mt-2'} bg-dark-850 border border-dark-700/80 rounded-2xl shadow-dropdown overflow-hidden animate-slide-down`}>
           {/* Search Header */}
           <div className="p-2.5 border-b border-dark-700/60 space-y-2">
             <div className="relative">

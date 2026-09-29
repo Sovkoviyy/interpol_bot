@@ -142,7 +142,7 @@ export class LeaveService {
             const ch = (guild.channels.cache.get(leave.channelId) || await guild.channels.fetch(leave.channelId).catch(() => null)) as TextChannel | null;
             if (ch) {
               const msg = await ch.messages.fetch(leave.messageId).catch(() => null);
-              if (msg) {
+              if (msg && typeof (msg as any).edit === 'function') {
                 const leaveType = leave.type === 'VACATION' ? 'Отпуск' : 'Отгул';
                 const daysDiff = Math.max(1, Math.round((leave.endDate.getTime() - leave.startDate.getTime()) / (1000 * 60 * 60 * 24)));
                 const daysStr = leave.type === 'DAY_OFF' ? '1 дн.' : `${daysDiff} дн.`;
@@ -159,7 +159,7 @@ export class LeaveService {
                   guild: guild.name,
                 });
 
-                await msg.edit({
+                await (msg as any).edit({
                   content: rendered.content || null,
                   embeds: [rendered.embed],
                   components: [],

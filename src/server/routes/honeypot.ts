@@ -38,8 +38,7 @@ router.get('/', async (req, res) => {
             (c: any) =>
               c &&
               (c.name?.toLowerCase() === targetName ||
-                c.name?.toLowerCase() === 'канал-ловушка' ||
-                c.name?.toLowerCase().includes('ловушк')) &&
+                c.name?.toLowerCase() === 'канал-ловушка') &&
               (c.type === 0 || Number(c.type) === 0)
           );
           if (found) {

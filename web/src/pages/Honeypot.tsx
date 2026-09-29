@@ -87,7 +87,7 @@ export const Honeypot: React.FC = () => {
     try {
       if (!silent) setLoading(true);
       const activeGId = guildIdOverride !== undefined ? guildIdOverride : selectedGuildId;
-      const url = activeGId ? `/api/honeypot?guildId=${activeGId}` : '/api/honeypot';
+      const url = activeGId ? `/honeypot?guildId=${activeGId}` : '/honeypot';
       const res = await api.get(url);
       if (res.data) {
         const conf = res.data.config;
@@ -112,12 +112,12 @@ export const Honeypot: React.FC = () => {
         if (conf.channelId) {
           setManualChannelId(conf.channelId);
         } else if (chList.length > 0) {
-          const autoCh = chList.find((c: any) => c.name === 'канал-ловушка' || c.name === conf.channelName || c.name?.includes('ловушк'));
+          const autoCh = chList.find((c: any) => c.name === 'канал-ловушка' || (conf.channelName && c.name === conf.channelName));
           if (autoCh) {
             conf.channelId = autoCh.id;
             conf.channelName = autoCh.name;
             setManualChannelId(autoCh.id);
-            api.put('/api/honeypot', { ...conf, channelId: autoCh.id, channelName: autoCh.name, guildId: activeGId || conf.guildId }).catch(() => {});
+            api.put('/honeypot', { ...conf, channelId: autoCh.id, channelName: autoCh.name, guildId: activeGId || conf.guildId }).catch(() => {});
           }
         }
         setRoles(res.data.roles || []);
@@ -159,7 +159,7 @@ export const Honeypot: React.FC = () => {
         ...config,
         whitelistRoles: whitelistRoleIds,
       };
-      await api.put('/api/honeypot', payload);
+      await api.put('/honeypot', payload);
       modal.success('Настройки канала-ловушки успешно сохранены!');
       loadData(true);
     } catch (err: any) {
@@ -194,7 +194,7 @@ export const Honeypot: React.FC = () => {
         guildId: selectedGuildId || config.guildId,
         whitelistRoles: whitelistRoleIds,
       };
-      const res = await api.put('/api/honeypot', payload);
+      const res = await api.put('/honeypot', payload);
       if (res.data?.config) {
         setConfig(res.data.config);
       }
@@ -219,7 +219,7 @@ export const Honeypot: React.FC = () => {
 
     try {
       setSettingUp(true);
-      const res = await api.post('/api/honeypot/setup-channel', {
+      const res = await api.post('/honeypot/setup-channel', {
         guildId: selectedGuildId || config.guildId,
       });
       if (res.data?.success) {
@@ -259,7 +259,7 @@ export const Honeypot: React.FC = () => {
 
     try {
       setSendingEmbed(true);
-      const res = await api.post('/api/honeypot/send-embed', {
+      const res = await api.post('/honeypot/send-embed', {
         channelId: chId,
         guildId: selectedGuildId || config.guildId,
       });
@@ -284,7 +284,7 @@ export const Honeypot: React.FC = () => {
   const handleRefreshEmbed = async () => {
     try {
       setSaving(true);
-      await api.post('/api/honeypot/refresh-embed');
+      await api.post('/honeypot/refresh-embed');
       modal.success('Предупреждающее сообщение в канале успешно обновлено!');
     } catch (err: any) {
       modal.error(err.response?.data?.error || 'Ошибка обновления сообщения');
@@ -304,7 +304,7 @@ export const Honeypot: React.FC = () => {
     if (!ok) return;
 
     try {
-      await api.post('/api/honeypot/reset-counter');
+      await api.post('/honeypot/reset-counter');
       setConfig((prev) => ({ ...prev, totalCaught: 0 }));
       modal.success('Счетчик нарушителей сброшен в 0');
     } catch (err: any) {
@@ -323,7 +323,7 @@ export const Honeypot: React.FC = () => {
     if (!ok) return;
 
     try {
-      await api.delete('/api/honeypot/logs');
+      await api.delete('/honeypot/logs');
       setRecentLogs([]);
       setTotalLogs(0);
       modal.success('Журнал пойманных ботов очищен');

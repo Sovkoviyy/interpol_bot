@@ -92,8 +92,7 @@ export class HoneypotManager {
               (c: any) =>
                 c &&
                 (c.name?.toLowerCase() === targetName ||
-                  c.name?.toLowerCase() === 'канал-ловушка' ||
-                  c.name?.toLowerCase().includes('ловушк')) &&
+                  c.name?.toLowerCase() === 'канал-ловушка') &&
                 (c.type === ChannelType.GuildText || Number(c.type) === 0)
             ) as TextChannel | undefined;
 
@@ -249,8 +248,7 @@ export class HoneypotManager {
         (c: any) =>
           c &&
           (c.name?.toLowerCase() === targetName ||
-            c.name?.toLowerCase() === 'канал-ловушка' ||
-            c.name?.toLowerCase().includes('ловушк')) &&
+            c.name?.toLowerCase() === 'канал-ловушка') &&
           (c.type === ChannelType.GuildText || Number(c.type) === 0)
       ) as TextChannel | undefined;
       if (existing) {
@@ -510,17 +508,15 @@ export class HoneypotManager {
     const chName = channel.name?.toLowerCase() || '';
     const targetName = (config.channelName || 'канал-ловушка').toLowerCase();
 
-    // Check if message belongs to trap channel (either by bound ID or matching name)
-    const isTrapChannel =
-      (Boolean(config.channelId) && message.channelId === config.channelId) ||
-      chName === targetName ||
-      chName === 'канал-ловушка' ||
-      chName.includes('ловушк');
+    // Check if message belongs to trap channel (strictly by bound ID if set, or exact matching name)
+    const isTrapChannel = Boolean(config.channelId)
+      ? message.channelId === config.channelId
+      : (chName === targetName || chName === 'канал-ловушка');
 
     if (!isTrapChannel) return;
 
-    // Auto-heal / Auto-bind channel ID if not set or mismatched
-    if (config.channelId !== message.channelId) {
+    // Auto-bind channel ID only if it was never bound before
+    if (!config.channelId) {
       config.channelId = message.channelId;
       config.guildId = message.guild.id;
       config.channelName = channel.name;
