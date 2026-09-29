@@ -228,7 +228,7 @@ export class AcademyService {
       username: member.user?.username || member.displayName,
       guild: guild.name,
       staticId: effectiveStatic,
-      mentorRole: config.academicRoleId ? `<@&${config.academicRoleId}>` : '@Куратор',
+      mentorRole: '',
     });
     if (welcomeRendered.enabled) {
       await channel.send({

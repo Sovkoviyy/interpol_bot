@@ -155,6 +155,7 @@ export class LeaveService {
                   days: daysStr,
                   startDate: leave.startDate.toLocaleDateString('ru-RU'),
                   endDate: leave.endDate.toLocaleDateString('ru-RU'),
+                  reason: leave.reason || 'Не указана',
                   guild: guild.name,
                 });
 
@@ -228,7 +229,7 @@ export class LeaveService {
       startDate: leave.startDate.toLocaleDateString('ru-RU'),
       endDate: leave.endDate.toLocaleDateString('ru-RU'),
       admin: `<@${reviewerId}>`,
-      reason: rejectionReason || 'Не указана',
+      reason: approved ? (leave.reason || 'Не указана') : (rejectionReason || 'Не указана'),
     }).catch(() => null);
 
     return updated;

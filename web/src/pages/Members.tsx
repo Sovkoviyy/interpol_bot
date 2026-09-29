@@ -146,9 +146,11 @@ export const Members: React.FC = () => {
   // Open Edit Profile modal
   const openEditProfile = (m: MemberItem) => {
     setEditingMember(m);
+    const chars = m.profile?.characters || [];
+    const mainChar = chars.find((c: any) => c.isMain) || chars[0];
     setProfileForm({
-      characterName: m.profile?.characterName || '',
-      staticId: m.profile?.staticId || '',
+      characterName: mainChar?.characterName || m.profile?.characterName || '',
+      staticId: mainChar?.staticId || m.profile?.staticId || '',
       rank: m.profile?.rank || 1,
       status: m.profile?.status || 'ACTIVE',
       notes: m.profile?.notes || '',
@@ -742,27 +744,41 @@ export const Members: React.FC = () => {
       {/* 1. Modal: Edit User Profile (Character, Static, Rank, etc.) */}
       {/* ========================================================= */}
       {editingMember && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditingMember(null);
+          }}
+        >
+          <div className="bg-[#151921] border border-[#1E232F] rounded-2xl w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden my-auto">
             {/* Modal Header */}
-            <div className="p-5 border-b border-[#1E232F] flex items-center justify-between">
+            <div className="p-5 border-b border-[#1E232F] flex items-center justify-between bg-[#11141B]">
               <div className="flex items-center gap-3">
                 <img
                   src={editingMember.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}
                   alt=""
-                  className="w-10 h-10 rounded-xl border border-[#1E232F]"
+                  className="w-11 h-11 rounded-xl border border-[#1E232F] object-cover"
                 />
                 <div>
                   <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                    Редактирование профиля: {editingMember.displayName}
+                    {editingMember.displayName}
+                    {editingMember.nickname && editingMember.nickname !== editingMember.username && (
+                      <span className="text-[11px] font-normal text-slate-400">({editingMember.username})</span>
+                    )}
                   </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Discord ID: <span className="font-mono text-slate-300">{editingMember.id}</span>
-                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[11px] text-slate-400 font-mono">ID: {editingMember.id}</span>
+                    {editingMember.profile?.mpCount !== undefined && (
+                      <span className="text-[10px] bg-pink-500/10 text-pink-400 border border-pink-500/20 px-1.5 py-0.5 rounded font-medium">
+                        МП: {editingMember.profile.mpCount}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <button
+                type="button"
                 onClick={() => setEditingMember(null)}
                 className="p-1.5 rounded-xl hover:bg-[#1E232F] text-slate-400 hover:text-white transition-colors"
               >
@@ -785,7 +801,7 @@ export const Members: React.FC = () => {
                       placeholder="Tony Montana"
                       value={profileForm.characterName}
                       onChange={(e) => setProfileForm({ ...profileForm, characterName: e.target.value })}
-                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-pink-500"
+                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-pink-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -802,11 +818,35 @@ export const Members: React.FC = () => {
                       placeholder="142055"
                       value={profileForm.staticId}
                       onChange={(e) => setProfileForm({ ...profileForm, staticId: e.target.value })}
-                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-pink-500 font-mono"
+                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-pink-500 font-mono transition-colors"
                     />
                   </div>
                 </div>
               </div>
+
+              {editingMember.profile?.characters && editingMember.profile.characters.length > 1 && (
+                <div className="bg-[#0B0E14] border border-[#1E232F] rounded-xl p-2.5 text-[11px] text-slate-400">
+                  <span className="text-slate-300 font-semibold block mb-1">Все персонажи участника:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {editingMember.profile.characters.map((char: any, i: number) => (
+                      <span
+                        key={i}
+                        onClick={() => {
+                          setProfileForm({
+                            ...profileForm,
+                            characterName: char.characterName || '',
+                            staticId: char.staticId || '',
+                          });
+                        }}
+                        className="px-2 py-0.5 rounded bg-[#151921] border border-[#1E232F] hover:border-pink-500/50 cursor-pointer text-slate-300 font-mono transition-colors"
+                        title="Нажмите, чтобы подставить в форму"
+                      >
+                        {char.characterName} ({char.staticId}){char.isMain ? ' ★' : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 {/* Rank */}
@@ -814,18 +854,20 @@ export const Members: React.FC = () => {
                   <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
                     Ранг в семье
                   </label>
-                  <CustomSelect
-                    options={[
-                      { value: '1', label: '1 • Академик' },
-                      { value: '2', label: '2 • Участник' },
-                      { value: '3', label: '3 • Офицер' },
-                      { value: '4', label: '4 • Заместитель' },
-                      { value: '5', label: '5 • Лидер' },
-                    ]}
-                    value={String(profileForm.rank)}
-                    onChange={(val) => setProfileForm({ ...profileForm, rank: Number(val) })}
-                    searchable={false}
-                  />
+                  <div className="relative">
+                    <select
+                      value={profileForm.rank}
+                      onChange={(e) => setProfileForm({ ...profileForm, rank: Number(e.target.value) })}
+                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-3 pr-8 py-2.5 text-xs text-white appearance-none focus:outline-none focus:border-pink-500 cursor-pointer transition-colors"
+                    >
+                      <option value={1} className="bg-[#151921] text-white">1 • Академик</option>
+                      <option value={2} className="bg-[#151921] text-white">2 • Участник</option>
+                      <option value={3} className="bg-[#151921] text-white">3 • Офицер</option>
+                      <option value={4} className="bg-[#151921] text-white">4 • Заместитель</option>
+                      <option value={5} className="bg-[#151921] text-white">5 • Лидер</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
 
                 {/* Status */}
@@ -833,17 +875,19 @@ export const Members: React.FC = () => {
                   <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
                     Статус активности
                   </label>
-                  <CustomSelect
-                    options={[
-                      { value: 'ACTIVE', label: 'Активен' },
-                      { value: 'ON_LEAVE', label: 'В отпуске' },
-                      { value: 'AFK', label: 'Неактив' },
-                      { value: 'BLACKLISTED', label: 'Черный список (ЧС)' },
-                    ]}
-                    value={profileForm.status}
-                    onChange={(val) => setProfileForm({ ...profileForm, status: val })}
-                    searchable={false}
-                  />
+                  <div className="relative">
+                    <select
+                      value={profileForm.status}
+                      onChange={(e) => setProfileForm({ ...profileForm, status: e.target.value })}
+                      className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-3 pr-8 py-2.5 text-xs text-white appearance-none focus:outline-none focus:border-pink-500 cursor-pointer transition-colors"
+                    >
+                      <option value="ACTIVE" className="bg-[#151921] text-white">Активен</option>
+                      <option value="ON_LEAVE" className="bg-[#151921] text-white">В отпуске</option>
+                      <option value="AFK" className="bg-[#151921] text-white">Неактив</option>
+                      <option value="BLACKLISTED" className="bg-[#151921] text-white">Черный список (ЧС)</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
               </div>
 
@@ -857,7 +901,7 @@ export const Members: React.FC = () => {
                   placeholder="Дополнительные пометки руководства..."
                   value={profileForm.notes}
                   onChange={(e) => setProfileForm({ ...profileForm, notes: e.target.value })}
-                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-pink-500 resize-none"
+                  className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-pink-500 resize-none transition-colors"
                 />
               </div>
 
