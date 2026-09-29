@@ -11,18 +11,25 @@ export interface ActivityItem {
   enabled?: boolean;
 }
 
-export function mapActivityType(type: string): ActivityType {
-  switch (type?.toUpperCase()) {
+export function mapActivityType(type: string | number): ActivityType {
+  const str = String(type || '').toUpperCase();
+  switch (str) {
+    case '1':
     case 'STREAMING':
       return ActivityType.Streaming; // 1
+    case '2':
     case 'LISTENING':
       return ActivityType.Listening; // 2
+    case '3':
     case 'WATCHING':
       return ActivityType.Watching; // 3
-    case 'COMPETING':
-      return ActivityType.Competing; // 5
+    case '4':
     case 'CUSTOM':
       return ActivityType.Custom; // 4
+    case '5':
+    case 'COMPETING':
+      return ActivityType.Competing; // 5
+    case '0':
     case 'PLAYING':
     default:
       return ActivityType.Playing; // 0
@@ -36,6 +43,7 @@ export function mapPresenceStatus(status: string): PresenceStatusData {
     case 'dnd':
       return 'dnd';
     case 'invisible':
+    case 'offline':
       return 'invisible';
     case 'online':
     default:
@@ -127,73 +135,150 @@ class BotActivityManager {
   }
 
   /**
-   * Retrieve or create default configuration
+   * Build Discord activity payload array.
+   * Emits both primary rich activity (Playing/Streaming/Watching) AND Custom Status
+   * so Discord displays it in BOTH the server member list and the profile card!
    */
-  public async getConfig() {
-    let config = await prisma.botActivityConfig.findUnique({
-      where: { id: 'default' },
-    });
+  public buildActivitiesPayload(
+    typeStr: string | number,
+    rawName: string,
+    rawState: string | undefined,
+    streamingUrl: string | undefined,
+    vars: Record<string, string | number>
+  ) {
+    const parsedName = this.replacePlaceholders(rawName || '', vars).trim();
+    const parsedState = rawState ? this.replacePlaceholders(rawState, vars).trim() : '';
+    const type = mapActivityType(typeStr);
 
-    if (!config) {
-      const defaultActivities: ActivityItem[] = [
-        {
-          id: '1',
-          type: 'PLAYING',
-          name: 'Majestic RP • Dallas',
-          state: 'Семья INTERPOL • {members} уч.',
-          streamingUrl: '',
-          enabled: true,
-        },
-        {
-          id: '2',
-          type: 'STREAMING',
-          name: 'Капты & Дропы',
-          state: 'twitch.tv/interpol',
-          streamingUrl: 'https://twitch.tv/interpol',
-          enabled: true,
-        },
-        {
-          id: '3',
-          type: 'WATCHING',
-          name: 'за порядком на сервере',
-          state: 'Сборов на МП: {activeEvents}',
-          streamingUrl: '',
-          enabled: true,
-        },
-        {
-          id: '4',
-          type: 'LISTENING',
-          name: 'Голосовые каналы',
-          state: '{voiceCount} чел. в войсе',
-          streamingUrl: '',
-          enabled: true,
-        },
-      ];
+    const activities: any[] = [];
 
-      config = await prisma.botActivityConfig.create({
-        data: {
-          id: 'default',
-          enabled: true,
-          status: 'online',
-          mode: 'STATIC',
-          rotationInterval: 30,
-          activityType: 'PLAYING',
-          activityName: 'Majestic RP • INTERPOL',
-          activityState: 'Сервер Dallas • {members} уч.',
-          streamingUrl: 'https://twitch.tv/interpol',
-          activitiesJson: JSON.stringify(defaultActivities),
-        },
+    if (type === ActivityType.Custom) {
+      // Custom status in Discord shows the `state` field directly in the member list
+      const customText = parsedState || parsedName || 'INTERPOL • Majestic RP';
+      activities.push({
+        name: 'Custom Status',
+        type: ActivityType.Custom,
+        state: customText,
       });
+    } else {
+      // Primary Activity: PLAYING, STREAMING, LISTENING, WATCHING, COMPETING
+      const primaryActivity: any = {
+        name: parsedName || parsedState || 'Majestic RP • Dallas',
+        type,
+      };
+
+      if (type === ActivityType.Streaming) {
+        primaryActivity.url = streamingUrl || 'https://twitch.tv/interpol';
+      }
+
+      if (parsedState && parsedState.length > 0) {
+        primaryActivity.state = parsedState;
+      }
+
+      activities.push(primaryActivity);
+
+      // Also add Custom Status: in modern Discord, this guarantees the status text
+      // appears right under the bot's name in the server member list without needing to click it!
+      const statusText = parsedState || parsedName;
+      if (statusText && statusText.length > 0) {
+        activities.push({
+          name: 'Custom Status',
+          type: ActivityType.Custom,
+          state: statusText,
+        });
+      }
     }
 
-    return config;
+    return { activities, parsedName, parsedState, type };
+  }
+
+  /**
+   * Retrieve or create default configuration with safe DB fallback
+   */
+  public async getConfig() {
+    try {
+      let config = await prisma.botActivityConfig.findUnique({
+        where: { id: 'default' },
+      });
+
+      if (!config) {
+        const defaultActivities: ActivityItem[] = [
+          {
+            id: '1',
+            type: 'PLAYING',
+            name: 'Majestic RP • Dallas',
+            state: 'Семья INTERPOL • {members} уч.',
+            streamingUrl: '',
+            enabled: true,
+          },
+          {
+            id: '2',
+            type: 'STREAMING',
+            name: 'Капты & Дропы',
+            state: 'twitch.tv/interpol',
+            streamingUrl: 'https://twitch.tv/interpol',
+            enabled: true,
+          },
+          {
+            id: '3',
+            type: 'WATCHING',
+            name: 'за порядком на сервере',
+            state: 'Сборов на МП: {activeEvents}',
+            streamingUrl: '',
+            enabled: true,
+          },
+          {
+            id: '4',
+            type: 'LISTENING',
+            name: 'Голосовые каналы',
+            state: '{voiceCount} чел. в войсе',
+            streamingUrl: '',
+            enabled: true,
+          },
+        ];
+
+        config = await prisma.botActivityConfig.create({
+          data: {
+            id: 'default',
+            enabled: true,
+            status: 'online',
+            mode: 'STATIC',
+            rotationInterval: 30,
+            activityType: 'PLAYING',
+            activityName: 'Majestic RP • INTERPOL',
+            activityState: 'Сервер Dallas • {members} уч.',
+            streamingUrl: 'https://twitch.tv/interpol',
+            activitiesJson: JSON.stringify(defaultActivities),
+          },
+        });
+      }
+
+      return config;
+    } catch (err: any) {
+      console.warn('⚠️ [BotActivityManager] DB access error (falling back to default config):', err?.message);
+      // Safe fallback if database table not yet synced
+      return {
+        id: 'default',
+        enabled: true,
+        status: 'online',
+        mode: 'STATIC',
+        rotationInterval: 30,
+        activityType: 'PLAYING',
+        activityName: 'Majestic RP • INTERPOL',
+        activityState: 'Сервер Dallas • {members} уч.',
+        streamingUrl: 'https://twitch.tv/interpol',
+        activitiesJson: '[]',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
   }
 
   /**
    * Apply activity to Discord Bot
    */
   public async applyActivity(): Promise<void> {
-    if (!bot.isReady()) {
+    if (!bot.isReady() || !bot.user) {
       return;
     }
 
@@ -214,36 +299,58 @@ class BotActivityManager {
       });
       this.currentAppliedActivity = null;
       this.lastAppliedAt = new Date();
+      console.log('🎮 [Bot Activity] Presence disabled / cleared.');
       return;
     }
 
     // Static mode
     if (config.mode === 'STATIC') {
-      const parsedName = this.replacePlaceholders(config.activityName, vars);
-      const parsedState = config.activityState ? this.replacePlaceholders(config.activityState, vars) : undefined;
-      const type = mapActivityType(config.activityType);
-      const url = config.activityType === 'STREAMING' ? (config.streamingUrl || 'https://twitch.tv/discord') : undefined;
+      const { activities, parsedName, parsedState } = this.buildActivitiesPayload(
+        config.activityType,
+        config.activityName,
+        config.activityState || undefined,
+        config.streamingUrl || undefined,
+        vars
+      );
 
       bot.user.setPresence({
         status: mapPresenceStatus(config.status),
-        activities: [
-          {
-            name: parsedName,
-            type,
-            url,
-            state: parsedState,
-          },
-        ],
+        activities,
       });
 
       this.currentAppliedActivity = {
         type: config.activityType,
         name: parsedName,
         state: parsedState,
-        url,
+        url: config.streamingUrl,
         status: config.status,
       };
       this.lastAppliedAt = new Date();
+
+      console.log(`🎮 [Bot Activity] Applied presence [${config.status}]: ${config.activityType} "${parsedName}" (${activities.length} activities)`);
+
+      // Set a 45-second refresh timer for static mode to keep dynamic variables ({members}, {time}, {voiceCount}) updated!
+      this.rotationTimer = setInterval(async () => {
+        if (!bot.isReady() || !bot.user) return;
+        try {
+          const freshVars = await this.getLiveVariables();
+          const refreshed = this.buildActivitiesPayload(
+            config.activityType,
+            config.activityName,
+            config.activityState || undefined,
+            config.streamingUrl || undefined,
+            freshVars
+          );
+          bot.user.setPresence({
+            status: mapPresenceStatus(config.status),
+            activities: refreshed.activities,
+          });
+          this.lastAppliedAt = new Date();
+        } catch {
+          // ignore
+        }
+      }, 45000);
+
       return;
     }
 
@@ -255,23 +362,23 @@ class BotActivityManager {
       activities = [];
     }
 
-    const enabledActivities = activities.filter((a) => a.enabled !== false && a.name.trim().length > 0);
+    const enabledActivities = activities.filter((a) => a.enabled !== false && (a.name || a.state));
 
     if (enabledActivities.length === 0) {
       // Fallback to static values if no rotating activities configured
-      const parsedName = this.replacePlaceholders(config.activityName, vars);
-      const parsedState = config.activityState ? this.replacePlaceholders(config.activityState, vars) : undefined;
+      const { activities: payload, parsedName, parsedState } = this.buildActivitiesPayload(
+        config.activityType,
+        config.activityName,
+        config.activityState || undefined,
+        config.streamingUrl || undefined,
+        vars
+      );
+
       bot.user.setPresence({
         status: mapPresenceStatus(config.status),
-        activities: [
-          {
-            name: parsedName,
-            type: mapActivityType(config.activityType),
-            url: config.activityType === 'STREAMING' ? config.streamingUrl || 'https://twitch.tv/discord' : undefined,
-            state: parsedState,
-          },
-        ],
+        activities: payload,
       });
+
       this.currentAppliedActivity = {
         type: config.activityType,
         name: parsedName,
@@ -295,38 +402,36 @@ class BotActivityManager {
   }
 
   private async applySingleRotationStep(list: ActivityItem[], status: string) {
-    if (!bot.isReady() || list.length === 0) return;
+    if (!bot.isReady() || !bot.user || list.length === 0) return;
 
     const item = list[this.currentRotationIndex % list.length];
     const vars = await this.getLiveVariables();
 
-    const parsedName = this.replacePlaceholders(item.name, vars);
-    const parsedState = item.state ? this.replacePlaceholders(item.state, vars) : undefined;
-    const type = mapActivityType(item.type);
-    const url = item.type === 'STREAMING' ? (item.streamingUrl || 'https://twitch.tv/discord') : undefined;
+    const { activities, parsedName, parsedState } = this.buildActivitiesPayload(
+      item.type,
+      item.name,
+      item.state,
+      item.streamingUrl,
+      vars
+    );
 
     bot.user.setPresence({
       status: mapPresenceStatus(status),
-      activities: [
-        {
-          name: parsedName,
-          type,
-          url,
-          state: parsedState,
-        },
-      ],
+      activities,
     });
 
     this.currentAppliedActivity = {
       type: item.type,
       name: parsedName,
       state: parsedState,
-      url,
+      url: item.streamingUrl,
       status,
       index: this.currentRotationIndex,
       total: list.length,
     };
     this.lastAppliedAt = new Date();
+
+    console.log(`🎮 [Bot Activity] Rotation step #${this.currentRotationIndex + 1}/${list.length} [${status}]: ${item.type} "${parsedName}"`);
   }
 
   /**

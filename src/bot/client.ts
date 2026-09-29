@@ -34,6 +34,20 @@ class ExtendedClient extends Client {
         Partials.User,
         Partials.GuildMember,
       ],
+      presence: {
+        status: 'online',
+        activities: [
+          {
+            name: 'Majestic RP • Dallas',
+            type: 0,
+          },
+          {
+            name: 'Custom Status',
+            type: 4,
+            state: 'Majestic RP • Dallas | INTERPOL',
+          },
+        ],
+      },
     });
 
     // Resilience: Catch EventEmitter errors to prevent process termination

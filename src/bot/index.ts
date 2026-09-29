@@ -36,6 +36,12 @@ export async function startBot() {
       console.error('Failed to apply initial bot activity:', err);
     });
 
+    // Re-apply presence on gateway resume
+    bot.on(Events.ShardResume, async () => {
+      console.log('🔄 [Bot] Gateway shard resumed, reapplying activity...');
+      await botActivityManager.applyActivity().catch(() => {});
+    });
+
     // Clear any slash commands from Discord API
     await clearSlashCommands();
 
