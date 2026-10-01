@@ -60,11 +60,17 @@ if ! git diff-index --quiet HEAD -- 2>/dev/null; then
   git stash save "Auto-stash before safe update $TIMESTAMP" || true
 fi
 
-# Обновляем ветку main
-git fetch origin main
-git pull origin main --no-rebase || {
-  echo "⚠️ Обычный pull вызвал конфликт. Загружаю актуальную версию origin/main..."
-  git reset --hard origin/main
+# Определяем целевую ветку (по умолчанию текущая или v5)
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "v5")
+TARGET_BRANCH="${1:-$CURRENT_BRANCH}"
+if [ "$TARGET_BRANCH" = "HEAD" ]; then TARGET_BRANCH="v5"; fi
+
+echo "   Ветка для обновления: $TARGET_BRANCH"
+git fetch origin "$TARGET_BRANCH"
+git checkout "$TARGET_BRANCH" 2>/dev/null || true
+git pull origin "$TARGET_BRANCH" --no-rebase || {
+  echo "⚠️ Обычный pull вызвал конфликт. Загружаю актуальную версию origin/$TARGET_BRANCH..."
+  git reset --hard "origin/$TARGET_BRANCH"
 }
 
 echo "   ✅ Исходный код успешно обновлен."
