@@ -21,14 +21,22 @@ async function main() {
     console.warn('⚠️ [SECURITY WARNING] Default JWT_SECRET is in use! Please set a unique JWT_SECRET in .env.');
   }
 
-  // 0. Ensure Database Schema is Up-to-Date (Auto-migrates SQLite columns)
-  await ensureDatabaseSchema();
-
-  // 1. Start Web Dashboard Server
+  // 1. Start Web Dashboard Server immediately so reverse proxies (OpenResty, Nginx) get 200 OK
   startServer();
 
-  // 2. Start Discord Bot
-  await startBot();
+  // 2. Ensure Database Schema is Up-to-Date (Auto-migrates SQLite columns)
+  try {
+    await ensureDatabaseSchema();
+  } catch (err: any) {
+    console.warn('⚠️ [Database Schema Warning]:', err?.message || err);
+  }
+
+  // 3. Start Discord Bot
+  try {
+    await startBot();
+  } catch (err: any) {
+    console.warn('⚠️ [Discord Bot Warning]:', err?.message || err);
+  }
 }
 
 main().catch(err => {
