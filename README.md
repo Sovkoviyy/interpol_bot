@@ -56,10 +56,57 @@ chmod +x start.sh
 ```
 *Для непрерывной работы 24/7 в фоне через PM2:*
 ```bash
+# Сборка проекта
+npm run build
+
+# Запуск в PM2
 pm2 start ecosystem.config.js
 pm2 save
 pm2 startup
 ```
+
+---
+
+### 🛡️ Настройка OpenResty / Nginx / aaPanel (Reverse Proxy)
+
+Если сайт открывается через OpenResty или Nginx (например, в **aaPanel**):
+
+#### 1. Конфигурация виртуального хоста (Reverse Proxy)
+Убедитесь, что в конфигурации сайта (вкладка **Reverse Proxy** в aaPanel или конфиг Nginx) указан порт `3001`:
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 60s;
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
+}
+```
+
+#### 2. Если вы видите ошибку `502 Bad Gateway (openresty)`:
+1. **Проверьте статус процесса бота в PM2:**
+   ```bash
+   pm2 status
+   pm2 logs interpol_bot --lines 50
+   ```
+2. **Проверьте, занят ли порт 3001:**
+   ```bash
+   lsof -i :3001
+   # или освободите зависший старый процесс:
+   fuser -k 3001/tcp
+   pm2 restart interpol_bot
+   ```
+3. **Проверьте доступность локального сервера:**
+   ```bash
+   curl -I http://127.0.0.1:3001/api/health
+   ```
+   Должен возвращаться статус `HTTP/1.1 200 OK`.
 
 ---
 
