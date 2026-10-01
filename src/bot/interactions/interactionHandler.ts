@@ -222,18 +222,21 @@ export function registerInteractionHandler() {
 
         if (customId.startsWith('recruit_claim_')) {
           const applicationId = customId.replace('recruit_claim_', '');
+          await interaction.deferReply().catch(() => null);
           await RecruitmentService.handleClaim(interaction, applicationId);
           return;
         }
 
         if (customId.startsWith('recruit_approve_')) {
           const applicationId = customId.replace('recruit_approve_', '');
+          await interaction.deferReply().catch(() => null);
           await RecruitmentService.handleApprove(interaction, applicationId);
           return;
         }
 
         if (customId.startsWith('recruit_interview_')) {
           const applicationId = customId.replace('recruit_interview_', '');
+          await interaction.deferReply().catch(() => null);
           await RecruitmentService.handleInterview(interaction, applicationId);
           return;
         }
@@ -530,12 +533,14 @@ export function registerInteractionHandler() {
         }
 
         if (customId === 'recruit_modal_submit') {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => null);
           await RecruitmentService.handleModalSubmit(interaction);
           return;
         }
 
         if (customId.startsWith('recruit_modal_reject_')) {
           const applicationId = customId.replace('recruit_modal_reject_', '');
+          await interaction.deferReply().catch(() => null);
           await RecruitmentService.handleRejectSubmit(interaction, applicationId);
           return;
         }

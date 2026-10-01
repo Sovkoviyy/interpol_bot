@@ -178,6 +178,10 @@ export class RecruitmentService {
    */
   public static async handleModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
     try {
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => null);
+      }
+
       const guild = await this.resolveGuild(interaction);
       if (!guild) {
         const errorContent = '❌ Сервер Discord не определен.';
@@ -187,10 +191,6 @@ export class RecruitmentService {
           await interaction.reply({ content: errorContent, flags: MessageFlags.Ephemeral }).catch(() => null);
         }
         return;
-      }
-
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => null);
       }
 
       // Check if recruitment is enabled
@@ -590,6 +590,8 @@ export class RecruitmentService {
     }
   }
 
+  private static recruiterRolesCache = new Map<string, { roles: string[]; expires: number }>();
+
   /**
    * Check if member is a recruiter or admin
    */
@@ -603,16 +605,22 @@ export class RecruitmentService {
     const guildId = member.guild?.id;
     if (!guildId) return false;
 
-    const config = await prisma.recruitmentConfig.findUnique({
-      where: { guildId },
-    });
-    if (!config) return false;
-
     let roles: string[] = [];
-    try {
-      roles = JSON.parse(config.recruiterRoleIds || '[]');
-    } catch {
-      roles = [];
+    const cached = this.recruiterRolesCache.get(guildId);
+    if (cached && Date.now() < cached.expires) {
+      roles = cached.roles;
+    } else {
+      const config = await prisma.recruitmentConfig.findUnique({
+        where: { guildId },
+      }).catch(() => null);
+      if (config) {
+        try {
+          roles = JSON.parse(config.recruiterRoleIds || '[]');
+        } catch {
+          roles = [];
+        }
+      }
+      this.recruiterRolesCache.set(guildId, { roles, expires: Date.now() + 60000 });
     }
 
     if (member.roles && 'cache' in member.roles && member.roles.cache) {
@@ -627,9 +635,23 @@ export class RecruitmentService {
    * Claim ticket handler
    */
   public static async handleClaim(interaction: ButtonInteraction, applicationId: string): Promise<void> {
+    // 1. Instantly acknowledge interaction so Discord never times out (< 3s)
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => null);
+    }
+
+    const reply = async (data: string | { content?: string; embeds?: any[]; flags?: any }) => {
+      const payload = typeof data === 'string' ? { content: data } : data;
+      if (interaction.deferred || interaction.replied) {
+        return await interaction.editReply(payload).catch(() => null);
+      } else {
+        return await interaction.reply(payload).catch(() => null);
+      }
+    };
+
     const member = interaction.member as GuildMember;
     if (!(await this.isRecruiter(member))) {
-      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', flags: MessageFlags.Ephemeral });
+      await reply({ content: '❌ У вас нет прав рекрутера для этого действия.' });
       return;
     }
 
@@ -637,7 +659,22 @@ export class RecruitmentService {
       where: { id: applicationId },
     });
     if (!application) {
-      await interaction.reply({ content: '❌ Заявка не найдена в базе данных.', flags: MessageFlags.Ephemeral });
+      await reply({ content: '❌ Заявка не найдена в базе данных.' });
+      return;
+    }
+
+    // Check if already claimed by another recruiter
+    if (application.status === 'UNDER_REVIEW' && application.recruiterId && application.recruiterId !== interaction.user.id) {
+      await reply({
+        content: `⚠️ Заявку уже взял на рассмотрение рекрутер <@${application.recruiterId}> (\`${application.recruiterTag || 'Рекрутер'}\`).`,
+      });
+      return;
+    }
+
+    if (application.status === 'ACCEPTED' || application.status === 'REJECTED') {
+      await reply({
+        content: `⚠️ Данная заявка уже закрыта (статус: \`${application.status}\`).`,
+      });
       return;
     }
 
@@ -650,7 +687,7 @@ export class RecruitmentService {
       },
     });
 
-    await interaction.reply({
+    await reply({
       content: `📌 Рекрутер ${interaction.user} взял заявку на рассмотрение.`,
     });
 
@@ -670,20 +707,46 @@ export class RecruitmentService {
         ].filter(Boolean).join('\n'),
         footerText: 'INTERPOL • Набор в семью',
       });
-      await this.sendRecruitmentLog(guild, claimEmbed);
+      await this.sendRecruitmentLog(guild, claimEmbed).catch(() => null);
     }
 
-    // Update original embed if possible
+    // Update original ticket message (embed + buttons)
     if (interaction.message && interaction.message.embeds.length > 0) {
-      const oldEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
-      oldEmbed.setColor(THEME.COLORS.WARNING);
-      oldEmbed.setDescription(
-        oldEmbed.data.description?.replace(
-          /Статус: .*/,
-          `Статус: На рассмотрении у ${interaction.user} (\`${interaction.user.tag}\`)`
-        ) || null
-      );
-      await interaction.message.edit({ embeds: [oldEmbed] });
+      try {
+        const oldEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
+        oldEmbed.setColor(THEME.COLORS.WARNING);
+        oldEmbed.setDescription(
+          oldEmbed.data.description?.replace(
+            /Статус: .*/,
+            `Статус: На рассмотрении у ${interaction.user} (\`${interaction.user.tag}\`)`
+          ) || `Статус: На рассмотрении у ${interaction.user} (\`${interaction.user.tag}\`)`
+        );
+
+        // Update button row: disable "Взять на рассмотрение" and mark who claimed it
+        const updatedComponents: ActionRowBuilder<ButtonBuilder>[] = [];
+        if (interaction.message.components && interaction.message.components.length > 0) {
+          for (const row of interaction.message.components) {
+            const newRow = new ActionRowBuilder<ButtonBuilder>();
+            for (const comp of (row as any).components) {
+              const b = ButtonBuilder.from(comp);
+              if (b.data && (b.data as any).custom_id === `recruit_claim_${applicationId}`) {
+                b.setDisabled(true);
+                b.setLabel(`Взял: ${interaction.user.username.slice(0, 18)}`);
+                b.setStyle(ButtonStyle.Secondary);
+              }
+              newRow.addComponents(b);
+            }
+            updatedComponents.push(newRow);
+          }
+        }
+
+        await interaction.message.edit({
+          embeds: [oldEmbed],
+          components: updatedComponents.length > 0 ? updatedComponents : undefined,
+        }).catch(() => null);
+      } catch (e) {
+        console.error('[Recruitment] Error updating ticket message embed on claim:', e);
+      }
     }
   }
 
@@ -691,9 +754,22 @@ export class RecruitmentService {
    * Handle calling candidate to interview by creating a private voice channel
    */
   public static async handleInterview(interaction: ButtonInteraction, applicationId: string): Promise<void> {
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => null);
+    }
+
+    const reply = async (data: string | { content?: string; embeds?: any[]; flags?: any }) => {
+      const payload = typeof data === 'string' ? { content: data } : data;
+      if (interaction.deferred || interaction.replied) {
+        return await interaction.editReply(payload).catch(() => null);
+      } else {
+        return await interaction.reply(payload).catch(() => null);
+      }
+    };
+
     const member = interaction.member as GuildMember;
     if (!(await this.isRecruiter(member))) {
-      await interaction.reply({ content: 'У вас нет прав рекрутера для этого действия.', flags: MessageFlags.Ephemeral });
+      await reply({ content: '❌ У вас нет прав рекрутера для этого действия.' });
       return;
     }
 
@@ -701,17 +777,15 @@ export class RecruitmentService {
       where: { id: applicationId },
     });
     if (!application) {
-      await interaction.reply({ content: 'Заявка не найдена в базе данных.', flags: MessageFlags.Ephemeral });
+      await reply({ content: '❌ Заявка не найдена в базе данных.' });
       return;
     }
 
     const guild = await this.resolveGuild(interaction);
     if (!guild) {
-      await interaction.reply({ content: 'Сервер Discord не найден.', flags: MessageFlags.Ephemeral });
+      await reply({ content: '❌ Сервер Discord не найден.' });
       return;
     }
-
-    await interaction.deferReply();
 
     // Check if voice channel already exists
     if (application.interviewVoiceId) {
@@ -864,9 +938,22 @@ export class RecruitmentService {
    * Approve application handler
    */
   public static async handleApprove(interaction: ButtonInteraction, applicationId: string): Promise<void> {
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => null);
+    }
+
+    const reply = async (data: string | { content?: string; embeds?: any[]; flags?: any }) => {
+      const payload = typeof data === 'string' ? { content: data } : data;
+      if (interaction.deferred || interaction.replied) {
+        return await interaction.editReply(payload).catch(() => null);
+      } else {
+        return await interaction.reply(payload).catch(() => null);
+      }
+    };
+
     const member = interaction.member as GuildMember;
     if (!(await this.isRecruiter(member))) {
-      await interaction.reply({ content: '❌ У вас нет прав рекрутера для этого действия.', flags: MessageFlags.Ephemeral });
+      await reply({ content: '❌ У вас нет прав рекрутера для этого действия.' });
       return;
     }
 
@@ -874,15 +961,13 @@ export class RecruitmentService {
       where: { id: applicationId },
     });
     if (!application) {
-      await interaction.reply({ content: '❌ Заявка не найдена.', flags: MessageFlags.Ephemeral });
+      await reply({ content: '❌ Заявка не найдена.' });
       return;
     }
 
-    await interaction.deferReply();
-
     const guild = await this.resolveGuild(interaction);
     if (!guild) {
-      await interaction.editReply({ content: '❌ Сервер Discord не найден.' });
+      await reply({ content: '❌ Сервер Discord не найден.' });
       return;
     }
 
@@ -1063,15 +1148,21 @@ export class RecruitmentService {
       .setMaxLength(500);
 
     modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput));
-    await interaction.showModal(modal);
+    try {
+      await interaction.showModal(modal);
+    } catch (e) {
+      console.error('[Recruitment] Error showing reject modal:', e);
+    }
   }
 
   /**
    * Process rejection modal submit
    */
   public static async handleRejectSubmit(interaction: ModalSubmitInteraction, applicationId: string): Promise<void> {
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => null);
+    }
     const reason = interaction.fields.getTextInputValue('rejection_reason');
-    await interaction.deferReply();
 
     const guild = await this.resolveGuild(interaction);
     if (!guild) {
