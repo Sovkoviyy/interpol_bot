@@ -14,5 +14,8 @@ web/dist/
 *.db
 *.db-journal
 
+# Backups
+backups/
+
 # Logs
 *.log
