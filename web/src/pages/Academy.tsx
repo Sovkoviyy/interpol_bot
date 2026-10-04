@@ -19,12 +19,14 @@ import {
   X
 } from 'lucide-react';
 import api from '../api/client';
-import { useModal } from '../context/ModalContext';
+import { useToast } from '../context/ToastContext';
 import { ChannelSelect } from '../components/ChannelSelect';
 import { CustomSelect } from '../components/CustomSelect';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Modal } from '../components/Modal';
 
 export const Academy: React.FC = () => {
-  const modal = useModal();
+  const toast = useToast();
   const [tab, setTab] = useState<'channels' | 'reports' | 'settings'>('channels');
   const [config, setConfig] = useState<any>(null);
   const [channels, setChannels] = useState<any[]>([]);
@@ -35,6 +37,21 @@ export const Academy: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [reportFilter, setReportFilter] = useState('ALL');
   const [viewingReportsMember, setViewingReportsMember] = useState<any>(null);
+
+  // Confirmation dialog states
+  const [studentToDelete, setStudentToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState(false);
+
+  const [reportToDelete, setReportToDelete] = useState<string | null>(null);
+  const [deletingReport, setDeletingReport] = useState(false);
+
+  const [promoteTarget, setPromoteTarget] = useState<{ channelId: string; studentName: string } | null>(null);
+  const [promoting, setPromoting] = useState(false);
+
+  const [penaltyModal, setPenaltyModal] = useState<{ channelId: string; studentName: string } | null>(null);
+  const [penaltyReason, setPenaltyReason] = useState('');
+  const [penaltyMp, setPenaltyMp] = useState(2);
+  const [penalizing, setPenalizing] = useState(false);
 
   // Edit Student Profile State
   const [editingStudent, setEditingStudent] = useState<any | null>(null);
@@ -75,17 +92,9 @@ export const Academy: React.FC = () => {
     try {
       setSaving(true);
       await api.post('/academy/config', config);
-      modal.alert({
-        title: 'Успешно',
-        message: 'Настройки академии успешно сохранены!',
-        type: 'success',
-      });
+      toast.success('Настройки академии успешно сохранены!');
     } catch (err: any) {
-      modal.alert({
-        title: 'Ошибка',
-        message: err.response?.data?.error || 'Не удалось сохранить настройки',
-        type: 'error',
-      });
+      toast.error(err.response?.data?.error || 'Не удалось сохранить настройки');
     } finally {
       setSaving(false);
     }
@@ -104,91 +113,55 @@ export const Academy: React.FC = () => {
         approved,
         rejectionReason,
       });
-      modal.alert({
-        title: approved ? 'Отчет одобрен' : 'Отчет отклонен',
-        message: approved ? 'Отчет засчитан академику!' : 'Отчет отклонен.',
-        type: approved ? 'success' : 'info',
-      });
+      if (approved) {
+        toast.success('Отчет одобрен и засчитан академику!');
+      } else {
+        toast.info('Отчет отклонен');
+      }
       fetchData();
     } catch (err: any) {
-      modal.alert({
-        title: 'Ошибка',
-        message: err.response?.data?.error || 'Ошибка проверки отчета',
-        type: 'error',
-      });
+      toast.error(err.response?.data?.error || 'Ошибка проверки отчета');
     }
   };
 
-  const handlePromote = async (channelId: string, approved: boolean) => {
-    if (!approved) {
-      modal.form({
-        title: 'Отклонить повышение',
-        message: 'Укажите причину отказа и количество штрафных МП, которые академик должен отыграть дополнительно:',
-        fields: [
-          {
-            name: 'rejectionReason',
-            label: 'Причина отказа',
-            placeholder: 'Недостаточно активности, косяки в отчетах...',
-            required: true,
-          },
-          {
-            name: 'penaltyMp',
-            label: 'Штрафные МП к норме',
-            placeholder: '2',
-            defaultValue: '2',
-            required: true,
-          },
-        ],
-        submitText: 'Отклонить и оштрафовать',
-        onSubmit: async (values) => {
-          try {
-            await api.post(`/academy/channels/${channelId}/promote`, {
-              approved: false,
-              rejectionReason: values.rejectionReason,
-              penaltyMp: parseInt(values.penaltyMp, 10) || 2,
-            });
-            modal.alert({
-              title: 'Повышение отклонено',
-              message: `Назначен штраф +${values.penaltyMp || 2} МП к норме.`,
-              type: 'info',
-            });
-            fetchData();
-          } catch (err: any) {
-            modal.alert({
-              title: 'Ошибка',
-              message: err.response?.data?.error || 'Ошибка действия',
-              type: 'error',
-            });
-          }
-        },
-      });
-      return;
-    }
-
-    const confirmed = await modal.confirm({
-      title: 'Повышение на 2 ранг',
-      message: 'Одобрить повышение академика на 2 ранг? Бот снимет роль 1 ранга, выдаст роль 2 ранга (мейна) и заархивирует канал.',
-      confirmText: 'Повысить',
-      type: 'pink',
-    });
-    if (!confirmed) return;
-
+  const executePromote = async () => {
+    if (!promoteTarget) return;
     try {
-      await api.post(`/academy/channels/${channelId}/promote`, {
+      setPromoting(true);
+      await api.post(`/academy/channels/${promoteTarget.channelId}/promote`, {
         approved: true,
       });
-      modal.alert({
-        title: 'Повышение одобрено!',
-        message: 'Академик успешно повышен на 2 ранг (Основной состав)!',
-        type: 'success',
-      });
+      toast.success('Академик успешно повышен на 2 ранг (Основной состав)!');
+      setPromoteTarget(null);
       fetchData();
     } catch (err: any) {
-      modal.alert({
-        title: 'Ошибка',
-        message: err.response?.data?.error || 'Ошибка действия',
-        type: 'error',
+      toast.error(err.response?.data?.error || 'Ошибка повышения');
+    } finally {
+      setPromoting(false);
+    }
+  };
+
+  const executePenalty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!penaltyModal) return;
+    if (!penaltyReason.trim()) {
+      toast.error('Укажите причину штрафа');
+      return;
+    }
+    try {
+      setPenalizing(true);
+      await api.post(`/academy/channels/${penaltyModal.channelId}/promote`, {
+        approved: false,
+        rejectionReason: penaltyReason,
+        penaltyMp: penaltyMp || 2,
       });
+      toast.info(`Назначен штраф +${penaltyMp || 2} МП к норме`);
+      setPenaltyModal(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Ошибка назначения штрафа');
+    } finally {
+      setPenalizing(false);
     }
   };
 
@@ -212,73 +185,47 @@ export const Academy: React.FC = () => {
         penaltyMp: studentPenaltyMp,
         status: studentStatus,
       });
-      modal.alert({
-        title: 'Успешно',
-        message: 'Профиль ученика успешно обновлен!',
-        type: 'success',
-      });
+      toast.success('Профиль ученика успешно обновлен!');
       setEditingStudent(null);
       fetchData();
     } catch (err: any) {
-      modal.alert({
-        title: 'Ошибка',
-        message: err.response?.data?.error || 'Не удалось обновить профиль',
-        type: 'error',
-      });
+      toast.error(err.response?.data?.error || 'Не удалось обновить профиль');
     } finally {
       setSavingStudent(false);
     }
   };
 
-  const handleDeleteStudent = async (studentId: string, studentName: string) => {
-    const confirmed = await modal.confirm({
-      title: 'Удалить профиль ученика?',
-      message: `Вы действительно хотите удалить профиль ученика ${studentName}? Это действие сотрет все связанные отчеты и удалит канал в Discord.`,
-      confirmText: 'Да, удалить профиль',
-      type: 'danger',
-    });
-    if (!confirmed) return;
-
+  const executeDeleteStudent = async () => {
+    if (!studentToDelete) return;
     try {
-      await api.delete(`/academy/channels/${studentId}`);
-      modal.alert({
-        title: 'Удалено',
-        message: 'Профиль ученика успешно удален.',
-        type: 'success',
+      setDeletingStudent(true);
+      await api.delete(`/academy/channels/${studentToDelete.id}`, {
+        params: { guildId: config?.guildId },
       });
-      fetchData();
+      toast.success('Профиль ученика успешно удален!');
+      setStudentToDelete(null);
+      await fetchData();
     } catch (err: any) {
-      modal.alert({
-        title: 'Ошибка',
-        message: err.response?.data?.error || 'Не удалось удалить профиль',
-        type: 'error',
-      });
+      toast.error(err.response?.data?.error || 'Не удалось удалить профиль');
+    } finally {
+      setDeletingStudent(false);
     }
   };
 
-  const handleDeleteReport = async (reportId: string) => {
-    const confirmed = await modal.confirm({
-      title: 'Удалить этот отчет?',
-      message: 'Вы уверены, что хотите удалить этот отчет по МП? Запись будет удалена безвозвратно.',
-      confirmText: 'Удалить отчет',
-      type: 'danger',
-    });
-    if (!confirmed) return;
-
+  const executeDeleteReport = async () => {
+    if (!reportToDelete) return;
     try {
-      await api.delete(`/academy/reports/${reportId}`);
-      modal.alert({
-        title: 'Удалено',
-        message: 'Отчет успешно удален из системы.',
-        type: 'success',
+      setDeletingReport(true);
+      await api.delete(`/academy/reports/${reportToDelete}`, {
+        params: { guildId: config?.guildId },
       });
-      fetchData();
+      toast.success('Отчет успешно удален из системы');
+      setReportToDelete(null);
+      await fetchData();
     } catch (err: any) {
-      modal.alert({
-        title: 'Ошибка',
-        message: err.response?.data?.error || 'Не удалось удалить отчет',
-        type: 'error',
-      });
+      toast.error(err.response?.data?.error || 'Не удалось удалить отчет');
+    } finally {
+      setDeletingReport(false);
     }
   };
 
@@ -407,7 +354,7 @@ export const Academy: React.FC = () => {
                         </button>
 
                         <button
-                          onClick={() => handleDeleteStudent(ch.id, ch.userTag || ch.userId)}
+                          onClick={() => setStudentToDelete({ id: ch.id, name: ch.userTag || ch.userId || 'Ученик' })}
                           className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
                           title="Удалить профиль ученика"
                         >
@@ -416,7 +363,11 @@ export const Academy: React.FC = () => {
 
                         {ch.status === 'ACTIVE' && (
                           <button
-                            onClick={() => handlePromote(ch.id, false)}
+                            onClick={() => {
+                              setPenaltyModal({ channelId: ch.id, studentName: ch.userTag || ch.userId || 'Ученик' });
+                              setPenaltyReason('');
+                              setPenaltyMp(2);
+                            }}
                             className="py-1.5 px-2.5 rounded-xl bg-[#1E232F] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-xs font-semibold border border-slate-700/40 transition-all"
                             title="Добавить штрафные МП"
                           >
@@ -427,7 +378,7 @@ export const Academy: React.FC = () => {
 
                       {ch.status === 'ACTIVE' && (
                         <button
-                          onClick={() => handlePromote(ch.id, true)}
+                          onClick={() => setPromoteTarget({ channelId: ch.id, studentName: ch.userTag || ch.userId || 'Ученик' })}
                           className="w-full py-1.5 px-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-semibold shadow-md shadow-pink-600/20 transition-all text-center"
                         >
                           Повысить на 2 ранг
@@ -539,7 +490,7 @@ export const Academy: React.FC = () => {
                               </>
                             )}
                             <button
-                              onClick={() => handleDeleteReport(r.id)}
+                              onClick={() => setReportToDelete(r.id)}
                               className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all"
                               title="Удалить отчет"
                             >
@@ -901,6 +852,99 @@ export const Academy: React.FC = () => {
         </div>,
         document.body
       )}
+
+      {/* Confirm Dialog: Delete Student */}
+      <ConfirmDialog
+        isOpen={!!studentToDelete}
+        onClose={() => setStudentToDelete(null)}
+        onConfirm={executeDeleteStudent}
+        title="Удалить профиль ученика?"
+        message={`Вы действительно хотите удалить профиль ученика ${studentToDelete?.name}? Это действие сотрет все связанные отчеты и удалит канал в Discord.`}
+        confirmLabel="Да, удалить профиль"
+        variant="danger"
+        loading={deletingStudent}
+      />
+
+      {/* Confirm Dialog: Delete Report */}
+      <ConfirmDialog
+        isOpen={!!reportToDelete}
+        onClose={() => setReportToDelete(null)}
+        onConfirm={executeDeleteReport}
+        title="Удалить этот отчет?"
+        message="Вы уверены, что хотите удалить этот отчет по МП? Запись будет удалена безвозвратно."
+        confirmLabel="Удалить отчет"
+        variant="danger"
+        loading={deletingReport}
+      />
+
+      {/* Confirm Dialog: Promote Student */}
+      <ConfirmDialog
+        isOpen={!!promoteTarget}
+        onClose={() => setPromoteTarget(null)}
+        onConfirm={executePromote}
+        title="Повышение на 2 ранг"
+        message={`Одобрить повышение академика ${promoteTarget?.studentName} на 2 ранг? Бот снимет роль 1 ранга, выдаст роль 2 ранга (мейна) и заархивирует канал.`}
+        confirmLabel="Повысить"
+        variant="info"
+        loading={promoting}
+      />
+
+      {/* Modal: Penalty */}
+      <Modal
+        isOpen={!!penaltyModal}
+        onClose={() => setPenaltyModal(null)}
+        title="Отклонить повышение и назначить штраф"
+        description={`Академик: ${penaltyModal?.studentName}`}
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={executePenalty} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              Причина отказа <span className="text-pink-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={penaltyReason}
+              onChange={(e) => setPenaltyReason(e.target.value)}
+              placeholder="Недостаточно активности, косяки в отчетах..."
+              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              Штрафные МП к норме <span className="text-pink-500">*</span>
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              required
+              value={penaltyMp}
+              onChange={(e) => setPenaltyMp(parseInt(e.target.value, 10) || 1)}
+              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-pink-500 transition-all"
+            />
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setPenaltyModal(null)}
+              className="px-4 py-2 rounded-xl bg-[#1E232F] hover:bg-[#252B3B] text-slate-300 text-xs font-medium transition-all"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={penalizing}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold text-xs shadow-lg shadow-red-600/20 transition-all disabled:opacity-50"
+            >
+              {penalizing ? 'Сохранение...' : 'Отклонить и оштрафовать'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

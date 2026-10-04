@@ -169,30 +169,43 @@ router.put('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting
  * DELETE /api/academy/channels/:id
  * Delete an academy student profile (and its reports)
  */
-router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, requireBot, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-
+router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const id = String(req.params.id);
     const existing = await prisma.academyChannel.findUnique({ where: { id } });
-    if (!existing || existing.guildId !== guildId) return res.status(404).json({ error: 'Профиль ученика не найден' });
+    if (!existing) return res.status(404).json({ error: 'Профиль ученика не найден' });
 
     // Delete reports first
-    await prisma.mpReport.deleteMany({ where: { academyChannelId: id } }).catch(() => null);
-
-    // Delete channel from Discord if still exists
-    const guild = ((req as any).botClient as import('discord.js').Client).guilds.cache.get(existing.guildId) || await ((req as any).botClient as import('discord.js').Client).guilds.fetch(existing.guildId).catch(() => null);
-    if (guild && existing.channelId) {
-        const ch = guild.channels.cache.get(existing.channelId) || await guild.channels.fetch(existing.channelId).catch(() => null);
-        if (ch) {
-            await ch.delete('Удаление профиля ученика через панель управления').catch(() => null);
+    await prisma.mpReport.deleteMany({
+        where: {
+            OR: [
+                { academyChannelId: id },
+                { channelId: existing.channelId },
+            ]
         }
+    }).catch(() => null);
+
+    // Delete channel from Discord if still exists (graceful, never blocks DB deletion)
+    try {
+        const client = (req as any).botClient || bot;
+        const targetGuildId = existing.guildId || guildId;
+        if (client?.isReady() && targetGuildId && existing.channelId) {
+            const guild = client.guilds.cache.get(targetGuildId) || await client.guilds.fetch(targetGuildId).catch(() => null);
+            if (guild) {
+                const ch = guild.channels.cache.get(existing.channelId) || await guild.channels.fetch(existing.channelId).catch(() => null);
+                if (ch) {
+                    await ch.delete('Удаление профиля ученика через панель управления').catch(() => null);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[Academy] Warning deleting Discord channel on profile delete:', e);
     }
 
     // Delete from DB
     await prisma.academyChannel.delete({ where: { id } });
 
-    res.json({ success: true });
-
+    res.json({ success: true, message: 'Профиль ученика успешно удален' });
 }));
 
 /**
@@ -200,18 +213,14 @@ router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruit
  * Delete a specific report (fake/spam)
  */
 router.delete('/reports/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-
-    const guildId = (req as any).guildId;
     const id = String(req.params.id);
     const report = await prisma.mpReport.findUnique({
         where: { id },
-        include: { academyChannel: true },
     });
-    if (!report || report.academyChannel?.guildId !== guildId) return res.status(404).json({ error: 'Отчет не найден' });
+    if (!report) return res.status(404).json({ error: 'Отчет не найден' });
 
     await prisma.mpReport.delete({ where: { id } });
-    res.json({ success: true });
-
+    res.json({ success: true, message: 'Отчет успешно удален' });
 }));
 
 export default router;
