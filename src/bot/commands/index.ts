@@ -1,10 +1,27 @@
 import { REST, Routes } from 'discord.js';
 import bot from '../client';
 import config from '../../config';
+import { academyCommand } from './academy';
+import { clearChannelCommand } from './clearChannel';
+import { eventCommand } from './event';
+import { logsCommand } from './logs';
+import { profileCommand, setStaticCommand, topCommand, penaltyCommand } from './profile';
+import { recruitCommand } from './recruit';
+import { tierCommand } from './tier';
 
 export function registerCommands() {
   bot.commands.clear();
-  console.log('ℹ️ [Commands] Slash commands are disabled. Bot operates via interactive buttons and web dashboard.');
+  bot.commands.set('academy', academyCommand);
+  bot.commands.set('clear-channel', clearChannelCommand);
+  bot.commands.set('event', eventCommand);
+  bot.commands.set('logs', logsCommand);
+  bot.commands.set('profile', profileCommand);
+  bot.commands.set('set-static', setStaticCommand);
+  bot.commands.set('top', topCommand);
+  bot.commands.set('penalty', penaltyCommand);
+  bot.commands.set('recruit', recruitCommand);
+  bot.commands.set('tier', tierCommand);
+  console.log(`✅ [Commands] Registered ${bot.commands.size} slash commands.`);
 }
 
 /**

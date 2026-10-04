@@ -732,9 +732,11 @@ export class AcademyService {
         // Delete the academy channel immediately after promotion to rank 2
         setTimeout(async () => {
           try {
-            await channel.delete('Академик успешно повышен на 2 ранг (канал академии закрыт)');
+            if (channel && typeof (channel as any).delete === 'function') {
+              await (channel as any).delete('Академик успешно повышен на 2 ранг (канал академии закрыт)');
+            }
           } catch (delErr) {
-            console.warn(`[Academy] Could not delete channel ${channel.id}:`, delErr);
+            console.warn(`[Academy] Could not delete channel ${channel?.id}:`, delErr);
           }
         }, 1500);
       }

@@ -230,8 +230,16 @@ router.post('/:userId/characters', requirePermission('manageProfiles', 'manageRe
  */
 router.post('/:userId/set-main', requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
-    const guildId = (req as any).guildId;
+    const authUser = req.user;
     const targetUserId = String(req.params.userId);
+    const isSelf = authUser?.userId === targetUserId;
+    const hasPerm = authUser?.permissions.isAdmin || authUser?.permissions.manageSettings || authUser?.permissions.manageRecruiting;
+
+    if (!isSelf && !hasPerm) {
+        return res.status(403).json({ error: 'Forbidden: You cannot modify another member\'s profile' });
+    }
+
+    const guildId = (req as any).guildId;
     const { staticOrCharId } = req.body;
 
     if (!staticOrCharId) return res.status(400).json({ error: 'Укажите staticId или characterId' });

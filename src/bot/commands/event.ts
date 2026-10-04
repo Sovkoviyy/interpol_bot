@@ -234,7 +234,7 @@ export const eventCommand: Command = {
         pingContent = `<@&${finalTargetRoleId}>`;
       }
 
-      const channel = interaction.channel;
+      const channel = interaction.channel || (guild ? (guild.channels.cache.get(interaction.channelId) || await guild.channels.fetch(interaction.channelId).catch(() => null)) : null);
       if (!channel || !channel.isTextBased() || !('send' in channel)) {
         await interaction.editReply({ content: '❌ Неверный канал для создания сбора.' });
         return;

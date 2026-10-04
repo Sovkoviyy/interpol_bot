@@ -55,8 +55,8 @@ embedsRouter.post('/', requireAuth, requirePermission('manageSettings'), require
 
     let template;
     if (id) {
-        template = await prisma.customEmbedTemplate.update({
-            where: { id },
+        await prisma.customEmbedTemplate.updateMany({
+            where: { id, guildId },
             data: {
                 name,
                 targetChannelId,
@@ -74,6 +74,7 @@ embedsRouter.post('/', requireAuth, requirePermission('manageSettings'), require
                 fieldsJson,
             },
         });
+        template = await prisma.customEmbedTemplate.findFirst({ where: { id, guildId } });
     } else {
         template = await prisma.customEmbedTemplate.create({
             data: {
@@ -100,11 +101,12 @@ embedsRouter.post('/', requireAuth, requirePermission('manageSettings'), require
 }));
 
 // Delete a saved embed template
-embedsRouter.delete('/:id', requireAuth, requirePermission('manageSettings'), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+embedsRouter.delete('/:id', requireAuth, requirePermission('manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
+    const guildId = (req as any).guildId;
     const id = req.params.id as string;
-    await prisma.customEmbedTemplate.delete({
-        where: { id },
+    await prisma.customEmbedTemplate.deleteMany({
+        where: { id, guildId },
     }).catch(() => null);
 
     return res.json({ success: true });

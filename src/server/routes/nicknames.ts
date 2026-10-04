@@ -143,7 +143,7 @@ nicknamesRouter.delete('/bindings/:id', requirePermission('manageSettings'), asy
  * GET /api/nicknames/locks
  * List all members with manual nickname locks
  */
-nicknamesRouter.get('/locks', requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+nicknamesRouter.get('/locks', requirePermission('manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
     const guildId = (req as any).guildId;
     const guild = await getDiscordGuild(guildId);
@@ -208,7 +208,7 @@ nicknamesRouter.delete('/locks/:userId', requirePermission('manageSettings'), re
  * POST /api/nicknames/sync/:userId
  * Auto-sync a single user's nickname based on their roles and main character
  */
-nicknamesRouter.post('/sync/:userId', requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+nicknamesRouter.post('/sync/:userId', requirePermission('manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
     const guildId = (req as any).guildId;
     const userId = req.params.userId as string;
@@ -234,7 +234,7 @@ nicknamesRouter.post('/sync/:userId', requireGuildId, asyncHandler(async (req: A
  * POST /api/nicknames/manual/:userId
  * Manually set a custom nickname for a user in Discord
  */
-nicknamesRouter.post('/manual/:userId', requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+nicknamesRouter.post('/manual/:userId', requirePermission('manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
     const guildId = (req as any).guildId;
     const userId = req.params.userId as string;

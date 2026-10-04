@@ -18,7 +18,7 @@ router.use(requireAuth);
  * GET /api/honeypot
  * Retrieve honeypot config, statistics, and recent caught spam logs
  */
-router.get('/', requireGuildId, requireBot, asyncHandler(async (req, res) => {
+router.get('/', requirePermission('manageSettings'), requireGuildId, requireBot, asyncHandler(async (req, res) => {
 
     const config = await honeypotManager.getConfig();
 

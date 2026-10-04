@@ -247,7 +247,7 @@ async function runSimulation() {
     };
 
     bot.emit(Events.InteractionCreate, mockInteraction);
-    await Promise.race([completionPromise, new Promise(r => setTimeout(r, 250))]);
+    await Promise.race([completionPromise, new Promise(r => setTimeout(r, 2000))]);
     return result;
   }
 

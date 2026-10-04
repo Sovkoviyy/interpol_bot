@@ -13,7 +13,7 @@ router.use(requireAuth);
 /**
  * GET /api/blacklist
  */
-router.get('/', requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', requirePermission('manageRecruiting', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
     const guildId = (req as any).guildId;
     const search = req.query.search as string;

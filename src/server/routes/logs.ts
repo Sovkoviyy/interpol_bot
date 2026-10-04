@@ -129,7 +129,7 @@ logsRouter.post('/auto-setup', requireAuth, requirePermission('manageSettings'),
  * GET /api/logs/entries
  * Returns combined audit logs (Discord server audit logs + internal Bot action logs)
  */
-logsRouter.get('/entries', requireAuth, requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+logsRouter.get('/entries', requireAuth, requirePermission('viewLogs', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
     const guildId = (req as any).guildId;
     const search = ((req.query.search as string) || '').trim().toLowerCase();

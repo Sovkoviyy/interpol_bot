@@ -123,13 +123,14 @@ router.get('/submissions', requirePermission('manageTier', 'manageEvents', 'mana
  * PUT /api/tier/tickets/:id
  * Edit a tier ticket
  */
-router.put('/tickets/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.put('/tickets/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
+    const guildId = (req as any).guildId;
     const id = String(req.params.id);
     const { status } = req.body;
 
     const ticket = await prisma.tierTicket.findUnique({ where: { id } });
-    if (!ticket) return res.status(404).json({ error: 'Тикет тира не найден' });
+    if (!ticket || ticket.guildId !== guildId) return res.status(404).json({ error: 'Тикет тира не найден' });
 
     const updated = await prisma.tierTicket.update({
         where: { id },
@@ -147,11 +148,12 @@ router.put('/tickets/:id', requirePermission('manageTier', 'manageEvents', 'mana
  * DELETE /api/tier/tickets/:id
  * Delete a tier ticket (and all its submissions)
  */
-router.delete('/tickets/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), requireBot, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/tickets/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), requireGuildId, requireBot, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
+    const guildId = (req as any).guildId;
     const id = String(req.params.id);
     const ticket = await prisma.tierTicket.findUnique({ where: { id } });
-    if (!ticket) return res.status(404).json({ error: 'Тикет тира не найден' });
+    if (!ticket || ticket.guildId !== guildId) return res.status(404).json({ error: 'Тикет тира не найден' });
 
     // Delete Discord channel if exists
     const guild = ((req as any).botClient as import('discord.js').Client).guilds.cache.get(ticket.guildId) || await ((req as any).botClient as import('discord.js').Client).guilds.fetch(ticket.guildId).catch(() => null);
@@ -175,13 +177,17 @@ router.delete('/tickets/:id', requirePermission('manageTier', 'manageEvents', 'm
  * PUT /api/tier/submissions/:id
  * Edit or review a tier submission
  */
-router.put('/submissions/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.put('/submissions/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
+    const guildId = (req as any).guildId;
     const id = String(req.params.id);
     const { status, reviewerComment, mpType, clipUrl } = req.body;
 
-    const submission = await prisma.tierSubmission.findUnique({ where: { id } });
-    if (!submission) return res.status(404).json({ error: 'Откат не найден' });
+    const submission = await prisma.tierSubmission.findUnique({
+        where: { id },
+        include: { ticket: true },
+    });
+    if (!submission || submission.ticket?.guildId !== guildId) return res.status(404).json({ error: 'Откат не найден' });
 
     const updated = await prisma.tierSubmission.update({
         where: { id },
@@ -201,11 +207,15 @@ router.put('/submissions/:id', requirePermission('manageTier', 'manageEvents', '
  * DELETE /api/tier/submissions/:id
  * Delete a single submission (fake/rofl clip)
  */
-router.delete('/submissions/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/submissions/:id', requirePermission('manageTier', 'manageEvents', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
+    const guildId = (req as any).guildId;
     const id = String(req.params.id);
-    const submission = await prisma.tierSubmission.findUnique({ where: { id } });
-    if (!submission) return res.status(404).json({ error: 'Откат не найден' });
+    const submission = await prisma.tierSubmission.findUnique({
+        where: { id },
+        include: { ticket: true },
+    });
+    if (!submission || submission.ticket?.guildId !== guildId) return res.status(404).json({ error: 'Откат не найден' });
 
     await prisma.tierSubmission.delete({ where: { id } });
     res.json({ success: true });

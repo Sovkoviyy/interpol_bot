@@ -138,13 +138,14 @@ router.post('/channels/:id/promote', requirePermission('manageAcademy', 'manageR
  * PUT /api/academy/channels/:id
  * Edit an academy student profile
  */
-router.put('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.put('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
+    const guildId = (req as any).guildId;
     const id = String(req.params.id);
     const { staticId, approvedMpCount, requiredMp, penaltyMp, status } = req.body;
 
     const existing = await prisma.academyChannel.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: 'Профиль ученика не найден' });
+    if (!existing || existing.guildId !== guildId) return res.status(404).json({ error: 'Профиль ученика не найден' });
 
     const updated = await prisma.academyChannel.update({
         where: { id },
@@ -168,11 +169,12 @@ router.put('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting
  * DELETE /api/academy/channels/:id
  * Delete an academy student profile (and its reports)
  */
-router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireBot, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, requireBot, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
+    const guildId = (req as any).guildId;
     const id = String(req.params.id);
     const existing = await prisma.academyChannel.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: 'Профиль ученика не найден' });
+    if (!existing || existing.guildId !== guildId) return res.status(404).json({ error: 'Профиль ученика не найден' });
 
     // Delete reports first
     await prisma.mpReport.deleteMany({ where: { academyChannelId: id } }).catch(() => null);
@@ -197,11 +199,15 @@ router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruit
  * DELETE /api/academy/reports/:id
  * Delete a specific report (fake/spam)
  */
-router.delete('/reports/:id', requirePermission('manageAcademy', 'manageRecruiting'), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/reports/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
+    const guildId = (req as any).guildId;
     const id = String(req.params.id);
-    const report = await prisma.mpReport.findUnique({ where: { id } });
-    if (!report) return res.status(404).json({ error: 'Отчет не найден' });
+    const report = await prisma.mpReport.findUnique({
+        where: { id },
+        include: { academyChannel: true },
+    });
+    if (!report || report.academyChannel?.guildId !== guildId) return res.status(404).json({ error: 'Отчет не найден' });
 
     await prisma.mpReport.delete({ where: { id } });
     res.json({ success: true });
