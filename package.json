@@ -12,7 +12,11 @@
     "build": "npm run build:server && npm run build:web",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push --accept-data-loss"
+    "prisma:push": "prisma db push --accept-data-loss",
+    "db:check": "node scripts/migrate-helper.js check",
+    "db:sync": "node scripts/migrate-helper.js sync",
+    "vps:export": "node scripts/migrate-helper.js export",
+    "vps:import": "node scripts/migrate-helper.js import"
   },
   "keywords": [],
   "author": "",
