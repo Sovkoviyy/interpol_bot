@@ -185,7 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userPermissions }) => {
             Бот онлайн
           </span>
           <span className="text-[10px] bg-gradient-to-r from-pink-500/15 to-rose-500/15 text-pink-400 font-mono px-2.5 py-0.5 rounded-lg border border-pink-500/20 font-semibold tracking-wide">
-            v3.0
+            v6.0
           </span>
         </div>
       </div>

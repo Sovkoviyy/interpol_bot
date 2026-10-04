@@ -12,6 +12,7 @@ import {
   Flame
 } from 'lucide-react';
 import api from '../api/client';
+import { LoadingSpinner } from '../components';
 
 export const Stats: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
@@ -36,9 +37,7 @@ export const Stats: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-400">
-        <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
+      <LoadingSpinner fullPage />
     );
   }
 

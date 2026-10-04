@@ -27,6 +27,7 @@ import api from '../api/client';
 import { useModal } from '../context/ModalContext';
 import { ChannelSelect } from '../components/ChannelSelect';
 import { CustomSelect } from '../components/CustomSelect';
+import { SearchInput } from '../components';
 
 export const Profiles: React.FC = () => {
   const modal = useModal();
@@ -549,16 +550,7 @@ export const Profiles: React.FC = () => {
       {/* Profiles List */}
       <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск по статику, имени, тегу или ID..."
-                className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-colors"
-              />
-            </div>
+            <SearchInput value={search} onChange={setSearch} placeholder="Поиск по статику, имени, тегу или ID..." className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition-colors" />
 
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span>Сортировка:</span>

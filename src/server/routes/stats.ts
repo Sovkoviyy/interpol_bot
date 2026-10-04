@@ -2,131 +2,132 @@ import { Router, Response } from 'express';
 import bot from '../../bot/client';
 import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
-import { resolveGuildId } from '../utils/guild';
+import { asyncHandler } from "../middlewares/asyncHandler";
+import { requireGuildId } from "../middlewares/requireGuildId";
 
 export const statsRouter = Router();
 
 // Helper to gather full stats data for a guild
 async function getFullStatsData(guildId: string) {
-  const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
 
-  // 1. Members count & Voice Activity
-  const totalMembers = guild?.memberCount || 0;
-  
-  let onlineMembers = 0;
-  let voiceOnline = 0;
-  let botCount = 0;
+    // 1. Members count & Voice Activity
+    const totalMembers = guild?.memberCount || 0;
 
-  if (guild) {
-    try {
-      const fetchedMembers = await guild.members.fetch({ time: 5000 }).catch(() => guild.members.cache);
-      for (const [, member] of fetchedMembers) {
-        if (member.user.bot) botCount++;
-        if (member.presence && member.presence.status !== 'offline') onlineMembers++;
-        if (member.voice && member.voice.channelId) voiceOnline++;
-      }
-    } catch {
-      // Fallback to cache if members.fetch times out
-      for (const [, member] of guild.members.cache) {
-        if (member.user.bot) botCount++;
-        if (member.voice && member.voice.channelId) voiceOnline++;
-      }
+    let onlineMembers = 0;
+    let voiceOnline = 0;
+    let botCount = 0;
+
+    if (guild) {
+        try {
+            const fetchedMembers = await guild.members.fetch({ time: 5000 }).catch(() => guild.members.cache);
+            for (const [, member] of fetchedMembers) {
+                if (member.user.bot) botCount++;
+                if (member.presence && member.presence.status !== 'offline') onlineMembers++;
+                if (member.voice && member.voice.channelId) voiceOnline++;
+            }
+        } catch {
+            // Fallback to cache if members.fetch times out
+            for (const [, member] of guild.members.cache) {
+                if (member.user.bot) botCount++;
+                if (member.voice && member.voice.channelId) voiceOnline++;
+            }
+        }
     }
-  }
 
-  const humanCount = Math.max(0, totalMembers - botCount);
+    const humanCount = Math.max(0, totalMembers - botCount);
 
-  // 2. Recruitment stats
-  const totalApplications = await prisma.recruitmentApplication.count({ where: { guildId } });
-  const pendingApplications = await prisma.recruitmentApplication.count({
-    where: { guildId, status: { in: ['PENDING', 'UNDER_REVIEW'] } },
-  });
-  const acceptedApplications = await prisma.recruitmentApplication.count({
-    where: { guildId, status: 'ACCEPTED' },
-  });
-  const rejectedApplications = await prisma.recruitmentApplication.count({
-    where: { guildId, status: 'REJECTED' },
-  });
+    // 2. Recruitment stats
+    const totalApplications = await prisma.recruitmentApplication.count({ where: { guildId } });
+    const pendingApplications = await prisma.recruitmentApplication.count({
+        where: { guildId, status: { in: ['PENDING', 'UNDER_REVIEW'] } },
+    });
+    const acceptedApplications = await prisma.recruitmentApplication.count({
+        where: { guildId, status: 'ACCEPTED' },
+    });
+    const rejectedApplications = await prisma.recruitmentApplication.count({
+        where: { guildId, status: 'REJECTED' },
+    });
 
-  // Recruiter leaderboard (using Prisma aggregation instead of loading all records)
-  const recruiterGroups = await prisma.recruitmentApplication.groupBy({
-    by: ['recruiterId', 'recruiterTag', 'status'],
-    where: { guildId, status: { in: ['ACCEPTED', 'REJECTED'] }, recruiterId: { not: null } },
-    _count: true,
-  });
+    // Recruiter leaderboard (using Prisma aggregation instead of loading all records)
+    const recruiterGroups = await prisma.recruitmentApplication.groupBy({
+        by: ['recruiterId', 'recruiterTag', 'status'],
+        where: { guildId, status: { in: ['ACCEPTED', 'REJECTED'] }, recruiterId: { not: null } },
+        _count: true,
+    });
 
-  const recruiterMap: Record<string, { tag: string; accepted: number; rejected: number; total: number }> = {};
-  for (const group of recruiterGroups) {
-    if (!group.recruiterId) continue;
-    if (!recruiterMap[group.recruiterId]) {
-      recruiterMap[group.recruiterId] = {
-        tag: group.recruiterTag || group.recruiterId,
-        accepted: 0,
-        rejected: 0,
-        total: 0,
-      };
+    const recruiterMap: Record<string, { tag: string; accepted: number; rejected: number; total: number }> = {};
+    for (const group of recruiterGroups) {
+        if (!group.recruiterId) continue;
+        if (!recruiterMap[group.recruiterId]) {
+            recruiterMap[group.recruiterId] = {
+                tag: group.recruiterTag || group.recruiterId,
+                accepted: 0,
+                rejected: 0,
+                total: 0,
+            };
+        }
+        if (group.status === 'ACCEPTED') recruiterMap[group.recruiterId].accepted = group._count;
+        if (group.status === 'REJECTED') recruiterMap[group.recruiterId].rejected = group._count;
+        recruiterMap[group.recruiterId].total += group._count;
     }
-    if (group.status === 'ACCEPTED') recruiterMap[group.recruiterId].accepted = group._count;
-    if (group.status === 'REJECTED') recruiterMap[group.recruiterId].rejected = group._count;
-    recruiterMap[group.recruiterId].total += group._count;
-  }
 
-  const recruiterLeaderboard = Object.values(recruiterMap).sort((a, b) => b.total - a.total);
+    const recruiterLeaderboard = Object.values(recruiterMap).sort((a, b) => b.total - a.total);
 
-  // 3. Events stats
-  const totalEvents = await prisma.eventGathering.count({ where: { guildId } });
-  const activeEvents = await prisma.eventGathering.count({ where: { guildId, status: 'ACTIVE' } });
-  const finishedEvents = await prisma.eventGathering.count({ where: { guildId, status: 'FINISHED' } });
-  const totalTurnout = await prisma.eventParticipant.count({
-    where: { event: { guildId } },
-  });
+    // 3. Events stats
+    const totalEvents = await prisma.eventGathering.count({ where: { guildId } });
+    const activeEvents = await prisma.eventGathering.count({ where: { guildId, status: 'ACTIVE' } });
+    const finishedEvents = await prisma.eventGathering.count({ where: { guildId, status: 'FINISHED' } });
+    const totalTurnout = await prisma.eventParticipant.count({
+        where: { event: { guildId } },
+    });
 
-  // 4. Role Persistence & Audit stats
-  const savedRolesCount = await prisma.savedMemberRoles.count({ where: { guildId } });
+    // 4. Role Persistence & Audit stats
+    const savedRolesCount = await prisma.savedMemberRoles.count({ where: { guildId } });
 
-  // 5. Members Activity Leaderboard
-  const membersLeaderboard = await prisma.userProfile.findMany({
-    where: { guildId },
-    orderBy: { mpCount: 'desc' },
-    include: { characters: { orderBy: { createdAt: 'asc' } } },
-    take: 50,
-  });
+    // 5. Members Activity Leaderboard
+    const membersLeaderboard = await prisma.userProfile.findMany({
+        where: { guildId },
+        orderBy: { mpCount: 'desc' },
+        include: { characters: { orderBy: { createdAt: 'asc' } } },
+        take: 50,
+    });
 
-  return {
-    guild: {
-      id: guildId,
-      name: guild?.name || 'Сервер не подключен',
-      icon: guild?.iconURL() || null,
-      totalMembers,
-      onlineMembers,
-      humanCount,
-      botCount,
-      voiceOnline,
-      channelsCount: guild?.channels.cache.size || 0,
-      rolesCount: guild?.roles.cache.size || 0,
-    },
-    recruitment: {
-      total: totalApplications,
-      pending: pendingApplications,
-      accepted: acceptedApplications,
-      rejected: rejectedApplications,
-      approvalRate: (acceptedApplications + rejectedApplications) > 0 
-        ? Math.round((acceptedApplications / (acceptedApplications + rejectedApplications)) * 100) 
-        : 0,
-      leaderboard: recruiterLeaderboard,
-    },
-    events: {
-      total: totalEvents,
-      active: activeEvents,
-      finished: finishedEvents,
-      totalTurnout,
-    },
-    members: membersLeaderboard,
-    system: {
-      savedRolesProfiles: savedRolesCount,
-      timestamp: new Date().toISOString(),
-    },
-  };
+    return {
+        guild: {
+            id: guildId,
+            name: guild?.name || 'Сервер не подключен',
+            icon: guild?.iconURL() || null,
+            totalMembers,
+            onlineMembers,
+            humanCount,
+            botCount,
+            voiceOnline,
+            channelsCount: guild?.channels.cache.size || 0,
+            rolesCount: guild?.roles.cache.size || 0,
+        },
+        recruitment: {
+            total: totalApplications,
+            pending: pendingApplications,
+            accepted: acceptedApplications,
+            rejected: rejectedApplications,
+            approvalRate: (acceptedApplications + rejectedApplications) > 0
+                ? Math.round((acceptedApplications / (acceptedApplications + rejectedApplications)) * 100)
+                : 0,
+            leaderboard: recruiterLeaderboard,
+        },
+        events: {
+            total: totalEvents,
+            active: activeEvents,
+            finished: finishedEvents,
+            totalTurnout,
+        },
+        members: membersLeaderboard,
+        system: {
+            savedRolesProfiles: savedRolesCount,
+            timestamp: new Date().toISOString(),
+        },
+    };
 }
 
 // In-memory cache to prevent Discord Gateway / DB overload
@@ -135,34 +136,36 @@ const statsPendingRequests = new Map<string, Promise<any>>();
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 async function getCachedStatsData(guildId: string, forceFresh = false) {
-  const now = Date.now();
-  const cached = statsCache.get(guildId);
-  if (!forceFresh && cached && (now - cached.cachedAt) < CACHE_TTL_MS) {
-    return cached.data;
-  }
+    const now = Date.now();
+    const cached = statsCache.get(guildId);
+    if (!forceFresh && cached && (now - cached.cachedAt) < CACHE_TTL_MS) {
+        return cached.data;
+    }
 
-  // Prevent cache stampede: reuse pending request if one is already in flight
-  const pending = statsPendingRequests.get(guildId);
-  if (pending) return pending;
+    // Prevent cache stampede: reuse pending request if one is already in flight
+    const pending = statsPendingRequests.get(guildId);
+    if (pending) return pending;
 
-  const promise = getFullStatsData(guildId)
-    .then(data => {
-      statsCache.set(guildId, { data, cachedAt: Date.now() });
-      return data;
-    })
-    .finally(() => {
-      statsPendingRequests.delete(guildId);
-    });
+    const promise = getFullStatsData(guildId)
+        .then(data => {
+            statsCache.set(guildId, { data, cachedAt: Date.now() });
+            return data;
+        })
+        .finally(() => {
+            statsPendingRequests.delete(guildId);
+        });
 
-  statsPendingRequests.set(guildId, promise);
-  return promise;
+    statsPendingRequests.set(guildId, promise);
+    return promise;
 }
 
 // Dashboard internal stats endpoint
-statsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = resolveGuildId(req);
-  const data = await getCachedStatsData(guildId, true);
-  return res.json(data);
-});
+statsRouter.get('/', requireAuth, requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+
+    const guildId = (req as any).guildId;
+    const forceFresh = req.query.fresh === 'true';
+    const data = await getCachedStatsData(guildId, forceFresh);
+    return res.json(data);
+}));
 
 export default statsRouter;

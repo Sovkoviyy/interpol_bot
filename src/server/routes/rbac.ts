@@ -3,92 +3,96 @@ import config from '../../config';
 import prisma from '../../database/client';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
-import { resolveGuildId } from '../utils/guild';
+import { asyncHandler } from "../middlewares/asyncHandler";
+import { requireGuildId } from "../middlewares/requireGuildId";
 
 export const rbacRouter = Router();
 
 // Get role permissions
-rbacRouter.get('/', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = resolveGuildId(req);
-  const permissions = await prisma.rolePermission.findMany({
-    where: { guildId },
-  });
+rbacRouter.get('/', requireAuth, requirePermission('manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
-  const parsed = permissions.map((p) => {
-    let modular: Record<string, boolean> = {};
-    try {
-      if (p.permissionsJson) modular = JSON.parse(p.permissionsJson);
-    } catch {}
-    return {
-      ...p,
-      modular,
-    };
-  });
+    const guildId = (req as any).guildId;
+    const permissions = await prisma.rolePermission.findMany({
+        where: { guildId },
+    });
 
-  return res.json({ permissions: parsed });
-});
+    const parsed = permissions.map((p) => {
+        let modular: Record<string, boolean> = {};
+        try {
+            if (p.permissionsJson) modular = JSON.parse(p.permissionsJson);
+        } catch { }
+        return {
+            ...p,
+            modular,
+        };
+    });
+
+    return res.json({ permissions: parsed });
+}));
 
 // Update or set permissions for a role
-rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = resolveGuildId(req);
-  const { 
-    roleId, 
-    roleName, 
-    manageSettings, 
-    manageRecruiting, 
-    manageEvents, 
-    viewLogs,
-    manageAcademy,
-    manageTier,
-    modular,
-    permissionsJson
-  } = req.body;
+rbacRouter.post('/', requireAuth, requirePermission('manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
-  if (!roleId) return res.status(400).json({ error: 'Role ID is required' });
+    const guildId = (req as any).guildId;
+    const {
+        roleId,
+        roleName,
+        manageSettings,
+        manageRecruiting,
+        manageEvents,
+        viewLogs,
+        manageAcademy,
+        manageTier,
+        modular,
+        permissionsJson
+    } = req.body;
 
-  const finalJson = permissionsJson || (modular ? JSON.stringify(modular) : null);
+    if (!roleId) return res.status(400).json({ error: 'Role ID is required' });
 
-  const record = await prisma.rolePermission.upsert({
-    where: {
-      guildId_roleId: { guildId, roleId },
-    },
-    update: {
-      roleName,
-      manageSettings: Boolean(manageSettings),
-      manageRecruiting: Boolean(manageRecruiting),
-      manageEvents: Boolean(manageEvents),
-      viewLogs: Boolean(viewLogs),
-      manageAcademy: Boolean(manageAcademy),
-      manageTier: Boolean(manageTier),
-      permissionsJson: finalJson,
-    },
-    create: {
-      guildId,
-      roleId,
-      roleName,
-      manageSettings: Boolean(manageSettings),
-      manageRecruiting: Boolean(manageRecruiting),
-      manageEvents: Boolean(manageEvents),
-      viewLogs: Boolean(viewLogs),
-      manageAcademy: Boolean(manageAcademy),
-      manageTier: Boolean(manageTier),
-      permissionsJson: finalJson,
-    },
-  });
+    const finalJson = permissionsJson || (modular ? JSON.stringify(modular) : null);
 
-  return res.json({ success: true, permission: record });
-});
+    const record = await prisma.rolePermission.upsert({
+        where: {
+            guildId_roleId: { guildId, roleId },
+        },
+        update: {
+            roleName,
+            manageSettings: Boolean(manageSettings),
+            manageRecruiting: Boolean(manageRecruiting),
+            manageEvents: Boolean(manageEvents),
+            viewLogs: Boolean(viewLogs),
+            manageAcademy: Boolean(manageAcademy),
+            manageTier: Boolean(manageTier),
+            permissionsJson: finalJson,
+        },
+        create: {
+            guildId,
+            roleId,
+            roleName,
+            manageSettings: Boolean(manageSettings),
+            manageRecruiting: Boolean(manageRecruiting),
+            manageEvents: Boolean(manageEvents),
+            viewLogs: Boolean(viewLogs),
+            manageAcademy: Boolean(manageAcademy),
+            manageTier: Boolean(manageTier),
+            permissionsJson: finalJson,
+        },
+    });
+
+    return res.json({ success: true, permission: record });
+}));
 
 // Delete role permissions
-rbacRouter.delete('/:roleId', requireAuth, requirePermission('manageSettings'), async (req: AuthenticatedRequest, res: Response) => {
-  const guildId = resolveGuildId(req);
-  const roleId = req.params.roleId as string;
+rbacRouter.delete('/:roleId', requireAuth, requirePermission('manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
-  await prisma.rolePermission.deleteMany({
-    where: { guildId, roleId },
-  });
+    const guildId = (req as any).guildId;
+    const roleId = req.params.roleId as string;
 
-  return res.json({ success: true });
-});
+    await prisma.rolePermission.deleteMany({
+        where: { guildId, roleId },
+    });
+
+    return res.json({ success: true });
+}));
 
 export default rbacRouter;

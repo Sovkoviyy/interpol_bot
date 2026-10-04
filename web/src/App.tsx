@@ -4,28 +4,31 @@ import { AnimatePresence, motion } from 'framer-motion';
 import api from './api/client';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
-import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
-import { Recruitment } from './pages/Recruitment';
-import { Events } from './pages/Events';
-import { Logs } from './pages/Logs';
-import { Roles } from './pages/Roles';
-import { Stats } from './pages/Stats';
-import { Members } from './pages/Members';
-import { BotMessages } from './pages/BotMessages';
-import { EmbedBuilder } from './pages/EmbedBuilder';
-import { Academy } from './pages/Academy';
-import { RecruiterPayroll } from './pages/RecruiterPayroll';
-import { Blacklist } from './pages/Blacklist';
-import { Leaves } from './pages/Leaves';
-import { Profiles } from './pages/Profiles';
-import { ServerSetup } from './pages/ServerSetup';
-import { Nicknames } from './pages/Nicknames';
-import { Tier } from './pages/Tier';
-import { BotActivity } from './pages/BotActivity';
-import { Honeypot } from './pages/Honeypot';
 import { ModalProvider } from './context/ModalContext';
+import { ToastProvider } from './context/ToastContext';
+import { LoadingSpinner } from './components/LoadingSpinner';
 import { ShieldAlert } from 'lucide-react';
+
+const Login = React.lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Recruitment = React.lazy(() => import('./pages/Recruitment').then(m => ({ default: m.Recruitment })));
+const Events = React.lazy(() => import('./pages/Events').then(m => ({ default: m.Events })));
+const Logs = React.lazy(() => import('./pages/Logs').then(m => ({ default: m.Logs })));
+const Roles = React.lazy(() => import('./pages/Roles').then(m => ({ default: m.Roles })));
+const Stats = React.lazy(() => import('./pages/Stats').then(m => ({ default: m.Stats })));
+const Members = React.lazy(() => import('./pages/Members').then(m => ({ default: m.Members })));
+const BotMessages = React.lazy(() => import('./pages/BotMessages').then(m => ({ default: m.BotMessages })));
+const EmbedBuilder = React.lazy(() => import('./pages/EmbedBuilder').then(m => ({ default: m.EmbedBuilder })));
+const Academy = React.lazy(() => import('./pages/Academy').then(m => ({ default: m.Academy })));
+const RecruiterPayroll = React.lazy(() => import('./pages/RecruiterPayroll').then(m => ({ default: m.RecruiterPayroll })));
+const Blacklist = React.lazy(() => import('./pages/Blacklist').then(m => ({ default: m.Blacklist })));
+const Leaves = React.lazy(() => import('./pages/Leaves').then(m => ({ default: m.Leaves })));
+const Profiles = React.lazy(() => import('./pages/Profiles').then(m => ({ default: m.Profiles })));
+const ServerSetup = React.lazy(() => import('./pages/ServerSetup').then(m => ({ default: m.ServerSetup })));
+const Nicknames = React.lazy(() => import('./pages/Nicknames').then(m => ({ default: m.Nicknames })));
+const Tier = React.lazy(() => import('./pages/Tier').then(m => ({ default: m.Tier })));
+const BotActivity = React.lazy(() => import('./pages/BotActivity').then(m => ({ default: m.BotActivity })));
+const Honeypot = React.lazy(() => import('./pages/Honeypot').then(m => ({ default: m.Honeypot })));
 
 const ProtectedRoute: React.FC<{ allowed: boolean; children: React.ReactElement }> = ({ allowed, children }) => {
   if (!allowed) {
@@ -67,28 +70,30 @@ const AnimatedPageRoutes: React.FC<AnimatedPageRoutesProps> = ({ userPermissions
         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
         className="w-full"
       >
-        <Routes location={location}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/stats" element={<Stats />} />
-          <Route path="/setup" element={<ProtectedRoute allowed={canSettings}><ServerSetup /></ProtectedRoute>} />
-          <Route path="/activity" element={<ProtectedRoute allowed={canSettings || canBotMessages}><BotActivity /></ProtectedRoute>} />
-          <Route path="/profiles" element={<ProtectedRoute allowed={canProfiles}><Profiles /></ProtectedRoute>} />
-          <Route path="/nicknames" element={<ProtectedRoute allowed={canSettings}><Nicknames /></ProtectedRoute>} />
-          <Route path="/academy" element={<ProtectedRoute allowed={canAcademy}><Academy /></ProtectedRoute>} />
-          <Route path="/recruitment" element={<ProtectedRoute allowed={canRecruit}><Recruitment /></ProtectedRoute>} />
-          <Route path="/events" element={<ProtectedRoute allowed={canEvents}><Events /></ProtectedRoute>} />
-          <Route path="/tier" element={<ProtectedRoute allowed={canTier}><Tier /></ProtectedRoute>} />
-          <Route path="/leaves" element={<ProtectedRoute allowed={canLeaves}><Leaves /></ProtectedRoute>} />
-          <Route path="/payroll" element={<ProtectedRoute allowed={canPayroll}><RecruiterPayroll /></ProtectedRoute>} />
-          <Route path="/honeypot" element={<ProtectedRoute allowed={canSettings}><Honeypot /></ProtectedRoute>} />
-          <Route path="/blacklist" element={<ProtectedRoute allowed={canRecruit || canSettings}><Blacklist /></ProtectedRoute>} />
-          <Route path="/members" element={<ProtectedRoute allowed={canMembers}><Members /></ProtectedRoute>} />
-          <Route path="/messages" element={<ProtectedRoute allowed={canBotMessages}><BotMessages /></ProtectedRoute>} />
-          <Route path="/embeds" element={<ProtectedRoute allowed={canBotMessages}><EmbedBuilder /></ProtectedRoute>} />
-          <Route path="/logs" element={<ProtectedRoute allowed={canLogs}><Logs /></ProtectedRoute>} />
-          <Route path="/roles" element={<ProtectedRoute allowed={canRoles}><Roles /></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+        <React.Suspense fallback={<LoadingSpinner />}>
+          <Routes location={location}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/stats" element={<Stats />} />
+            <Route path="/setup" element={<ProtectedRoute allowed={canSettings}><ServerSetup /></ProtectedRoute>} />
+            <Route path="/activity" element={<ProtectedRoute allowed={canSettings || canBotMessages}><BotActivity /></ProtectedRoute>} />
+            <Route path="/profiles" element={<ProtectedRoute allowed={canProfiles}><Profiles /></ProtectedRoute>} />
+            <Route path="/nicknames" element={<ProtectedRoute allowed={canSettings}><Nicknames /></ProtectedRoute>} />
+            <Route path="/academy" element={<ProtectedRoute allowed={canAcademy}><Academy /></ProtectedRoute>} />
+            <Route path="/recruitment" element={<ProtectedRoute allowed={canRecruit}><Recruitment /></ProtectedRoute>} />
+            <Route path="/events" element={<ProtectedRoute allowed={canEvents}><Events /></ProtectedRoute>} />
+            <Route path="/tier" element={<ProtectedRoute allowed={canTier}><Tier /></ProtectedRoute>} />
+            <Route path="/leaves" element={<ProtectedRoute allowed={canLeaves}><Leaves /></ProtectedRoute>} />
+            <Route path="/payroll" element={<ProtectedRoute allowed={canPayroll}><RecruiterPayroll /></ProtectedRoute>} />
+            <Route path="/honeypot" element={<ProtectedRoute allowed={canSettings}><Honeypot /></ProtectedRoute>} />
+            <Route path="/blacklist" element={<ProtectedRoute allowed={canRecruit || canSettings}><Blacklist /></ProtectedRoute>} />
+            <Route path="/members" element={<ProtectedRoute allowed={canMembers}><Members /></ProtectedRoute>} />
+            <Route path="/messages" element={<ProtectedRoute allowed={canBotMessages}><BotMessages /></ProtectedRoute>} />
+            <Route path="/embeds" element={<ProtectedRoute allowed={canBotMessages}><EmbedBuilder /></ProtectedRoute>} />
+            <Route path="/logs" element={<ProtectedRoute allowed={canLogs}><Logs /></ProtectedRoute>} />
+            <Route path="/roles" element={<ProtectedRoute allowed={canRoles}><Roles /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </React.Suspense>
       </motion.div>
     </AnimatePresence>
   );
@@ -157,9 +162,11 @@ export const App: React.FC = () => {
 
   return (
     <ModalProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route
+      <ToastProvider>
+        <BrowserRouter>
+          <React.Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route
             path="/login"
             element={
               user ? <Navigate to="/dashboard" replace /> : <Login onLoginSuccess={(u) => setUser(u)} />
@@ -229,8 +236,10 @@ export const App: React.FC = () => {
               )
             }
           />
-        </Routes>
-      </BrowserRouter>
+            </Routes>
+          </React.Suspense>
+        </BrowserRouter>
+      </ToastProvider>
     </ModalProvider>
   );
 };

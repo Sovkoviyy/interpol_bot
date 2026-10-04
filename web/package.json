@@ -1,7 +1,7 @@
 {
   "name": "interpol_bot_web",
   "private": true,
-  "version": "1.0.0",
+  "version": "6.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

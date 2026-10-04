@@ -1,6 +1,6 @@
 {
   "name": "interpol_bot",
-  "version": "1.0.0",
+  "version": "6.0.0",
   "description": "Modular Discord bot and Web Dashboard for Majestic RP Family",
   "main": "dist/index.js",
   "scripts": {

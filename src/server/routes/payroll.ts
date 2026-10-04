@@ -3,8 +3,8 @@ import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import config from '../../config';
 import { PayrollService } from '../../bot/modules/payroll/payrollService';
-
-import { resolveGuildId } from '../utils/guild';
+import { asyncHandler } from "../middlewares/asyncHandler";
+import { requireGuildId } from "../middlewares/requireGuildId";
 
 const router = Router();
 
@@ -13,41 +13,37 @@ router.use(requireAuth);
 /**
  * GET /api/payroll/config
  */
-router.get('/config', async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const guildId = resolveGuildId(req);
+router.get('/config', requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+
+    const guildId = (req as any).guildId;
     const cfg = await PayrollService.getConfig(guildId);
     res.json({ config: cfg });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
+}));
 
 /**
  * POST /api/payroll/config
  */
 router.post('/config', (req: AuthenticatedRequest, res: Response, next: any) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-  if (req.user.permissions?.isAdmin || req.user.permissions?.manageRecruiting || req.user.permissions?.manageSettings) {
-    return next();
-  }
-  return res.status(403).json({ error: 'Forbidden: You do not have permission to manage recruiter rates' });
-}, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const guildId = resolveGuildId(req);
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user.permissions?.isAdmin || req.user.permissions?.manageRecruiting || req.user.permissions?.manageSettings) {
+        return next();
+    }
+    return res.status(403).json({ error: 'Forbidden: You do not have permission to manage recruiter rates' });
+}, requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+
+    const guildId = (req as any).guildId;
     const updated = await PayrollService.saveConfig(guildId, req.body);
     res.json({ config: updated });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
+}));
 
 /**
  * GET /api/payroll/calculate
  */
-router.get('/calculate', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const guildId = resolveGuildId(req);
+router.get('/calculate', requirePermission('manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+
+    const guildId = (req as any).guildId;
     const startStr = req.query.start as string;
     const endStr = req.query.end as string;
 
@@ -56,48 +52,42 @@ router.get('/calculate', requirePermission('manageRecruiting'), async (req: Auth
 
     const report = await PayrollService.calculatePayroll(guildId, start, end);
     res.json(report);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
+}));
 
 /**
  * POST /api/payroll/reset
  * Reset stats for all recruiters or an individual recruiter
  */
-router.post('/reset', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const guildId = resolveGuildId(req);
+router.post('/reset', requirePermission('manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+
+    const guildId = (req as any).guildId;
     const { recruiterId } = req.body;
     const executor = {
-      id: req.user?.userId || 'unknown',
-      tag: req.user?.username ? `${req.user.username}#${req.user.discriminator || '0'}` : 'Web Admin',
+        id: req.user?.userId || 'unknown',
+        tag: req.user?.username ? `${req.user.username}#${req.user.discriminator || '0'}` : 'Web Admin',
     };
 
     const result = await PayrollService.resetStats(guildId, recruiterId, executor);
     res.json({
-      message: recruiterId ? 'Статистика рекрутера успешно обнулена' : 'Статистика всех рекрутеров успешно обнулена',
-      ...result,
+        message: recruiterId ? 'Статистика рекрутера успешно обнулена' : 'Статистика всех рекрутеров успешно обнулена',
+        ...result,
     });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
+}));
 
 /**
  * POST /api/payroll/reset-clear
  * Clear reset checkpoint (reverts to standard period filtering)
  */
-router.post('/reset-clear', requirePermission('manageRecruiting'), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const guildId = resolveGuildId(req);
+router.post('/reset-clear', requirePermission('manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+
+    const guildId = (req as any).guildId;
     const { recruiterId } = req.body;
 
     const result = await PayrollService.clearReset(guildId, recruiterId);
     res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
+}));
 
 export default router;

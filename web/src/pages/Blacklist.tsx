@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
+import { PageHeader, LoadingSpinner, EmptyState, SearchInput } from '../components';
 
 export const Blacklist: React.FC = () => {
   const modal = useModal();
@@ -120,24 +121,13 @@ export const Blacklist: React.FC = () => {
   return (
     <div className="space-y-6 w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
-            <UserX className="w-6 h-6 text-pink-500" />
-            Черный список семьи (ЧС)
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            База заблокированных игроков и нарушителей. Автоматическая проверка на наборе и предотвращение инвайтов.
-          </p>
-        </div>
-        <button
+      <PageHeader title="Черный список семьи (ЧС)" description="База заблокированных игроков и нарушителей. Автоматическая проверка на наборе и предотвращение инвайтов." icon={<UserX />} actions={<button
           onClick={handleAddBlacklist}
           className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-pink-600 to-pink-500 hover:from-pink-500 hover:to-pink-400 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-pink-500/20"
         >
           <Plus className="w-4 h-4" />
           Добавить в ЧС
-        </button>
-      </div>
+        </button>} />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -175,27 +165,14 @@ export const Blacklist: React.FC = () => {
       {/* Main Table Card */}
       <div className="bg-dark-900/60 border border-dark-800 rounded-2xl p-6 backdrop-blur-sm space-y-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-gray-500 absolute left-3 top-3" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск по статику, нику или Discord ID..."
-              className="w-full bg-dark-800/80 border border-dark-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-pink-500 transition-colors"
-            />
-          </div>
+          <SearchInput value={search} onChange={setSearch} placeholder="Поиск по статику, нику или Discord ID..." className="w-full bg-dark-800/80 border border-dark-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-pink-500 transition-colors" />
           <span className="text-xs text-gray-400">Найдено записей: {blacklist.length}</span>
         </div>
 
         {loading ? (
-          <div className="text-center py-10 text-gray-500 text-sm">Загрузка черного списка...</div>
+          <LoadingSpinner fullPage={false} />
         ) : blacklist.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-dark-800 rounded-xl">
-            <UserX className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-            <p className="text-sm text-gray-400">Черный список пуст</p>
-            <p className="text-xs text-gray-500 mt-1">Добавьте нарушителей с помощью кнопки сверху</p>
-          </div>
+          <EmptyState icon={<UserX />} title="Черный список пуст" description="Добавьте нарушителей с помощью кнопки сверху" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-gray-300">
