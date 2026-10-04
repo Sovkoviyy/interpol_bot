@@ -11,7 +11,9 @@ import {
   Shield,
   ArrowUpRight,
   Tag,
-  Target
+  Target,
+  ShieldAlert,
+  Gamepad2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
@@ -226,7 +228,11 @@ export const Dashboard: React.FC = () => {
                 <p className="text-[11px] text-slate-400">Черный список, роли доступа и аудит</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <Link to="/honeypot" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Канал-ловушка (Honeypot)</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
               <Link to="/blacklist" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Черный список (ЧС)</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
@@ -250,7 +256,7 @@ export const Dashboard: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">Настройки & Бот</h3>
-                <p className="text-[11px] text-slate-400">Автоматическая настройка, эмбеды и сообщения</p>
+                <p className="text-[11px] text-slate-400">Автоматическая настройка, активность, эмбеды и сообщения</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -258,11 +264,15 @@ export const Dashboard: React.FC = () => {
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Инициализация каналов & Сервер</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
+              <Link to="/activity" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
+                <span className="font-medium text-slate-200 group-hover:text-pink-400">Активность бота</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
+              </Link>
               <Link to="/messages" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Сообщения бота</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>
-              <Link to="/embeds" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all">
+              <Link to="/embeds" className="p-2.5 rounded-xl bg-dark-900 hover:bg-pink-500/10 border border-dark-700/60 hover:border-pink-500/30 flex items-center justify-between group transition-all sm:col-span-2">
                 <span className="font-medium text-slate-200 group-hover:text-pink-400">Embed Генератор</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-pink-400 transition-colors" />
               </Link>

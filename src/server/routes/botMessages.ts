@@ -96,8 +96,8 @@ botMessagesRouter.post('/', requireAuth, requirePermission('manageSettings'), re
             ticketGreetingTitle: ticketGreetingTitle || '',
             ticketGreetingDesc: ticketGreetingDesc || '',
             ticketTemplateId: ticketTemplateId || null,
-            botStatusText: botStatusText || 'Majestic RP',
-            botStatusActivity: botStatusActivity || 'PLAYING',
+            ...(botStatusText !== undefined ? { botStatusText } : {}),
+            ...(botStatusActivity !== undefined ? { botStatusActivity } : {}),
         },
         create: {
             guildId,

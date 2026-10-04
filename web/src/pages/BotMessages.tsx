@@ -22,13 +22,14 @@ import {
   Bell,
   Palette,
   Layers,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ExternalLink
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
 import { DiscordMarkdown } from '../components/DiscordMarkdown';
 import { ChannelSelect } from '../components/ChannelSelect';
-import { CustomSelect } from '../components/CustomSelect';
+import { Link } from 'react-router-dom';
 
 interface PlaceholderDef {
   tag: string;
@@ -97,10 +98,6 @@ export const BotMessages: React.FC = () => {
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [testChannelId, setTestChannelId] = useState('');
 
-  // Bot Presence state
-  const [botStatusText, setBotStatusText] = useState('Majestic RP • /event');
-  const [botStatusActivity, setBotStatusActivity] = useState('PLAYING');
-
   // Filter & Search
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -119,11 +116,6 @@ export const BotMessages: React.FC = () => {
       const cat: MessageDef[] = messagesRes.data.catalog || [];
       setCatalog(cat);
       setCustomMessages(messagesRes.data.customMessages || {});
-
-      if (messagesRes.data.config) {
-        setBotStatusText(messagesRes.data.config.botStatusText || 'Majestic RP • /event');
-        setBotStatusActivity(messagesRes.data.config.botStatusActivity || 'PLAYING');
-      }
 
       const textChannels = (channelsRes.data.channels || []).filter(
         (c: DiscordChannel) => c.type === 0 || c.type === 5
@@ -201,8 +193,6 @@ export const BotMessages: React.FC = () => {
       setSaving(true);
       await api.post('/bot-messages', {
         customMessages,
-        botStatusText,
-        botStatusActivity,
       });
       modal.success('Абсолютно все настройки сообщений и плейсхолдеров успешно сохранены!');
     } catch (err: any) {
@@ -300,41 +290,27 @@ export const BotMessages: React.FC = () => {
         </div>
       </div>
 
-      {/* Global Bot Presence Card */}
+      {/* Bot Presence Notice / Direct link to dedicated Bot Activity module */}
       <div className="bg-[#151921] border border-[#1E232F] rounded-2xl p-4 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/25 flex items-center justify-center text-pink-400">
+          <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/25 flex items-center justify-center text-pink-400 shrink-0">
             <Gamepad2 className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">Статус и активность бота в Discord</h3>
-            <p className="text-[11px] text-slate-400">Текст, отображаемый под ником бота в профиле Discord</p>
+            <h3 className="text-sm font-bold text-white">Игровая активность и статус бота в Discord</h3>
+            <p className="text-[11px] text-slate-400">
+              Полноценная настройка ротации статусов, стриминга и динамических плейсхолдеров ({'{members}'}, {'{voiceCount}'}) доступна в отдельном модуле
+            </p>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-          <div className="w-full sm:w-44">
-            <CustomSelect
-              value={botStatusActivity}
-              onChange={(val) => setBotStatusActivity(val)}
-              searchable={false}
-              options={[
-                { value: 'PLAYING', label: '🎮 Играет в' },
-                { value: 'WATCHING', label: '📺 Смотрит' },
-                { value: 'LISTENING', label: '🎧 Слушает' },
-                { value: 'COMPETING', label: '🏆 Соревнуется' },
-              ]}
-            />
-          </div>
-
-          <input
-            type="text"
-            placeholder="Majestic RP • /event"
-            value={botStatusText}
-            onChange={(e) => setBotStatusText(e.target.value)}
-            className="w-full sm:w-64 bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-pink-500"
-          />
-        </div>
+        <Link
+          to="/activity"
+          className="px-4 py-2 bg-[#0B0E14] hover:bg-pink-500/10 hover:text-pink-400 text-slate-300 border border-[#1E232F] hover:border-pink-500/30 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0"
+        >
+          <span>Настроить активность бота</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* Testing Channel Picker & Search Toolbar */}
