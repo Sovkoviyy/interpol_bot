@@ -414,6 +414,9 @@ model RecruiterSalaryConfig {
   payPerRejectedReport     Float    @default(1500)  // $1,500 per reviewed but rejected MP report
   payPerPromotion          Float    @default(15000) // $15,000 per completed academician promotion
   currencySymbol           String   @default("$")
+  payoutChannelId          String?  // Channel for weekly payroll announcements
+  autoWeeklyReset          Boolean  @default(true)
+  currentWeekMonday        DateTime? // Start of current tracking week (Monday 00:00:00)
   lastResetAt              DateTime? // Timestamp of last global stats reset
   recruiterResetsJson      String   @default("{}") // JSON map of recruiterId -> ISO timestamp
   updatedAt                DateTime @updatedAt
@@ -425,6 +428,8 @@ model RecruiterPayoutRecord {
   guildId                 String
   recruiterId             String
   recruiterTag            String?
+  recruiterName           String?  // Resolved Discord nickname or character name
+  staticId                String?  // Static ID if bound
   periodStart             DateTime
   periodEnd               DateTime
   acceptedCount           Int      @default(0)

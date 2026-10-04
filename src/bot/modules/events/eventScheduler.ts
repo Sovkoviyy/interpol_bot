@@ -6,6 +6,7 @@ import { AuditLogger } from '../logging/auditLogger';
 import { THEME, createThemedEmbed } from '../../utils/theme';
 import { BotMessageManager } from '../../utils/botMessageManager';
 import { LeaveService } from '../leave/leaveService';
+import { PayrollService } from '../payroll/payrollService';
 
 export class EventScheduler {
   private static timer: NodeJS.Timeout | null = null;
@@ -42,6 +43,9 @@ export class EventScheduler {
       });
       LeaveService.cleanupExpiredLeaves().catch(err => {
         console.error('[EventScheduler] Error cleaning up expired leaves:', err);
+      });
+      PayrollService.checkWeeklyPayrollRollover().catch(err => {
+        console.error('[EventScheduler] Error checking weekly payroll rollover:', err);
       });
     }, 25000);
   }

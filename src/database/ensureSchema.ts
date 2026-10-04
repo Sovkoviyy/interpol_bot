@@ -23,6 +23,50 @@ export async function ensureDatabaseSchema(): Promise<void> {
         );
         console.log('✅ [DB Self-Heal] Added column "recruiterResetsJson" to RecruiterSalaryConfig');
       }
+
+      if (!colNames.has('payoutChannelId')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE "RecruiterSalaryConfig" ADD COLUMN "payoutChannelId" TEXT;`
+        );
+        console.log('✅ [DB Self-Heal] Added column "payoutChannelId" to RecruiterSalaryConfig');
+      }
+
+      if (!colNames.has('autoWeeklyReset')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE "RecruiterSalaryConfig" ADD COLUMN "autoWeeklyReset" BOOLEAN NOT NULL DEFAULT 1;`
+        );
+        console.log('✅ [DB Self-Heal] Added column "autoWeeklyReset" to RecruiterSalaryConfig');
+      }
+
+      if (!colNames.has('currentWeekMonday')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE "RecruiterSalaryConfig" ADD COLUMN "currentWeekMonday" DATETIME;`
+        );
+        console.log('✅ [DB Self-Heal] Added column "currentWeekMonday" to RecruiterSalaryConfig');
+      }
+    }
+
+    // 1b. Check RecruiterPayoutRecord
+    const payoutColumns = (await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+      `PRAGMA table_info("RecruiterPayoutRecord")`
+    ).catch(() => [])) as Array<{ name: string }>;
+
+    if (payoutColumns && payoutColumns.length > 0) {
+      const colNames = new Set(payoutColumns.map((c) => c.name));
+
+      if (!colNames.has('recruiterName')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE "RecruiterPayoutRecord" ADD COLUMN "recruiterName" TEXT;`
+        );
+        console.log('✅ [DB Self-Heal] Added column "recruiterName" to RecruiterPayoutRecord');
+      }
+
+      if (!colNames.has('staticId')) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE "RecruiterPayoutRecord" ADD COLUMN "staticId" TEXT;`
+        );
+        console.log('✅ [DB Self-Heal] Added column "staticId" to RecruiterPayoutRecord');
+      }
     }
 
     // 2. Check GuildConfig

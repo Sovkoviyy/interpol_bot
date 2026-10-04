@@ -1,9 +1,86 @@
+import { EmbedBuilder, Guild, TextChannel } from 'discord.js';
 import prisma from '../../../database/client';
+import bot from '../../client';
 import { AuditLogger } from '../logging/auditLogger';
 import { ensureDatabaseSchema } from '../../../database/ensureSchema';
 
 export class PayrollService {
-  static async getConfig(guildId: string) {
+  /**
+   * Calculates Monday 00:00:00.000 to Sunday 23:59:59.999 for the given date's week
+   */
+  public static getWeekRange(referenceDate: Date = new Date()): { start: Date; end: Date } {
+    const d = new Date(referenceDate);
+    const day = d.getDay(); // 0 is Sunday, 1 is Monday ... 6 is Saturday
+    // In Russia / Europe, week starts on Monday
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    return { start: monday, end: sunday };
+  }
+
+  /**
+   * Calculates the previous completed week (previous Monday to previous Sunday)
+   */
+  public static getPreviousWeekRange(referenceDate: Date = new Date()): { start: Date; end: Date } {
+    const currentWeek = this.getWeekRange(referenceDate);
+    const prevMonday = new Date(currentWeek.start);
+    prevMonday.setDate(prevMonday.getDate() - 7);
+
+    const prevSunday = new Date(currentWeek.start);
+    prevSunday.setMilliseconds(-1);
+
+    return { start: prevMonday, end: prevSunday };
+  }
+
+  /**
+   * Formats a date range like "28.09 — 04.10"
+   */
+  public static formatRangeString(start: Date, end: Date): string {
+    const f = (d: Date) => d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+    return `${f(start)} — ${f(end)}`;
+  }
+
+  /**
+   * Resolves the recruiter display name according to the rule:
+   * 1. If character name is bound (with or without static), use character name (e.g. "Tony Stark [142055]" or "Tony Stark")
+   * 2. Else use Discord server nickname (member.nickname or member.displayName)
+   * 3. Fallback to Discord username / tag
+   */
+  public static resolveRecruiterDisplayName(
+    member: { nickname?: string | null; displayName?: string | null } | null,
+    profile: { characterName?: string | null; staticId?: string | null; characters?: any[] } | null,
+    fallbackTag?: string | null,
+    fallbackId?: string
+  ): { displayName: string; staticId: string; characterName: string } {
+    const mainChar = profile?.characters?.find((c: any) => c.isMain) || profile?.characters?.[0];
+    const characterName = (mainChar?.characterName || profile?.characterName || '').trim();
+    const staticId = (mainChar?.staticId || profile?.staticId || '').trim();
+
+    let displayName = '';
+    if (characterName) {
+      displayName = staticId ? `${characterName} [${staticId}]` : characterName;
+    } else if (member?.nickname) {
+      displayName = member.nickname.trim();
+    } else if (member?.displayName) {
+      displayName = member.displayName.trim();
+    } else {
+      displayName = (fallbackTag || fallbackId || 'Рекрутер').split('#')[0];
+    }
+
+    return { displayName, staticId, characterName };
+  }
+
+  /**
+   * Get salary configuration for guild
+   */
+  public static async getConfig(guildId: string) {
     try {
       return await prisma.recruiterSalaryConfig.upsert({
         where: { guildId },
@@ -16,6 +93,7 @@ export class PayrollService {
           payPerRejectedReport: 1500,
           payPerPromotion: 15000,
           currencySymbol: '$',
+          autoWeeklyReset: true,
         },
       });
     } catch (err: any) {
@@ -32,6 +110,7 @@ export class PayrollService {
             payPerRejectedReport: 1500,
             payPerPromotion: 15000,
             currencySymbol: '$',
+            autoWeeklyReset: true,
           },
         });
       }
@@ -39,7 +118,10 @@ export class PayrollService {
     }
   }
 
-  static async saveConfig(guildId: string, data: any) {
+  /**
+   * Save salary configuration
+   */
+  public static async saveConfig(guildId: string, data: any) {
     const payload = data?.config || data || {};
     const parseRate = (val: any, fallback: number) => {
       if (val === undefined || val === null || val === '') return fallback;
@@ -53,156 +135,46 @@ export class PayrollService {
     const rejectedRep = parseRate(payload.payPerRejectedReport, 1500);
     const promotion = parseRate(payload.payPerPromotion, 15000);
     const currency = typeof payload.currencySymbol === 'string' && payload.currencySymbol.trim() ? payload.currencySymbol.trim() : '$';
+    const payoutChannelId = payload.payoutChannelId !== undefined ? (payload.payoutChannelId ? String(payload.payoutChannelId).trim() : null) : undefined;
+    const autoWeeklyReset = payload.autoWeeklyReset !== undefined ? Boolean(payload.autoWeeklyReset) : undefined;
 
-    try {
-      return await prisma.recruiterSalaryConfig.upsert({
-        where: { guildId },
-        update: {
-          payPerCandidateAccepted: accepted,
-          payPerCandidateRejected: rejected,
-          payPerApprovedReport: approvedRep,
-          payPerRejectedReport: rejectedRep,
-          payPerPromotion: promotion,
-          currencySymbol: currency,
-        },
-        create: {
-          guildId,
-          payPerCandidateAccepted: accepted,
-          payPerCandidateRejected: rejected,
-          payPerApprovedReport: approvedRep,
-          payPerRejectedReport: rejectedRep,
-          payPerPromotion: promotion,
-          currencySymbol: currency,
-        },
-      });
-    } catch (err: any) {
-      if (err?.message?.includes('lastResetAt') || err?.message?.includes('does not exist')) {
-        await ensureDatabaseSchema();
-        return await prisma.recruiterSalaryConfig.upsert({
-          where: { guildId },
-          update: {
-            payPerCandidateAccepted: accepted,
-            payPerCandidateRejected: rejected,
-            payPerApprovedReport: approvedRep,
-            payPerRejectedReport: rejectedRep,
-            payPerPromotion: promotion,
-            currencySymbol: currency,
-          },
-          create: {
-            guildId,
-            payPerCandidateAccepted: accepted,
-            payPerCandidateRejected: rejected,
-            payPerApprovedReport: approvedRep,
-            payPerRejectedReport: rejectedRep,
-            payPerPromotion: promotion,
-            currencySymbol: currency,
-          },
-        });
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Reset stats for all recruiters or an individual recruiter
-   */
-  static async resetStats(guildId: string, recruiterId?: string, executor?: { id: string; tag: string }) {
-    const config = await this.getConfig(guildId);
-    const now = new Date();
-
-    if (!recruiterId) {
-      // Global reset for all recruiters
-      await prisma.recruiterSalaryConfig.update({
-        where: { guildId },
-        data: {
-          lastResetAt: now,
-          recruiterResetsJson: '{}',
-        },
-      });
-
-      await AuditLogger.recordEntry({
+    return await prisma.recruiterSalaryConfig.upsert({
+      where: { guildId },
+      update: {
+        payPerCandidateAccepted: accepted,
+        payPerCandidateRejected: rejected,
+        payPerApprovedReport: approvedRep,
+        payPerRejectedReport: rejectedRep,
+        payPerPromotion: promotion,
+        currencySymbol: currency,
+        ...(payoutChannelId !== undefined ? { payoutChannelId } : {}),
+        ...(autoWeeklyReset !== undefined ? { autoWeeklyReset } : {}),
+      },
+      create: {
         guildId,
-        category: 'RECRUIT',
-        action: 'RECRUITER_STATS_RESET_ALL',
-        title: 'Обнуление статистики всех рекрутеров',
-        description: `Администратор обнулил статистику всех рекрутеров. Отсчет начат с ${now.toLocaleString('ru-RU')}.`,
-        executorId: executor?.id,
-        executorTag: executor?.tag,
-      }).catch(() => null);
-
-      return { success: true, resetAt: now };
-    } else {
-      // Reset for a specific recruiter
-      let resets: Record<string, string> = {};
-      try {
-        resets = JSON.parse(config.recruiterResetsJson || '{}');
-      } catch {
-        resets = {};
-      }
-      resets[recruiterId] = now.toISOString();
-
-      await prisma.recruiterSalaryConfig.update({
-        where: { guildId },
-        data: {
-          recruiterResetsJson: JSON.stringify(resets),
-        },
-      });
-
-      await AuditLogger.recordEntry({
-        guildId,
-        category: 'RECRUIT',
-        action: 'RECRUITER_STATS_RESET_USER',
-        title: 'Обнуление статистики рекрутера',
-        description: `Администратор обнулил статистику рекрутера <@${recruiterId}>. Отсчет начат с ${now.toLocaleString('ru-RU')}.`,
-        executorId: executor?.id,
-        executorTag: executor?.tag,
-        targetId: recruiterId,
-      }).catch(() => null);
-
-      return { success: true, recruiterId, resetAt: now };
-    }
+        payPerCandidateAccepted: accepted,
+        payPerCandidateRejected: rejected,
+        payPerApprovedReport: approvedRep,
+        payPerRejectedReport: rejectedRep,
+        payPerPromotion: promotion,
+        currencySymbol: currency,
+        payoutChannelId: payoutChannelId || null,
+        autoWeeklyReset: autoWeeklyReset !== undefined ? autoWeeklyReset : true,
+      },
+    });
   }
 
   /**
-   * Clear reset checkpoint (revert to default date window)
+   * Calculate activity and payouts for recruiters within a given time period (defaults to current week Monday-Sunday)
    */
-  static async clearReset(guildId: string, recruiterId?: string) {
+  public static async calculatePayroll(guildId: string, requestedStart?: Date, requestedEnd?: Date) {
     const config = await this.getConfig(guildId);
+    const week = this.getWeekRange(new Date());
 
-    if (!recruiterId) {
-      await prisma.recruiterSalaryConfig.update({
-        where: { guildId },
-        data: {
-          lastResetAt: null,
-        },
-      });
-      return { success: true };
-    } else {
-      let resets: Record<string, string> = {};
-      try {
-        resets = JSON.parse(config.recruiterResetsJson || '{}');
-      } catch {
-        resets = {};
-      }
-      delete resets[recruiterId];
+    const periodStart = requestedStart || week.start;
+    const periodEnd = requestedEnd || week.end;
 
-      await prisma.recruiterSalaryConfig.update({
-        where: { guildId },
-        data: {
-          recruiterResetsJson: JSON.stringify(resets),
-        },
-      });
-      return { success: true };
-    }
-  }
-
-  /**
-   * Calculate activity and payouts for recruiters within a given time period
-   */
-  static async calculatePayroll(guildId: string, periodStart: Date, periodEnd: Date) {
-    const config = await this.getConfig(guildId);
-
-    // Global reset check
+    // Respect lastResetAt so resets take immediate effect
     const effectiveStart = config.lastResetAt && config.lastResetAt > periodStart
       ? config.lastResetAt
       : periodStart;
@@ -214,7 +186,7 @@ export class PayrollService {
       recruiterResets = {};
     }
 
-    // 1. Accepted recruitment candidates
+    // 1. Accepted candidates
     const acceptedCandidates = await prisma.recruitmentApplication.findMany({
       where: {
         guildId,
@@ -224,7 +196,7 @@ export class PayrollService {
       },
     });
 
-    // 2. Rejected recruitment candidates
+    // 2. Rejected candidates
     const rejectedCandidates = await prisma.recruitmentApplication.findMany({
       where: {
         guildId,
@@ -254,7 +226,7 @@ export class PayrollService {
       },
     });
 
-    // 5. Completed academy promotions
+    // 5. Completed promotions
     const promotions = await prisma.academyChannel.findMany({
       where: {
         guildId,
@@ -263,7 +235,6 @@ export class PayrollService {
       },
     });
 
-    // Map by recruiter ID
     const recruitersMap = new Map<string, {
       recruiterId: string;
       recruiterTag: string;
@@ -296,49 +267,39 @@ export class PayrollService {
       return recruitersMap.get(id)!;
     };
 
-    // Credit accepted candidates
+    // Credit candidates
     for (const app of acceptedCandidates) {
       if (app.recruiterId) {
         const recReset = recruiterResets[app.recruiterId];
-        if (recReset && app.closedAt && app.closedAt <= new Date(recReset)) {
-          continue;
-        }
+        if (recReset && app.closedAt && app.closedAt <= new Date(recReset)) continue;
         const r = getOrInit(app.recruiterId, app.recruiterTag);
         r.acceptedCount += 1;
       }
     }
 
-    // Credit rejected candidates
     for (const app of rejectedCandidates) {
       if (app.recruiterId) {
         const recReset = recruiterResets[app.recruiterId];
-        if (recReset && app.closedAt && app.closedAt <= new Date(recReset)) {
-          continue;
-        }
+        if (recReset && app.closedAt && app.closedAt <= new Date(recReset)) continue;
         const r = getOrInit(app.recruiterId, app.recruiterTag);
         r.rejectedCandidatesCount += 1;
       }
     }
 
-    // Credit approved reports
+    // Credit reports
     for (const rep of approvedReports) {
       if (rep.reviewerId) {
         const recReset = recruiterResets[rep.reviewerId];
-        if (recReset && rep.reviewedAt && rep.reviewedAt <= new Date(recReset)) {
-          continue;
-        }
+        if (recReset && rep.reviewedAt && rep.reviewedAt <= new Date(recReset)) continue;
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
         r.approvedReportsCount += 1;
       }
     }
 
-    // Credit rejected reports
     for (const rep of rejectedReports) {
       if (rep.reviewerId) {
         const recReset = recruiterResets[rep.reviewerId];
-        if (recReset && rep.reviewedAt && rep.reviewedAt <= new Date(recReset)) {
-          continue;
-        }
+        if (recReset && rep.reviewedAt && rep.reviewedAt <= new Date(recReset)) continue;
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
         r.rejectedReportsCount += 1;
       }
@@ -349,22 +310,19 @@ export class PayrollService {
       const promoterId = promo.promotedById;
       if (promoterId) {
         const recReset = recruiterResets[promoterId];
-        if (recReset && promo.archivedAt && promo.archivedAt <= new Date(recReset)) {
-          continue;
-        }
+        if (recReset && promo.archivedAt && promo.archivedAt <= new Date(recReset)) continue;
         const r = getOrInit(promoterId, promo.promotedByTag);
         r.promotionsCount += 1;
       }
     }
 
-    // Ensure recruiters with active individual reset appear even if they have 0 actions
     for (const [recId, recReset] of Object.entries(recruiterResets)) {
       if (!recruitersMap.has(recId)) {
         getOrInit(recId);
       }
     }
 
-    // Calculate payouts
+    // Resolve recruiter names and character profiles
     const recruiterIds = Array.from(recruitersMap.keys());
     const profiles = await prisma.userProfile.findMany({
       where: { guildId, userId: { in: recruiterIds } },
@@ -372,27 +330,41 @@ export class PayrollService {
     });
     const profileMap = new Map(profiles.map(p => [p.userId, p]));
 
-    const results = Array.from(recruitersMap.values()).map((rec) => {
-      const payout =
-        rec.acceptedCount * config.payPerCandidateAccepted +
-        rec.rejectedCandidatesCount * config.payPerCandidateRejected +
-        rec.approvedReportsCount * config.payPerApprovedReport +
-        rec.rejectedReportsCount * config.payPerRejectedReport +
-        rec.promotionsCount * config.payPerPromotion;
+    // Fetch Discord Guild & Members for nickname resolution
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
 
-      const profile = profileMap.get(rec.recruiterId);
-      const mainChar = profile?.characters?.find((c: any) => c.isMain) || profile?.characters?.[0];
-      const staticId = mainChar?.staticId || profile?.staticId || '';
-      const characterName = mainChar?.characterName || profile?.characterName || '';
+    const results = await Promise.all(
+      Array.from(recruitersMap.values()).map(async (rec) => {
+        const payout =
+          rec.acceptedCount * config.payPerCandidateAccepted +
+          rec.rejectedCandidatesCount * config.payPerCandidateRejected +
+          rec.approvedReportsCount * config.payPerApprovedReport +
+          rec.rejectedReportsCount * config.payPerRejectedReport +
+          rec.promotionsCount * config.payPerPromotion;
 
-      rec.totalPayout = payout;
-      return {
-        ...rec,
-        staticId,
-        characterName,
-        exportRow: `${staticId || 'БЕЗ_СТАТИКА'};${payout};Зарплата рекрутера`,
-      };
-    });
+        const profile = profileMap.get(rec.recruiterId) || null;
+        let member: any = null;
+        if (guild) {
+          member = guild.members.cache.get(rec.recruiterId) || await guild.members.fetch(rec.recruiterId).catch(() => null);
+        }
+
+        const { displayName, staticId, characterName } = this.resolveRecruiterDisplayName(
+          member,
+          profile,
+          rec.recruiterTag,
+          rec.recruiterId
+        );
+
+        rec.totalPayout = payout;
+        return {
+          ...rec,
+          displayName,
+          staticId,
+          characterName,
+          exportRow: `${staticId || 'БЕЗ_СТАТИКА'};${payout};Зарплата рекрутера (${displayName})`,
+        };
+      })
+    );
 
     const grandTotal = results.reduce((acc, r) => acc + r.totalPayout, 0);
 
@@ -403,6 +375,8 @@ export class PayrollService {
       lastResetAt: config.lastResetAt,
       recruiterResets,
       currencySymbol: config.currencySymbol,
+      payoutChannelId: config.payoutChannelId,
+      autoWeeklyReset: config.autoWeeklyReset,
       rates: {
         payPerCandidateAccepted: config.payPerCandidateAccepted,
         payPerCandidateRejected: config.payPerCandidateRejected,
@@ -414,5 +388,327 @@ export class PayrollService {
       grandTotal,
     };
   }
-}
 
+  /**
+   * Finalizes the current weekly payroll, creates immutable RecruiterPayoutRecords,
+   * resets the active tracking counters, and posts the report + new week announcement to Discord.
+   */
+  public static async archiveAndResetWeek(
+    guildId: string,
+    options: {
+      executor?: { id: string; tag: string };
+      isAutomatic?: boolean;
+    } = {}
+  ): Promise<{ success: boolean; recordsCreated: number; resetAt: Date; periodString: string }> {
+    const config = await this.getConfig(guildId);
+    const now = new Date();
+
+    // 1. Calculate the active payroll up to now
+    const week = this.getWeekRange(now);
+    const periodStart = config.lastResetAt || week.start;
+    const periodEnd = now;
+    const periodString = this.formatRangeString(periodStart, periodEnd);
+
+    const payroll = await this.calculatePayroll(guildId, periodStart, periodEnd);
+
+    // 2. Create payout records in database for all recruiters with activity or payout
+    const createdRecords: any[] = [];
+    for (const rec of payroll.recruiters) {
+      if (rec.totalPayout > 0 || rec.acceptedCount > 0 || rec.approvedReportsCount > 0) {
+        const record = await prisma.recruiterPayoutRecord.create({
+          data: {
+            guildId,
+            recruiterId: rec.recruiterId,
+            recruiterTag: rec.recruiterTag,
+            recruiterName: rec.displayName,
+            staticId: rec.staticId || null,
+            periodStart,
+            periodEnd,
+            acceptedCount: rec.acceptedCount,
+            rejectedCandidatesCount: rec.rejectedCandidatesCount,
+            reportsCount: rec.approvedReportsCount,
+            rejectedReportsCount: rec.rejectedReportsCount,
+            promotionsCount: rec.promotionsCount,
+            totalPayout: rec.totalPayout,
+            status: 'PENDING',
+            notes: options.isAutomatic ? 'Автоматический сброс по окончании недели' : `Ручное формирование (${options.executor?.tag || 'Администратор'})`,
+          },
+        });
+        createdRecords.push(record);
+      }
+    }
+
+    // 3. Update config with reset timestamp and current week Monday
+    const nextWeekRange = this.getWeekRange(now);
+    await prisma.recruiterSalaryConfig.update({
+      where: { guildId },
+      data: {
+        lastResetAt: now,
+        currentWeekMonday: nextWeekRange.start,
+        recruiterResetsJson: '{}',
+      },
+    });
+
+    // 4. Send announcement to Discord payout channel if configured
+    await this.postWeeklyAnnouncementToDiscord(guildId, config.payoutChannelId, payroll, periodString, nextWeekRange);
+
+    // 5. Audit log
+    await AuditLogger.recordEntry({
+      guildId,
+      category: 'RECRUIT',
+      action: options.isAutomatic ? 'RECRUITER_WEEKLY_AUTORESET' : 'RECRUITER_STATS_RESET_ALL',
+      title: options.isAutomatic ? 'Автоматический недельный расчет выплат рекрутерам' : 'Формирование выплат и обнуление недели рекрутеров',
+      description: `Сформировано ${createdRecords.length} выплат на сумму ${config.currencySymbol}${payroll.grandTotal.toLocaleString('ru-RU')} за период ${periodString}.`,
+      executorId: options.executor?.id,
+      executorTag: options.executor?.tag,
+    }).catch(() => null);
+
+    return {
+      success: true,
+      recordsCreated: createdRecords.length,
+      resetAt: now,
+      periodString,
+    };
+  }
+
+  /**
+   * Posts the weekly payout summary and new week start announcement to Discord
+   */
+  public static async postWeeklyAnnouncementToDiscord(
+    guildId: string,
+    payoutChannelId: string | null | undefined,
+    payroll: any,
+    periodString: string,
+    nextWeekRange: { start: Date; end: Date }
+  ): Promise<void> {
+    if (!payoutChannelId) return;
+
+    try {
+      const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+      if (!guild) return;
+
+      const channel = (guild.channels.cache.get(payoutChannelId) || await guild.channels.fetch(payoutChannelId).catch(() => null)) as TextChannel | null;
+      if (!channel || !channel.isTextBased() || typeof channel.send !== 'function') return;
+
+      const sym = payroll.currencySymbol || '$';
+      const grandTotalFormatted = `${sym}${payroll.grandTotal.toLocaleString('ru-RU')}`;
+
+      // Build payout summary embed
+      const summaryEmbed = new EmbedBuilder()
+        .setColor(0xEC4899) // Hot pink
+        .setTitle(`📊 Итоговые выплаты рекрутерам за неделю (${periodString})`)
+        .setDescription(
+          `Завершена расчетная неделя рекрутинга! Сформированы ведомости выплат для выдачи в игре.\n` +
+          `💰 **Общая сумма к выплате:** **${grandTotalFormatted}**\n` +
+          `👥 **Всего рекрутеров:** **${payroll.recruiters.length}**`
+        )
+        .setTimestamp();
+
+      if (payroll.recruiters.length > 0) {
+        // Group recruiters into fields (up to 15 recruiters per field or individual fields)
+        const recruiterLines = payroll.recruiters.map((r: any, idx: number) => {
+          const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '▫️';
+          const staticBadge = r.staticId ? ` \`[#${r.staticId}]\`` : '';
+          const statsBrief = `принято: **${r.acceptedCount}** | отчетов: **${r.approvedReportsCount}** | повышений: **${r.promotionsCount}**`;
+          return `${medal} **${r.displayName}**${staticBadge}\n   └ ${statsBrief} → **${sym}${r.totalPayout.toLocaleString('ru-RU')}**`;
+        });
+
+        // Split into chunks of 10 if necessary
+        const chunkSize = 10;
+        for (let i = 0; i < recruiterLines.length; i += chunkSize) {
+          const chunk = recruiterLines.slice(i, i + chunkSize).join('\n\n');
+          summaryEmbed.addFields({
+            name: i === 0 ? '📋 Список к выплате:' : '📋 Список (продолжение):',
+            value: chunk.slice(0, 1024),
+          });
+        }
+      } else {
+        summaryEmbed.addFields({
+          name: 'Список выплат',
+          value: 'За прошедший период активности рекрутеров не зафиксировано.',
+        });
+      }
+
+      // New week notice embed
+      const nextWeekStr = this.formatRangeString(nextWeekRange.start, nextWeekRange.end);
+      const newWeekEmbed = new EmbedBuilder()
+        .setColor(0x10B981) // Emerald green
+        .setTitle('🚀 Началась новая неделя отсчета статистики рекрутеров!')
+        .setDescription(
+          `📅 **Период:** с понедельника по воскресенье (**${nextWeekStr}**).\n` +
+          `Все счетчики принятых заявок, отчетов и закрытых обучений обнулены.\n\n` +
+          `Желаем продуктивной недели и отличных результатов! 💼`
+        )
+        .setFooter({ text: 'INTERPOL • Система рекрутинга и выплат' })
+        .setTimestamp();
+
+      await channel.send({
+        embeds: [summaryEmbed, newWeekEmbed],
+      });
+    } catch (err) {
+      console.error('[PayrollService] Error posting weekly announcement to Discord:', err);
+    }
+  }
+
+  /**
+   * Reset stats for an individual recruiter (checkpoint)
+   */
+  public static async resetSingleRecruiter(guildId: string, recruiterId: string, executor?: { id: string; tag: string }) {
+    const config = await this.getConfig(guildId);
+    const now = new Date();
+
+    let resets: Record<string, string> = {};
+    try {
+      resets = JSON.parse(config.recruiterResetsJson || '{}');
+    } catch {
+      resets = {};
+    }
+    resets[recruiterId] = now.toISOString();
+
+    await prisma.recruiterSalaryConfig.update({
+      where: { guildId },
+      data: {
+        recruiterResetsJson: JSON.stringify(resets),
+      },
+    });
+
+    await AuditLogger.recordEntry({
+      guildId,
+      category: 'RECRUIT',
+      action: 'RECRUITER_STATS_RESET_USER',
+      title: 'Индивидуальное обнуление рекрутера',
+      description: `Обнулена статистика рекрутера <@${recruiterId}> с ${now.toLocaleString('ru-RU')}.`,
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: recruiterId,
+    }).catch(() => null);
+
+    return { success: true, recruiterId, resetAt: now };
+  }
+
+  /**
+   * Clear reset checkpoint (revert to full week window)
+   */
+  public static async clearReset(guildId: string, recruiterId?: string) {
+    const config = await this.getConfig(guildId);
+
+    if (!recruiterId) {
+      await prisma.recruiterSalaryConfig.update({
+        where: { guildId },
+        data: {
+          lastResetAt: null,
+        },
+      });
+      return { success: true };
+    } else {
+      let resets: Record<string, string> = {};
+      try {
+        resets = JSON.parse(config.recruiterResetsJson || '{}');
+      } catch {
+        resets = {};
+      }
+      delete resets[recruiterId];
+
+      await prisma.recruiterSalaryConfig.update({
+        where: { guildId },
+        data: {
+          recruiterResetsJson: JSON.stringify(resets),
+        },
+      });
+      return { success: true };
+    }
+  }
+
+  /**
+   * Get payout history for a guild
+   */
+  public static async getPayoutHistory(guildId: string, options: { status?: string; limit?: number } = {}) {
+    const where: any = { guildId };
+    if (options.status && options.status !== 'ALL') {
+      where.status = options.status;
+    }
+
+    return await prisma.recruiterPayoutRecord.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(200, options.limit || 100),
+    });
+  }
+
+  /**
+   * Toggle or set payout record status (PAID / PENDING)
+   */
+  public static async updatePayoutStatus(
+    guildId: string,
+    payoutId: string,
+    status: 'PAID' | 'PENDING',
+    paidById?: string
+  ) {
+    const record = await prisma.recruiterPayoutRecord.findUnique({
+      where: { id: payoutId },
+    });
+
+    if (!record || record.guildId !== guildId) {
+      throw new Error('Запись о выплате не найдена');
+    }
+
+    return await prisma.recruiterPayoutRecord.update({
+      where: { id: payoutId },
+      data: {
+        status,
+        paidAt: status === 'PAID' ? new Date() : null,
+        paidById: status === 'PAID' ? paidById : null,
+      },
+    });
+  }
+
+  /**
+   * Delete a payout history record
+   */
+  public static async deletePayoutRecord(guildId: string, payoutId: string) {
+    const record = await prisma.recruiterPayoutRecord.findUnique({
+      where: { id: payoutId },
+    });
+
+    if (!record || record.guildId !== guildId) {
+      throw new Error('Запись о выплате не найдена');
+    }
+
+    return await prisma.recruiterPayoutRecord.delete({
+      where: { id: payoutId },
+    });
+  }
+
+  /**
+   * Background task: check if Monday 00:00:00 has arrived and trigger weekly rollover
+   */
+  public static async checkWeeklyPayrollRollover(): Promise<void> {
+    const configs = await prisma.recruiterSalaryConfig.findMany({
+      where: { autoWeeklyReset: true },
+    });
+
+    const now = new Date();
+    const currentWeek = this.getWeekRange(now);
+
+    for (const cfg of configs) {
+      try {
+        // If currentWeekMonday was never set, initialize it to this week's Monday
+        if (!cfg.currentWeekMonday) {
+          await prisma.recruiterSalaryConfig.update({
+            where: { guildId: cfg.guildId },
+            data: { currentWeekMonday: currentWeek.start },
+          });
+          continue;
+        }
+
+        // If the stored Monday is older than this week's Monday, a new week has started!
+        if (cfg.currentWeekMonday.getTime() < currentWeek.start.getTime()) {
+          console.log(`🔄 [PayrollService] New week detected for guild ${cfg.guildId}. Archiving previous week and resetting...`);
+          await this.archiveAndResetWeek(cfg.guildId, { isAutomatic: true });
+        }
+      } catch (guildErr) {
+        console.error(`[PayrollService] Error checking weekly rollover for guild ${cfg.guildId}:`, guildErr);
+      }
+    }
+  }
+}
