@@ -6,9 +6,9 @@
  * ====================================================================
  * Команды:
  *   node scripts/migrate-helper.js check    - Проверить БД, подсчитать записи и сверить GUILD_ID
- *   node scripts/migrate-helper.js export   - Сделать архив для переноса на новый VPS (.env + dev.db)
+ *   node scripts/migrate-helper.js export   - Сделать архив для переноса на новый VPS (.env + БД)
  *   node scripts/migrate-helper.js import   - Развернуть архив на новом VPS и накатить схему v6
- *   node scripts/migrate-helper.js sync     - Синхронизировать dev.db между корнем и prisma/
+ *   node scripts/migrate-helper.js fix      - Автоматически синхронизировать пути и конфиг базы
  * ====================================================================
  */
 
@@ -19,8 +19,6 @@ const { execSync } = require('child_process');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const PRISMA_DIR = path.join(ROOT_DIR, 'prisma');
 const ENV_FILE = path.join(ROOT_DIR, '.env');
-const ROOT_DB = path.join(ROOT_DIR, 'dev.db');
-const PRISMA_DB = path.join(PRISMA_DIR, 'dev.db');
 
 function parseEnv() {
   const env = {};
@@ -43,14 +41,57 @@ function parseEnv() {
   return env;
 }
 
-function getFileSize(filePath) {
+function resolveDatabasePath(databaseUrl) {
+  if (!databaseUrl || !databaseUrl.startsWith('file:')) {
+    return path.join(PRISMA_DIR, 'dev.db');
+  }
+  const rawPath = databaseUrl.replace(/^file:/, '').replace(/^\/\//, '');
+  if (path.isAbsolute(rawPath)) return rawPath;
+  return path.resolve(PRISMA_DIR, rawPath);
+}
+
+function getFileInfo(filePath) {
   if (!fs.existsSync(filePath)) return null;
   const stats = fs.statSync(filePath);
   return {
+    path: filePath,
+    relPath: path.relative(ROOT_DIR, filePath).replace(/\\/g, '/'),
     bytes: stats.size,
     kb: (stats.size / 1024).toFixed(1),
     mtime: stats.mtime.toLocaleString('ru-RU'),
   };
+}
+
+function findDatabaseFiles() {
+  const candidates = [
+    path.join(PRISMA_DIR, 'data', 'interpol.db'),
+    path.join(ROOT_DIR, 'data', 'interpol.db'),
+    path.join(PRISMA_DIR, 'interpol.db'),
+    path.join(ROOT_DIR, 'interpol.db'),
+    path.join(PRISMA_DIR, 'dev.db'),
+    path.join(ROOT_DIR, 'dev.db'),
+  ];
+
+  // Также сканируем prisma/data/ на любые .db файлы
+  const prismaDataDir = path.join(PRISMA_DIR, 'data');
+  if (fs.existsSync(prismaDataDir)) {
+    try {
+      const files = fs.readdirSync(prismaDataDir);
+      for (const f of files) {
+        if (f.endsWith('.db')) {
+          candidates.push(path.join(prismaDataDir, f));
+        }
+      }
+    } catch {}
+  }
+
+  const found = new Map();
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      found.set(path.normalize(c), getFileInfo(c));
+    }
+  }
+  return Array.from(found.values());
 }
 
 async function runCheck() {
@@ -59,47 +100,56 @@ async function runCheck() {
   console.log('====================================================================\n');
 
   const env = parseEnv();
+  const dbUrl = env.DATABASE_URL || 'file:./dev.db';
+  const activeDbPath = resolveDatabasePath(dbUrl);
+  const activeDbInfo = getFileInfo(activeDbPath);
+
   console.log('📄 [1] Проверка конфигурации (.env):');
   console.log(`   • Файл .env: ${fs.existsSync(ENV_FILE) ? '✅ Найден' : '❌ ОТСУТСТВУЕТ!'}`);
   console.log(`   • GUILD_ID в .env: ${env.GUILD_ID ? `"${env.GUILD_ID}"` : '❌ НЕ ЗАДАН'}`);
   console.log(`   • DISCORD_TOKEN: ${env.DISCORD_TOKEN ? (env.DISCORD_TOKEN.includes('your_') ? '⚠️ Шаблонный (не заполнен)' : '✅ Задан') : '❌ Отсутствует'}`);
-  console.log(`   • DATABASE_URL: ${env.DATABASE_URL || 'file:./dev.db (по умолчанию)'}`);
+  console.log(`   • DATABASE_URL: "${dbUrl}"`);
+  console.log(`   • Активный путь БД (по Prisma): ${activeDbPath}`);
 
-  console.log('\n💾 [2] Проверка файлов SQLite на диске:');
-  const rootDbInfo = getFileSize(ROOT_DB);
-  const prismaDbInfo = getFileSize(PRISMA_DB);
+  console.log('\n💾 [2] Поиск файлов баз данных SQLite на диске:');
+  const allDbFiles = findDatabaseFiles();
 
-  console.log(`   • В корне проекта (dev.db): ${rootDbInfo ? `✅ ${rootDbInfo.kb} KB (изменен: ${rootDbInfo.mtime})` : '⚪ нет файла'}`);
-  console.log(`   • В папке prisma (prisma/dev.db): ${prismaDbInfo ? `✅ ${prismaDbInfo.kb} KB (изменен: ${prismaDbInfo.mtime})` : '⚪ нет файла'}`);
-
-  // Проверка журналов WAL
-  const rootWal = getFileSize(path.join(ROOT_DIR, 'dev.db-wal'));
-  const prismaWal = getFileSize(path.join(PRISMA_DIR, 'dev.db-wal'));
-  if (rootWal || prismaWal) {
-    console.log(`   ℹ️ Обнаружен SQLite WAL: root=${rootWal ? `${rootWal.kb} KB` : 'нет'}, prisma=${prismaWal ? `${prismaWal.kb} KB` : 'нет'}`);
-  }
-
-  // Предупреждение о несоответствии
-  if (rootDbInfo && prismaDbInfo) {
-    if (Math.abs(rootDbInfo.bytes - prismaDbInfo.bytes) > 1024) {
-      console.log('\n⚠️ ВНИМАНИЕ: Файлы dev.db в корне и в prisma/ РАЗНОГО размера!');
-      console.log(`   Prisma по умолчанию использует именно prisma/dev.db.`);
-      if (rootDbInfo.bytes > prismaDbInfo.bytes) {
-        console.log(`   👉 Файл в корне проекта больше (${rootDbInfo.kb} KB > ${prismaDbInfo.kb} KB)! Возможно, данные были скопированы в корень, а не в prisma/.`);
-        console.log(`   👉 Выполните команду: node scripts/migrate-helper.js sync`);
-      }
+  if (allDbFiles.length === 0) {
+    console.log('   ❌ На диске не найдено ни одного файла базы данных SQLite (.db)!');
+  } else {
+    for (const db of allDbFiles) {
+      const isActive = path.normalize(db.path) === path.normalize(activeDbPath);
+      const mark = isActive ? '👉 [АКТИВНАЯ В .ENV]' : '   [другая]';
+      console.log(`   ${mark} ${db.relPath} (${db.kb} KB, изменен: ${db.mtime})`);
     }
-  } else if (rootDbInfo && !prismaDbInfo) {
-    console.log('\n⚠️ ВНИМАНИЕ: dev.db найден только в корне, но Prisma ожидает prisma/dev.db!');
-    console.log(`   👉 Скопируйте файл в prisma/dev.db командой: node scripts/migrate-helper.js sync`);
   }
 
-  console.log('\n📊 [3] Подключение к базе данных и подсчет записей...');
+  // Проверка несоответствий путей
+  const interpolDbInPrisma = getFileInfo(path.join(PRISMA_DIR, 'data', 'interpol.db'));
+  if (interpolDbInPrisma && path.normalize(activeDbPath) !== path.normalize(interpolDbInPrisma.path)) {
+    console.log('\n⚠️ ВНИМАНИЕ: Обнаружена база данных по оригинальному пути:');
+    console.log(`   prisma/data/interpol.db (${interpolDbInPrisma.kb} KB)`);
+    console.log(`   Но в .env указан DATABASE_URL="${dbUrl}"!`);
+    console.log(`   👉 Бот может подключаться к пустой базе вместо реальной!`);
+    console.log(`   👉 Решение: укажите в .env: DATABASE_URL="file:./data/interpol.db"`);
+    console.log(`   Или выполните: node scripts/migrate-helper.js fix`);
+  }
+
+  if (activeDbInfo && activeDbInfo.bytes < 40960) {
+    // База меньше 40 KB — скорее всего пустая свежесозданная
+    const largerDb = allDbFiles.find((d) => d.bytes > 50000);
+    if (largerDb) {
+      console.log('\n⚠️ ПРЕДУПРЕЖДЕНИЕ: Активная база кажется пустой (<40 KB),');
+      console.log(`   но найден другой файл базы с данными: ${largerDb.relPath} (${largerDb.kb} KB)!`);
+      console.log(`   Выполните команду авто-исправления: node scripts/migrate-helper.js fix`);
+    }
+  }
+
+  console.log('\n📊 [3] Подключение через Prisma и подсчет записей...');
   try {
     const { PrismaClient } = require('@prisma/client');
     const prisma = new PrismaClient({ log: ['error'] });
 
-    // Принудительно сбрасываем WAL
     try {
       await prisma.$queryRawUnsafe('PRAGMA wal_checkpoint(FULL);');
     } catch {}
@@ -136,29 +186,28 @@ async function runCheck() {
     console.log(`   🏷️ Привязок никнеймов: ${nicknames > 0 ? `✅ ${nicknames}` : '⚪ 0'}`);
     console.log(`   📨 Трекинг инвайтов: ${invites > 0 ? `✅ ${invites}` : '⚪ 0'}`);
 
-    // Проверка GuildId в существующих профилях
+    // Проверка GuildId
     if (userProfiles > 0) {
       const distinctGuilds = await prisma.userProfile.findMany({
         select: { guildId: true },
         distinct: ['guildId'],
       });
       const foundGuildIds = distinctGuilds.map((g) => g.guildId);
-      console.log(`\n🎯 Гильдии, к которым привязаны профили в базе данных: ${foundGuildIds.join(', ')}`);
+      console.log(`\n🎯 Гильдии в базе данных: ${foundGuildIds.join(', ')}`);
 
       if (env.GUILD_ID && !foundGuildIds.includes(env.GUILD_ID)) {
         console.log('\n❌ КРИТИЧЕСКОЕ НЕСООТВЕТСТВИЕ GUILD_ID!');
         console.log(`   В файле .env указан GUILD_ID: "${env.GUILD_ID}"`);
-        console.log(`   Но профили в базе данных привязаны к: "${foundGuildIds.join(', ')}"`);
-        console.log(`   ⚠️ Из-за этого бот и сайт ищут пользователей по чужому GUILD_ID и показывают 0!`);
-        console.log(`   👉 Решение: Откройте .env и укажите GUILD_ID=${foundGuildIds[0]}`);
+        console.log(`   Но профили пользователей привязаны к: "${foundGuildIds.join(', ')}"`);
+        console.log(`   ⚠️ Из-за этого расхождения бот и веб-панель не отображают данные пользователей!`);
+        console.log(`   👉 Решение: Укажите в .env: GUILD_ID=${foundGuildIds[0]}`);
       } else if (env.GUILD_ID && foundGuildIds.includes(env.GUILD_ID)) {
         console.log(`   ✅ GUILD_ID в .env совпадает с данными в базе!`);
       }
     } else {
       console.log('\n⚠️ В текущей активной базе 0 профилей пользователей.');
       console.log('   Если на старом сервере пользователи были:');
-      console.log('   1. Убедитесь, что вы скопировали dev.db именно со старого сервера.');
-      console.log('   2. Файл должен лежать по пути: interpol_bot/prisma/dev.db');
+      console.log('   Убедитесь, что скопирован файл /root/interpol_bot/prisma/data/interpol.db');
     }
 
     await prisma.$disconnect();
@@ -169,26 +218,55 @@ async function runCheck() {
   console.log('\n====================================================================\n');
 }
 
-function runSync() {
-  console.log('🔄 Синхронизация файлов dev.db между корнем и prisma/ ...');
-  const rootDbInfo = getFileSize(ROOT_DB);
-  const prismaDbInfo = getFileSize(PRISMA_DB);
+function runFix() {
+  console.log('\n====================================================================');
+  console.log('🛠️ [INTERPOL BOT] Автоматическое выравнивание файлов базы данных');
+  console.log('====================================================================\n');
 
-  if (!rootDbInfo && !prismaDbInfo) {
-    console.log('❌ Ни один файл dev.db не найден.');
+  const allDbFiles = findDatabaseFiles();
+  if (allDbFiles.length === 0) {
+    console.log('❌ Не найдено ни одного файла базы данных SQLite.');
     return;
   }
 
-  if (rootDbInfo && (!prismaDbInfo || rootDbInfo.bytes > prismaDbInfo.bytes)) {
-    fs.mkdirSync(PRISMA_DIR, { recursive: true });
-    fs.copyFileSync(ROOT_DB, PRISMA_DB);
-    console.log(`✅ Скопирован ${ROOT_DB} (${rootDbInfo.kb} KB) -> ${PRISMA_DB}`);
-  } else if (prismaDbInfo && (!rootDbInfo || prismaDbInfo.bytes > rootDbInfo.bytes)) {
-    fs.copyFileSync(PRISMA_DB, ROOT_DB);
-    console.log(`✅ Скопирован ${PRISMA_DB} (${prismaDbInfo.kb} KB) -> ${ROOT_DB}`);
-  } else {
-    console.log('✅ Файлы dev.db в корне и в prisma/ уже идентичны.');
+  // Находим самый большой файл базы (где лежат реальные данные)
+  const largestDb = [...allDbFiles].sort((a, b) => b.bytes - a.bytes)[0];
+  console.log(`📦 Самый объемный файл базы данных: ${largestDb.relPath} (${largestDb.kb} KB)`);
+
+  // Убеждаемся, что prisma/data создана
+  const prismaDataDir = path.join(PRISMA_DIR, 'data');
+  fs.mkdirSync(prismaDataDir, { recursive: true });
+
+  const targetInterpolDb = path.join(prismaDataDir, 'interpol.db');
+  const targetDevDb = path.join(PRISMA_DIR, 'dev.db');
+
+  if (largestDb.path !== targetInterpolDb) {
+    fs.copyFileSync(largestDb.path, targetInterpolDb);
+    console.log(`✅ Скопирован ${largestDb.relPath} -> prisma/data/interpol.db`);
   }
+
+  if (largestDb.path !== targetDevDb) {
+    fs.copyFileSync(largestDb.path, targetDevDb);
+    console.log(`✅ Скопирован ${largestDb.relPath} -> prisma/dev.db (для совместимости)`);
+  }
+
+  // Проверяем .env
+  if (fs.existsSync(ENV_FILE)) {
+    let envContent = fs.readFileSync(ENV_FILE, 'utf-8');
+    if (!envContent.includes('file:./data/interpol.db')) {
+      if (envContent.includes('DATABASE_URL=')) {
+        envContent = envContent.replace(/DATABASE_URL=["'][^"']*["']/g, 'DATABASE_URL="file:./data/interpol.db"');
+        envContent = envContent.replace(/DATABASE_URL=[^\r\n]*/g, 'DATABASE_URL="file:./data/interpol.db"');
+      } else {
+        envContent += '\nDATABASE_URL="file:./data/interpol.db"\n';
+      }
+      fs.writeFileSync(ENV_FILE, envContent, 'utf-8');
+      console.log('✅ В файле .env установлен DATABASE_URL="file:./data/interpol.db"');
+    }
+  }
+
+  console.log('\n🎉 Выравнивание завершено! Проверяю базу:');
+  runCheck();
 }
 
 async function runExport() {
@@ -202,46 +280,51 @@ async function runExport() {
     const prisma = new PrismaClient({ log: ['error'] });
     await prisma.$queryRawUnsafe('PRAGMA wal_checkpoint(FULL);');
     await prisma.$disconnect();
-    console.log('✅ SQLite WAL успешно сброшен в основной файл dev.db');
+    console.log('✅ SQLite WAL успешно сброшен в файлы базы.');
   } catch (e) {
     console.log('ℹ️ WAL сброс пропущен или не требуется.');
   }
-
-  // Синхронизируем dev.db
-  runSync();
 
   const exportDir = path.join(ROOT_DIR, 'migration_export');
   if (fs.existsSync(exportDir)) {
     fs.rmSync(exportDir, { recursive: true, force: true });
   }
-  fs.mkdirSync(path.join(exportDir, 'prisma'), { recursive: true });
 
-  // Копируем .env
+  // Создаем папки
+  fs.mkdirSync(path.join(exportDir, 'prisma', 'data'), { recursive: true });
+
+  // 1. Копируем .env
   if (fs.existsSync(ENV_FILE)) {
     fs.copyFileSync(ENV_FILE, path.join(exportDir, '.env'));
     console.log('✅ Конфигурация .env добавлена в архив.');
   } else {
-    console.warn('⚠️ Внимание: файл .env не найден!');
+    console.warn('⚠️ Внимание: файл .env не найден в корне!');
   }
 
-  // Копируем dev.db
-  let dbFound = false;
-  if (fs.existsSync(PRISMA_DB)) {
-    fs.copyFileSync(PRISMA_DB, path.join(exportDir, 'prisma', 'dev.db'));
-    fs.copyFileSync(PRISMA_DB, path.join(exportDir, 'dev.db'));
-    dbFound = true;
-    const size = getFileSize(PRISMA_DB);
-    console.log(`✅ База данных prisma/dev.db (${size.kb} KB) добавлена в архив.`);
-  } else if (fs.existsSync(ROOT_DB)) {
-    fs.copyFileSync(ROOT_DB, path.join(exportDir, 'prisma', 'dev.db'));
-    fs.copyFileSync(ROOT_DB, path.join(exportDir, 'dev.db'));
-    dbFound = true;
-    const size = getFileSize(ROOT_DB);
-    console.log(`✅ База данных dev.db (${size.kb} KB) добавлена в архив.`);
+  // 2. Ищем и копируем все базы данных и журналы
+  const allDbFiles = findDatabaseFiles();
+  let dbCopied = 0;
+
+  for (const db of allDbFiles) {
+    const rel = db.relPath;
+    const dest = path.join(exportDir, rel);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(db.path, dest);
+    console.log(`✅ База данных ${rel} (${db.kb} KB) добавлена в архив.`);
+    dbCopied++;
+
+    // Проверяем сопутствующие wal / shm / journal
+    for (const ext of ['-wal', '-shm', '-journal']) {
+      const companion = db.path + ext;
+      if (fs.existsSync(companion)) {
+        fs.copyFileSync(companion, dest + ext);
+        console.log(`   ➕ Сопутствующий файл ${path.basename(companion)} добавлен.`);
+      }
+    }
   }
 
-  if (!dbFound) {
-    console.error('❌ ОШИБКА: Файл базы данных dev.db не найден!');
+  if (dbCopied === 0) {
+    console.error('❌ ОШИБКА: На сервере не найдено ни одного файла базы данных SQLite!');
     return;
   }
 
@@ -251,16 +334,15 @@ async function runExport() {
   try {
     execSync(`tar -czf "${archivePath}" -C "${exportDir}" .`, { stdio: 'inherit' });
     fs.rmSync(exportDir, { recursive: true, force: true });
-    const archiveSize = getFileSize(archivePath);
+    const archiveSize = getFileInfo(archivePath);
     console.log(`\n🎉 Архив успешно создан: ${archiveName} (${archiveSize.kb} KB)!`);
     console.log('\n👉 Чтобы перенести данные на новый VPS, выполните на старом сервере:');
-    console.log(`   scp ${archiveName} root@<НОВЫЙ_VPS_IP>:/путь/к/interpol_bot/`);
-    console.log('\n👉 Затем на новом сервере в папке бота выполните:');
+    console.log(`   scp ${archiveName} root@<НОВЫЙ_VPS_IP>:/root/interpol_bot/`);
+    console.log('\n👉 Затем на новом сервере в папке /root/interpol_bot выполните:');
     console.log(`   node scripts/migrate-helper.js import`);
   } catch (err) {
-    console.log('\nℹ️ Утилита tar не сработала или недоступна. Папка с файлами сохранена:');
+    console.log('\nℹ️ Утилита tar недоступна. Папка с файлами сохранена:');
     console.log(`   ${exportDir}`);
-    console.log('   Скопируйте файлы .env и prisma/dev.db на новый сервер вручную.');
   }
 }
 
@@ -282,24 +364,21 @@ async function runImport() {
     }
   }
 
-  // Синхронизируем dev.db
-  runSync();
+  // Запускаем авто-выравнивание путей
+  runFix();
 
   // Применяем схему Prisma v6
   console.log('\n⚙️ Синхронизация структуры БД со схемой v6...');
   try {
     execSync('npx prisma generate', { cwd: ROOT_DIR, stdio: 'inherit' });
     execSync('npx prisma db push --accept-data-loss', { cwd: ROOT_DIR, stdio: 'inherit' });
-    console.log('✅ Структура базы данных успешно обновлена до v6!');
+    console.log('✅ Структура базы данных успешно синхронизирована с v6!');
   } catch (e) {
     console.error('⚠️ Ошибка выполнения prisma db push:', e.message);
   }
 
-  // Запуск проверки
-  await runCheck();
-
-  console.log('🎉 Импорт завершен! Теперь вы можете перезапустить бота:');
-  console.log('   npm run build && (pm2 restart interpol-bot || node start.js)');
+  console.log('\n🎉 Импорт завершен! Теперь вы можете перезапустить бота:');
+  console.log('   npm run build && (pm2 restart interpol_bot || node start.js)');
 }
 
 const action = process.argv[2] || 'check';
@@ -308,8 +387,8 @@ switch (action) {
   case 'check':
     runCheck();
     break;
-  case 'sync':
-    runSync();
+  case 'fix':
+    runFix();
     break;
   case 'export':
     runExport();
@@ -319,5 +398,5 @@ switch (action) {
     break;
   default:
     console.log(`Неизвестное действие: ${action}`);
-    console.log('Доступно: check | sync | export | import');
+    console.log('Доступно: check | fix | export | import');
 }

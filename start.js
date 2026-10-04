@@ -40,9 +40,26 @@ if (!fs.existsSync(envFile)) {
   }
 }
 
+// Загружаем переменные окружения из .env
+try {
+  require('dotenv').config({ path: envFile });
+} catch (e) {}
+
 // Fallback for DATABASE_URL
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'file:./dev.db';
+}
+
+// Если используется SQLite, гарантируем существование директории (например prisma/data)
+if (process.env.DATABASE_URL.startsWith('file:')) {
+  try {
+    const rawPath = process.env.DATABASE_URL.replace(/^file:/, '').replace(/^\/\//, '');
+    const absPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(ROOT_DIR, 'prisma', rawPath);
+    const dbDir = path.dirname(absPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+  } catch (e) {}
 }
 
 // Утилита для выполнения команд с выводом

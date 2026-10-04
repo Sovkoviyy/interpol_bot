@@ -36,9 +36,15 @@ fi
 
 # Бэкап базы данных SQLite
 DB_BACKED_UP=false
-for db_path in "$ROOT_DIR/dev.db" "$ROOT_DIR/prisma/dev.db" "$ROOT_DIR/dev.db-journal" "$ROOT_DIR/prisma/dev.db-journal"; do
+mkdir -p "$BACKUP_DIR/prisma/data"
+
+for db_path in "$ROOT_DIR/dev.db"* "$ROOT_DIR/prisma/dev.db"* "$ROOT_DIR/prisma/data/"*.db* "$ROOT_DIR/data/"*.db*; do
   if [ -f "$db_path" ]; then
-    cp "$db_path" "$BACKUP_DIR/"
+    # Сохраняем с сохранением относительного пути
+    rel_path="${db_path#$ROOT_DIR/}"
+    dest_dir="$BACKUP_DIR/$(dirname "$rel_path")"
+    mkdir -p "$dest_dir"
+    cp "$db_path" "$dest_dir/"
     DB_BACKED_UP=true
   fi
 done
