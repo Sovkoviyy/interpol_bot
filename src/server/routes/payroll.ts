@@ -63,10 +63,10 @@ router.get('/export', requirePermission('manageRecruiting'), requireGuildId, asy
         records = report.recruiters.map(r => ({ staticId: r.staticId, totalPayout: r.totalPayout }));
     }
 
-    const csvContent = PayrollService.generateBankExport(records, comment, onlyPositive);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="payout_template.csv"');
-    res.send('\uFEFF' + csvContent);
+    const textContent = PayrollService.generateBankExport(records, comment, onlyPositive);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="payout_template.txt"');
+    res.send('\uFEFF' + textContent);
 }));
 
 /**

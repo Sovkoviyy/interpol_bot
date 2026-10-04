@@ -285,16 +285,16 @@ export const RecruiterPayroll: React.FC = () => {
 
   const handleDownloadExport = () => {
     const text = generateStrictExportText();
-    const blob = new Blob(['\uFEFF' + text], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `payouts_${exportSource === 'history' ? 'history' : 'current'}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `payouts_${exportSource === 'history' ? 'history' : 'current'}_${new Date().toISOString().split('T')[0]}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.success('Файл шаблона выплат скачан (.csv)!');
+    toast.success('Файл шаблона выплат скачан (.txt)!');
   };
 
   if (loading) {
@@ -1022,7 +1022,7 @@ export const RecruiterPayroll: React.FC = () => {
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         title="Экспорт выплат в банк Majestic RP"
-        description="Строгий CSV-шаблон для выплат премий в планшете организации"
+        description="Строгий текстовый шаблон (.txt) для выплат премий в планшете организации"
         maxWidth="max-w-lg"
       >
         <div className="space-y-4 text-xs">
@@ -1124,10 +1124,10 @@ export const RecruiterPayroll: React.FC = () => {
             <button
               onClick={handleDownloadExport}
               className="px-4 py-2.5 rounded-xl bg-[#151921] hover:bg-[#1E232F] text-slate-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 border border-[#1E232F] transition-all"
-              title="Скачать файл CSV с кодировкой UTF-8 BOM"
+              title="Скачать файл .txt с кодировкой UTF-8 BOM"
             >
               <Download className="w-4 h-4 text-emerald-400" />
-              <span>Скачать .csv</span>
+              <span>Скачать .txt</span>
             </button>
           </div>
         </div>
