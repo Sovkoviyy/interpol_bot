@@ -100,7 +100,61 @@ eventsRouter.get('/', requireAuth, requirePermission('manageEvents', 'manageSett
     take: 50,
   });
 
-  return res.json({ events });
+  const guild = await getDiscordGuild(guildId);
+  const memberNicknames = new Map<string, string>();
+
+  if (guild) {
+    const allUserIds = Array.from(new Set(events.flatMap(e => e.participants.map(p => p.userId))));
+    const missingIds: string[] = [];
+
+    for (const uid of allUserIds) {
+      const cached = guild.members.cache.get(uid);
+      if (cached) {
+        memberNicknames.set(uid, cached.nickname || cached.displayName || cached.user.username);
+      } else {
+        missingIds.push(uid);
+      }
+    }
+
+    if (missingIds.length > 0) {
+      try {
+        const fetched = await guild.members.fetch({ user: missingIds }).catch(() => null);
+        if (fetched) {
+          for (const [uid, m] of fetched) {
+            memberNicknames.set(uid, m.nickname || m.displayName || m.user.username);
+          }
+        }
+      } catch {}
+    }
+
+    // Fallback: check UserProfile if any user wasn't fetched
+    const remainingIds = allUserIds.filter(id => !memberNicknames.has(id));
+    if (remainingIds.length > 0) {
+      const profiles = await prisma.userProfile.findMany({
+        where: { guildId, userId: { in: remainingIds } },
+        select: { userId: true, characterName: true, userTag: true },
+      });
+      for (const prof of profiles) {
+        if (prof.characterName) {
+          memberNicknames.set(prof.userId, prof.characterName);
+        }
+      }
+    }
+  }
+
+  const enrichedEvents = events.map(event => ({
+    ...event,
+    participants: event.participants.map(p => {
+      const serverNick = memberNicknames.get(p.userId);
+      return {
+        ...p,
+        displayName: serverNick || p.userTag || p.userId,
+        serverNickname: serverNick || p.userTag || p.userId,
+      };
+    }),
+  }));
+
+  return res.json({ events: enrichedEvents });
 });
 
 // Create event from web dashboard (only LIMITED allowed: Capt, VZZ, MCL)

@@ -281,6 +281,11 @@ export const Events: React.FC = () => {
     }
   };
 
+  const getParticipantName = (p: any): string => {
+    if (!p) return 'Участник';
+    return p.displayName || p.serverNickname || p.nickname || p.userTag || p.userId;
+  };
+
   const handleMoveParticipant = async (eventId: string, userId: string, targetStatus: 'CONFIRMED' | 'RESERVE') => {
     try {
       await api.post(`/events/${eventId}/participants/${userId}/move`, { targetStatus });
@@ -312,7 +317,7 @@ export const Events: React.FC = () => {
       eventId,
       userId: p.userId,
       fromStatus: status,
-      userTag: p.userTag || p.userId,
+      userTag: getParticipantName(p),
     });
     e.dataTransfer.setData('text/plain', p.userId);
     e.dataTransfer.effectAllowed = 'move';
@@ -900,7 +905,7 @@ export const Events: React.FC = () => {
                                         )}
                                         <span className="text-slate-200 truncate">
                                           <strong className="text-slate-500 mr-1">{idx + 1}.</strong>
-                                          {p.userTag || p.userId}
+                                          {getParticipantName(p)}
                                         </span>
                                       </div>
 
@@ -929,7 +934,7 @@ export const Events: React.FC = () => {
                                             <span className="hidden sm:inline">В резерв</span>
                                           </button>
                                           <button
-                                            onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
+                                            onClick={() => handleKickParticipant(ev.id, p.userId, getParticipantName(p))}
                                             title="Исключить из состава"
                                             className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                                           >
@@ -1023,7 +1028,7 @@ export const Events: React.FC = () => {
                                         )}
                                         <span className="text-slate-300 truncate">
                                           <strong className="text-slate-500 mr-1">{idx + 1}.</strong>
-                                          {p.userTag || p.userId}
+                                          {getParticipantName(p)}
                                         </span>
                                       </div>
 
@@ -1052,7 +1057,7 @@ export const Events: React.FC = () => {
                                             <span className="hidden sm:inline">В основу</span>
                                           </button>
                                           <button
-                                            onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
+                                            onClick={() => handleKickParticipant(ev.id, p.userId, getParticipantName(p))}
                                             title="Исключить из состава"
                                             className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                                           >
@@ -1349,7 +1354,7 @@ export const Events: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-300 mb-3">
-              С кем поменять местами участника <span className="text-cyan-300 font-semibold">{swapModal.user.userTag || swapModal.user.userId}</span> ({swapModal.user.status === 'CONFIRMED' ? 'Основной состав' : 'Резерв'})?
+              С кем поменять местами участника <span className="text-cyan-300 font-semibold">{getParticipantName(swapModal.user)}</span> ({swapModal.user.status === 'CONFIRMED' ? 'Основной состав' : 'Резерв'})?
             </p>
 
             {swapModal.targetOptions.length === 0 ? (
@@ -1370,7 +1375,7 @@ export const Events: React.FC = () => {
                   >
                     <span className="truncate">
                       <strong className="text-slate-500 mr-1.5">{i + 1}.</strong>
-                      {targetUser.userTag || targetUser.userId}
+                      {getParticipantName(targetUser)}
                     </span>
                     <span className="text-[10px] text-cyan-400 font-medium group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
                       Обменять ➔

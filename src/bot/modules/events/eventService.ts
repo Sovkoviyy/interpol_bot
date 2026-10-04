@@ -374,6 +374,9 @@ export class EventService {
           }
         }
 
+        const member = (interaction.member as GuildMember) || (guild ? await guild.members.fetch(userId).catch(() => null) : null);
+        const serverNick = member?.nickname || member?.displayName || interaction.user.displayName || interaction.user.username;
+
         await prisma.eventParticipant.upsert({
           where: {
             eventId_userId: { eventId, userId },
@@ -381,12 +384,12 @@ export class EventService {
           create: {
             eventId,
             userId,
-            userTag: interaction.user.tag,
+            userTag: serverNick,
             status: assignedStatus,
           },
           update: {
             status: assignedStatus,
-            userTag: interaction.user.tag,
+            userTag: serverNick,
           },
         });
 
@@ -598,6 +601,9 @@ export class EventService {
           }
         }
 
+        const member = message.member || (guild ? await guild.members.fetch(userId).catch(() => null) : null);
+        const serverNick = member?.nickname || member?.displayName || message.author.displayName || message.author.username;
+
         await prisma.eventParticipant.upsert({
           where: {
             eventId_userId: { eventId, userId },
@@ -605,12 +611,12 @@ export class EventService {
           create: {
             eventId,
             userId,
-            userTag: message.author.tag,
+            userTag: serverNick,
             status: assignedStatus,
           },
           update: {
             status: assignedStatus,
-            userTag: message.author.tag,
+            userTag: serverNick,
           },
         });
 
