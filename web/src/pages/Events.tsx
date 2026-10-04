@@ -706,7 +706,7 @@ export const Events: React.FC = () => {
           </div>
 
           {/* Events Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {loading ? (
           <div className="col-span-full py-12 text-center text-slate-500">Загрузка мероприятий...</div>
         ) : events.length === 0 ? (
@@ -869,7 +869,7 @@ export const Events: React.FC = () => {
                                   : 'Пока никто не записался'}
                               </div>
                             ) : (
-                              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
                                 {confirmed.map((p: any, idx: number) => {
                                   const isItemDragged = draggedItem?.userId === p.userId;
                                   const isOver = dragOverUserId === p.userId && draggedItem?.userId !== p.userId;
@@ -891,7 +891,7 @@ export const Events: React.FC = () => {
                                         if (dragOverUserId === p.userId) setDragOverUserId(null);
                                       }}
                                       onDrop={(e) => handleDropOnUser(e, ev.id, p.userId)}
-                                      className={`flex items-center justify-between text-xs p-1.5 rounded-lg border transition-all select-none ${
+                                      className={`flex items-center justify-between text-xs p-1.5 rounded-lg border transition-all select-none gap-1.5 ${
                                         isOver
                                           ? 'border-cyan-400 bg-cyan-500/20 scale-[1.02] shadow-md shadow-cyan-500/20'
                                           : isItemDragged
@@ -899,43 +899,47 @@ export const Events: React.FC = () => {
                                           : 'bg-[#151921] border-[#1E232F] hover:border-pink-500/30'
                                       }`}
                                     >
-                                      <div className="flex items-center gap-1.5 min-w-0">
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                         {ev.status === 'ACTIVE' && (
                                           <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing shrink-0" />
                                         )}
-                                        <span className="text-slate-200 truncate">
-                                          <strong className="text-slate-500 mr-1">{idx + 1}.</strong>
+                                        <span className="text-slate-500 font-mono text-[11px] shrink-0 select-none">
+                                          {idx + 1}.
+                                        </span>
+                                        <span
+                                          className="text-slate-200 font-medium text-xs break-all sm:break-words leading-tight"
+                                          title={getParticipantName(p)}
+                                        >
                                           {getParticipantName(p)}
                                         </span>
                                       </div>
 
                                       {isOver ? (
-                                        <span className="text-[10px] text-cyan-300 font-semibold flex items-center gap-1 bg-cyan-500/20 px-1.5 py-0.5 rounded">
+                                        <span className="text-[10px] text-cyan-300 font-semibold flex items-center gap-1 bg-cyan-500/20 px-1.5 py-0.5 rounded shrink-0">
                                           <ArrowLeftRight className="w-3 h-3" />
                                           Поменять местами
                                         </span>
                                       ) : ev.status === 'ACTIVE' ? (
-                                        <div className="flex items-center gap-1 shrink-0">
+                                        <div className="flex items-center gap-0.5 shrink-0 ml-1">
                                           {reserve.length > 0 && (
                                             <button
                                               onClick={() => setSwapModal({ eventId: ev.id, user: p, targetOptions: reserve })}
                                               title="Поменять местами с участником из резерва 🔄"
                                               className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
                                             >
-                                              <ArrowLeftRight className="w-3 h-3" />
+                                              <ArrowLeftRight className="w-3.5 h-3.5" />
                                             </button>
                                           )}
                                           <button
                                             onClick={() => handleMoveParticipant(ev.id, p.userId, 'RESERVE')}
                                             title="Переместить в резерв ⬇️ (слот останется свободным)"
-                                            className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-colors flex items-center gap-0.5 text-[10px]"
+                                            className="p-1 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
                                           >
-                                            <ArrowDown className="w-3 h-3 text-amber-400" />
-                                            <span className="hidden sm:inline">В резерв</span>
+                                            <ArrowDown className="w-3.5 h-3.5" />
                                           </button>
                                           <button
                                             onClick={() => handleKickParticipant(ev.id, p.userId, getParticipantName(p))}
-                                            title="Исключить из состава"
+                                            title="Исключить из состава ❌"
                                             className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                                           >
                                             <UserMinus className="w-3.5 h-3.5" />
@@ -992,7 +996,7 @@ export const Events: React.FC = () => {
                                   : 'Резерв пуст'}
                               </div>
                             ) : (
-                              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
                                 {reserve.map((p: any, idx: number) => {
                                   const isItemDragged = draggedItem?.userId === p.userId;
                                   const isOver = dragOverUserId === p.userId && draggedItem?.userId !== p.userId;
@@ -1014,7 +1018,7 @@ export const Events: React.FC = () => {
                                         if (dragOverUserId === p.userId) setDragOverUserId(null);
                                       }}
                                       onDrop={(e) => handleDropOnUser(e, ev.id, p.userId)}
-                                      className={`flex items-center justify-between text-xs p-1.5 rounded-lg border transition-all select-none ${
+                                      className={`flex items-center justify-between text-xs p-1.5 rounded-lg border transition-all select-none gap-1.5 ${
                                         isOver
                                           ? 'border-cyan-400 bg-cyan-500/20 scale-[1.02] shadow-md shadow-cyan-500/20'
                                           : isItemDragged
@@ -1022,43 +1026,47 @@ export const Events: React.FC = () => {
                                           : 'bg-[#151921] border-[#1E232F] hover:border-amber-500/30'
                                       }`}
                                     >
-                                      <div className="flex items-center gap-1.5 min-w-0">
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                         {ev.status === 'ACTIVE' && (
                                           <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing shrink-0" />
                                         )}
-                                        <span className="text-slate-300 truncate">
-                                          <strong className="text-slate-500 mr-1">{idx + 1}.</strong>
+                                        <span className="text-slate-500 font-mono text-[11px] shrink-0 select-none">
+                                          {idx + 1}.
+                                        </span>
+                                        <span
+                                          className="text-slate-300 font-medium text-xs break-all sm:break-words leading-tight"
+                                          title={getParticipantName(p)}
+                                        >
                                           {getParticipantName(p)}
                                         </span>
                                       </div>
 
                                       {isOver ? (
-                                        <span className="text-[10px] text-cyan-300 font-semibold flex items-center gap-1 bg-cyan-500/20 px-1.5 py-0.5 rounded">
+                                        <span className="text-[10px] text-cyan-300 font-semibold flex items-center gap-1 bg-cyan-500/20 px-1.5 py-0.5 rounded shrink-0">
                                           <ArrowLeftRight className="w-3 h-3" />
                                           Поменять местами
                                         </span>
                                       ) : ev.status === 'ACTIVE' ? (
-                                        <div className="flex items-center gap-1 shrink-0">
+                                        <div className="flex items-center gap-0.5 shrink-0 ml-1">
                                           {confirmed.length > 0 && (
                                             <button
                                               onClick={() => setSwapModal({ eventId: ev.id, user: p, targetOptions: confirmed })}
                                               title="Поменять местами с участником из основы 🔄"
                                               className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
                                             >
-                                              <ArrowLeftRight className="w-3 h-3" />
+                                              <ArrowLeftRight className="w-3.5 h-3.5" />
                                             </button>
                                           )}
                                           <button
                                             onClick={() => handleMoveParticipant(ev.id, p.userId, 'CONFIRMED')}
                                             title="Переместить в основной состав ⬆️"
-                                            className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors flex items-center gap-0.5 text-[10px]"
+                                            className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded transition-colors"
                                           >
-                                            <ArrowUp className="w-3 h-3 text-emerald-400" />
-                                            <span className="hidden sm:inline">В основу</span>
+                                            <ArrowUp className="w-3.5 h-3.5" />
                                           </button>
                                           <button
                                             onClick={() => handleKickParticipant(ev.id, p.userId, getParticipantName(p))}
-                                            title="Исключить из состава"
+                                            title="Исключить из состава ❌"
                                             className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                                           >
                                             <UserMinus className="w-3.5 h-3.5" />
@@ -1373,11 +1381,13 @@ export const Events: React.FC = () => {
                     }}
                     className="w-full flex items-center justify-between p-2 rounded-xl bg-[#0B0E14] border border-[#1E232F] hover:border-cyan-400 hover:bg-cyan-500/10 text-xs text-slate-200 transition-all text-left group"
                   >
-                    <span className="truncate">
-                      <strong className="text-slate-500 mr-1.5">{i + 1}.</strong>
-                      {getParticipantName(targetUser)}
-                    </span>
-                    <span className="text-[10px] text-cyan-400 font-medium group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+                      <span className="text-slate-500 font-mono text-[11px] shrink-0">{i + 1}.</span>
+                      <span className="break-all sm:break-words leading-tight" title={getParticipantName(targetUser)}>
+                        {getParticipantName(targetUser)}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-cyan-400 font-medium group-hover:translate-x-0.5 transition-transform flex items-center gap-1 shrink-0">
                       Обменять ➔
                     </span>
                   </button>
