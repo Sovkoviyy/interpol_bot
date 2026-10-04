@@ -783,4 +783,104 @@ export class AcademyService {
       }
     }
   }
+
+  /**
+   * Expel an academician:
+   * 1. Send notification
+   * 2. Remove academic and recruit roles in Discord
+   * 3. Delete the academy channel in Discord
+   * 4. Clean up DB records (reports and academyChannel)
+   * 5. Audit log
+   */
+  static async expelAcademician(
+    guildId: string,
+    academyChannelId: string,
+    executor?: { id?: string; tag?: string },
+    reason: string = 'Исключение за неактивность (нет отчетов за неделю)'
+  ) {
+    const academy = await prisma.academyChannel.findUnique({
+      where: { id: academyChannelId },
+    });
+    if (!academy) return { success: false, error: 'Профиль ученика не найден' };
+
+    const targetGuildId = academy.guildId || guildId;
+    const guild = bot.guilds.cache.get(targetGuildId) || await bot.guilds.fetch(targetGuildId).catch(() => null);
+
+    // 1. Remove Discord roles if member is on the server
+    if (guild && academy.userId) {
+      try {
+        const member = await guild.members.fetch(academy.userId).catch(() => null);
+        if (member) {
+          // Notify user via DM (graceful)
+          try {
+            await member.send({
+              content: `⚠️ Здравствуйте! Ваш канал и статус в Академии на сервере **${guild.name}** были закрыты в связи с неактивностью (${reason}). Если это ошибка, свяжитесь с кураторами академии или руководством семьи.`
+            }).catch(() => null);
+          } catch {}
+
+          const academyConfig = await prisma.academyConfig.findUnique({ where: { guildId: targetGuildId } }).catch(() => null);
+          const recruitConfig = await prisma.recruitmentConfig.findUnique({ where: { guildId: targetGuildId } }).catch(() => null);
+
+          const rolesToRemove: string[] = [];
+          if (academyConfig?.academicRoleId) rolesToRemove.push(academyConfig.academicRoleId);
+          if (recruitConfig?.memberRoleId) rolesToRemove.push(recruitConfig.memberRoleId);
+          if (recruitConfig?.memberRoleIdsJson) {
+            try {
+              const parsed = JSON.parse(recruitConfig.memberRoleIdsJson);
+              if (Array.isArray(parsed)) rolesToRemove.push(...parsed);
+            } catch {}
+          }
+
+          for (const roleId of rolesToRemove) {
+            if (roleId && member.roles.cache.has(roleId)) {
+              await member.roles.remove(roleId, `Академия: ${reason}`).catch(() => null);
+            }
+          }
+        }
+      } catch (roleErr) {
+        console.warn(`[Academy] Failed removing roles for expelled user ${academy.userId}:`, roleErr);
+      }
+    }
+
+    // 2. Delete Discord channel
+    if (guild && academy.channelId) {
+      try {
+        const ch = guild.channels.cache.get(academy.channelId) || await guild.channels.fetch(academy.channelId).catch(() => null);
+        if (ch) {
+          await ch.delete(`Академия: ${reason}`).catch(() => null);
+        }
+      } catch (chErr) {
+        console.warn(`[Academy] Failed deleting channel ${academy.channelId}:`, chErr);
+      }
+    }
+
+    // 3. Delete reports
+    await prisma.mpReport.deleteMany({
+      where: {
+        OR: [
+          { academyChannelId },
+          { channelId: academy.channelId },
+        ],
+      },
+    }).catch(() => null);
+
+    // 4. Delete academy channel record
+    await prisma.academyChannel.delete({
+      where: { id: academyChannelId },
+    }).catch(() => null);
+
+    // 5. Audit log
+    await AuditLogger.recordEntry({
+      guildId: targetGuildId,
+      category: 'ACADEMY',
+      action: 'ACADEMY_STUDENT_EXPELLED',
+      title: 'Исключение из академии',
+      description: `Ученик <@${academy.userId}> (${academy.userTag || academy.staticId || academy.userId}) исключен из академии. Причина: ${reason}`,
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: academy.userId,
+    }).catch(() => null);
+
+    return { success: true };
+  }
 }

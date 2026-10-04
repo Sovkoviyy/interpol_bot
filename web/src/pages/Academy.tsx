@@ -16,7 +16,9 @@ import {
   ExternalLink,
   Pencil,
   Trash2,
-  X
+  X,
+  Search,
+  UserX
 } from 'lucide-react';
 import api from '../api/client';
 import { useToast } from '../context/ToastContext';
@@ -28,6 +30,8 @@ import { Modal } from '../components/Modal';
 export const Academy: React.FC = () => {
   const toast = useToast();
   const [tab, setTab] = useState<'channels' | 'reports' | 'settings'>('channels');
+  const [channelSubFilter, setChannelSubFilter] = useState<'ALL' | 'INACTIVE' | 'PROMOTED'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
   const [config, setConfig] = useState<any>(null);
   const [channels, setChannels] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
@@ -41,6 +45,9 @@ export const Academy: React.FC = () => {
   // Confirmation dialog states
   const [studentToDelete, setStudentToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deletingStudent, setDeletingStudent] = useState(false);
+
+  const [confirmExpelAllInactive, setConfirmExpelAllInactive] = useState(false);
+  const [expellingAllInactive, setExpellingAllInactive] = useState(false);
 
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
   const [deletingReport, setDeletingReport] = useState(false);
@@ -202,13 +209,29 @@ export const Academy: React.FC = () => {
       await api.delete(`/academy/channels/${studentToDelete.id}`, {
         params: { guildId: config?.guildId },
       });
-      toast.success('Профиль ученика успешно удален!');
+      toast.success('Ученик исключен: канал удален, роли сняты!');
       setStudentToDelete(null);
       await fetchData();
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Не удалось удалить профиль');
     } finally {
       setDeletingStudent(false);
+    }
+  };
+
+  const handleExpelAllInactive = async () => {
+    try {
+      setExpellingAllInactive(true);
+      const res = await api.post('/academy/channels/expel-inactive', {
+        guildId: config?.guildId,
+      });
+      toast.success(res.data?.message || 'Неактивные ученики исключены');
+      setConfirmExpelAllInactive(false);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Ошибка исключения неактивных');
+    } finally {
+      setExpellingAllInactive(false);
     }
   };
 
@@ -280,118 +303,245 @@ export const Academy: React.FC = () => {
         </div>
       </div>
 
-      {tab === 'channels' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {loading ? (
-              <div className="col-span-full py-12 text-center text-slate-500">Загрузка академиков...</div>
-            ) : channels.length === 0 ? (
-              <div className="col-span-full py-12 text-center text-slate-500">Академиков пока нет</div>
-            ) : (
-              channels.map((ch) => {
-                const totalNeeded = ch.requiredMp + ch.penaltyMp;
-                const percent = Math.min(100, Math.round((ch.approvedMpCount / totalNeeded) * 100));
-                const isReady = ch.approvedMpCount >= totalNeeded;
+      {tab === 'channels' && (() => {
+        const activeChannels = channels.filter(c => c.status === 'ACTIVE');
+        const inactiveChannels = channels.filter(c => c.isInactiveWeek);
+        const promotedChannels = channels.filter(c => c.status !== 'ACTIVE');
 
-                return (
-                  <div
-                    key={ch.id}
-                    className={`bg-[#151921] border rounded-2xl p-5 flex flex-col justify-between transition-all ${
-                      isReady && ch.status === 'ACTIVE'
-                        ? 'border-pink-500/60 shadow-lg shadow-pink-600/10'
-                        : 'border-[#1E232F]'
-                    }`}
+        const filteredChannels = channels.filter(ch => {
+          if (channelSubFilter === 'INACTIVE') {
+            if (!ch.isInactiveWeek) return false;
+          } else if (channelSubFilter === 'PROMOTED') {
+            if (ch.status === 'ACTIVE') return false;
+          } else {
+            if (ch.status !== 'ACTIVE') return false;
+          }
+
+          if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase().trim();
+            const tag = (ch.userTag || '').toLowerCase();
+            const id = (ch.userId || '').toLowerCase();
+            const stat = (ch.staticId || '').toLowerCase();
+            const chanId = (ch.channelId || '').toLowerCase();
+            return tag.includes(q) || id.includes(q) || stat.includes(q) || chanId.includes(q);
+          }
+
+          return true;
+        });
+
+        return (
+          <div className="space-y-4">
+            {/* Sub-filter tabs & actions */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#11141C] p-3 rounded-2xl border border-[#1E232F]">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={() => setChannelSubFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                    channelSubFilter === 'ALL'
+                      ? 'bg-pink-600/20 text-pink-300 border border-pink-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Все активные ({activeChannels.length})
+                </button>
+                <button
+                  onClick={() => setChannelSubFilter('INACTIVE')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    channelSubFilter === 'INACTIVE'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm shadow-amber-500/10'
+                      : 'text-slate-400 hover:text-amber-300'
+                  }`}
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>0 отчетов за 7 дней</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    inactiveChannels.length > 0 ? 'bg-amber-500/25 text-amber-300' : 'bg-slate-800 text-slate-500'
+                  }`}>
+                    {inactiveChannels.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setChannelSubFilter('PROMOTED')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                    channelSubFilter === 'PROMOTED'
+                      ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Повышенные ({promotedChannels.length})
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 sm:w-48">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Поиск по имени/статику..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-[#0B0E14] border border-[#1E232F] text-xs text-white pl-8 pr-3 py-1.5 rounded-xl placeholder-slate-600 focus:outline-none focus:border-pink-500/40 transition"
+                  />
+                </div>
+
+                {inactiveChannels.length > 0 && (
+                  <button
+                    onClick={() => setConfirmExpelAllInactive(true)}
+                    className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shadow-rose-600/10 flex-shrink-0"
+                    title="Исключить всех академиков, не сдавших ни одного отчета за 7+ дней"
                   >
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">
-                          ID: {ch.staticId || '—'}
-                        </span>
-                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                          ch.status === 'ACTIVE' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
-                        }`}>
-                          {ch.status === 'ACTIVE' ? (isReady ? '🎉 Готов к повышению' : 'Обучение') : 'Повышен'}
-                        </span>
-                      </div>
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>Исключить неактивных ({inactiveChannels.length})</span>
+                  </button>
+                )}
+              </div>
+            </div>
 
-                      <h3 className="font-bold text-white text-sm mb-1">{ch.userTag || ch.userId}</h3>
-                      <p className="text-[11px] text-slate-400 mb-4">Канал: #{ch.channelId}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {loading ? (
+                <div className="col-span-full py-12 text-center text-slate-500">Загрузка академиков...</div>
+              ) : filteredChannels.length === 0 ? (
+                <div className="col-span-full py-12 text-center text-slate-500">
+                  {channelSubFilter === 'INACTIVE'
+                    ? '🎉 Отлично! Нет неактивных академиков (все сдают отчеты)'
+                    : 'Академиков не найдено'}
+                </div>
+              ) : (
+                filteredChannels.map((ch) => {
+                  const totalNeeded = ch.requiredMp + ch.penaltyMp;
+                  const percent = Math.min(100, Math.round((ch.approvedMpCount / totalNeeded) * 100));
+                  const isReady = ch.approvedMpCount >= totalNeeded;
 
-                      {/* Progress bar */}
-                      <div className="space-y-1.5 mb-4">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-400">Сдано отчетов:</span>
-                          <span className="font-bold text-white">{ch.approvedMpCount} / {totalNeeded} МП</span>
+                  return (
+                    <div
+                      key={ch.id}
+                      className={`border rounded-2xl p-5 flex flex-col justify-between transition-all ${
+                        ch.isInactiveWeek
+                          ? 'bg-[#18151c] border-amber-500/40 shadow-sm shadow-amber-500/10'
+                          : isReady && ch.status === 'ACTIVE'
+                          ? 'bg-[#151921] border-pink-500/60 shadow-lg shadow-pink-600/10'
+                          : 'bg-[#151921] border-[#1E232F]'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                            ID: {ch.staticId || '—'}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {ch.isInactiveWeek && (
+                              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                Неактив
+                              </span>
+                            )}
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                              ch.status === 'ACTIVE' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
+                            }`}>
+                              {ch.status === 'ACTIVE' ? (isReady ? '🎉 Готов к повышению' : 'Обучение') : 'Повышен'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="w-full h-2 bg-[#0B0E14] rounded-full overflow-hidden border border-[#1E232F]">
-                          <div
-                            className="h-full bg-gradient-to-r from-pink-600 to-rose-500 rounded-full transition-all"
-                            style={{ width: `${percent}%` }}
-                          />
-                        </div>
-                        {ch.penaltyMp > 0 && (
-                          <p className="text-[10px] text-rose-400">⚠️ Включая штраф: +{ch.penaltyMp} МП</p>
+
+                        {/* Inactivity alert on student card */}
+                        {ch.isInactiveWeek && (
+                          <div className="mb-3 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-amber-300 text-xs">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                              <div>
+                                <p className="font-semibold text-amber-300">0 отчетов за 7 дней</p>
+                                <p className="text-[10px] text-amber-400/80">Неактивен {ch.daysWithoutReports} дн.</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setStudentToDelete({ id: ch.id, name: ch.userTag || ch.userId || 'Ученик' })}
+                              className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[10px] font-bold border border-rose-500/30 transition-all flex items-center gap-1"
+                              title="Исключить неактивного ученика: удалит канал и снимет роли"
+                            >
+                              <UserX className="w-3 h-3" />
+                              <span>Исключить</span>
+                            </button>
+                          </div>
                         )}
+
+                        <h3 className="font-bold text-white text-sm mb-1">{ch.userTag || ch.userId}</h3>
+                        <p className="text-[11px] text-slate-400 mb-4">Канал: #{ch.channelId}</p>
+
+                        {/* Progress bar */}
+                        <div className="space-y-1.5 mb-4">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-400">Сдано отчетов:</span>
+                            <span className="font-bold text-white">{ch.approvedMpCount} / {totalNeeded} МП</span>
+                          </div>
+                          <div className="w-full h-2 bg-[#0B0E14] rounded-full overflow-hidden border border-[#1E232F]">
+                            <div
+                              className="h-full bg-gradient-to-r from-pink-600 to-rose-500 rounded-full transition-all"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                          {ch.penaltyMp > 0 && (
+                            <p className="text-[10px] text-rose-400">⚠️ Включая штраф: +{ch.penaltyMp} МП</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="pt-3 border-t border-[#1E232F] space-y-2">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setViewingReportsMember(ch)}
-                          className="flex-1 py-1.5 px-2 rounded-xl bg-[#1E232F] hover:bg-slate-700/50 text-slate-200 text-xs font-semibold border border-slate-700/40 transition-all flex items-center justify-center gap-1.5"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-pink-400" />
-                          <span>Отчеты ({ch.reports?.length || 0})</span>
-                        </button>
+                      <div className="pt-3 border-t border-[#1E232F] space-y-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setViewingReportsMember(ch)}
+                            className="flex-1 py-1.5 px-2 rounded-xl bg-[#1E232F] hover:bg-slate-700/50 text-slate-200 text-xs font-semibold border border-slate-700/40 transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-pink-400" />
+                            <span>Отчеты ({ch.reports?.length || 0})</span>
+                          </button>
 
-                        <button
-                          onClick={() => handleOpenEditStudent(ch)}
-                          className="p-1.5 rounded-xl bg-[#1E232F] hover:bg-slate-700/50 text-slate-300 hover:text-white border border-slate-700/40 transition-colors"
-                          title="Редактировать профиль ученика"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                          <button
+                            onClick={() => handleOpenEditStudent(ch)}
+                            className="p-1.5 rounded-xl bg-[#1E232F] hover:bg-slate-700/50 text-slate-300 hover:text-white border border-slate-700/40 transition-colors"
+                            title="Редактировать профиль ученика"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
 
-                        <button
-                          onClick={() => setStudentToDelete({ id: ch.id, name: ch.userTag || ch.userId || 'Ученик' })}
-                          className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
-                          title="Удалить профиль ученика"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          <button
+                            onClick={() => setStudentToDelete({ id: ch.id, name: ch.userTag || ch.userId || 'Ученик' })}
+                            className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                            title="Исключить ученика (удалит канал и снимет роли в Discord)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          {ch.status === 'ACTIVE' && (
+                            <button
+                              onClick={() => {
+                                setPenaltyModal({ channelId: ch.id, studentName: ch.userTag || ch.userId || 'Ученик' });
+                                setPenaltyReason('');
+                                setPenaltyMp(2);
+                              }}
+                              className="py-1.5 px-2.5 rounded-xl bg-[#1E232F] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-xs font-semibold border border-slate-700/40 transition-all"
+                              title="Добавить штрафные МП"
+                            >
+                              Штраф
+                            </button>
+                          )}
+                        </div>
 
                         {ch.status === 'ACTIVE' && (
                           <button
-                            onClick={() => {
-                              setPenaltyModal({ channelId: ch.id, studentName: ch.userTag || ch.userId || 'Ученик' });
-                              setPenaltyReason('');
-                              setPenaltyMp(2);
-                            }}
-                            className="py-1.5 px-2.5 rounded-xl bg-[#1E232F] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-xs font-semibold border border-slate-700/40 transition-all"
-                            title="Добавить штрафные МП"
+                            onClick={() => setPromoteTarget({ channelId: ch.id, studentName: ch.userTag || ch.userId || 'Ученик' })}
+                            className="w-full py-1.5 px-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-semibold shadow-md shadow-pink-600/20 transition-all text-center"
                           >
-                            Штраф
+                            Повысить на 2 ранг
                           </button>
                         )}
                       </div>
-
-                      {ch.status === 'ACTIVE' && (
-                        <button
-                          onClick={() => setPromoteTarget({ channelId: ch.id, studentName: ch.userTag || ch.userId || 'Ученик' })}
-                          className="w-full py-1.5 px-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white text-xs font-semibold shadow-md shadow-pink-600/20 transition-all text-center"
-                        >
-                          Повысить на 2 ранг
-                        </button>
-                      )}
                     </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {tab === 'reports' && (
         <div className="space-y-4">
@@ -853,16 +1003,28 @@ export const Academy: React.FC = () => {
         document.body
       )}
 
-      {/* Confirm Dialog: Delete Student */}
+      {/* Confirm Dialog: Delete / Expel Student */}
       <ConfirmDialog
         isOpen={!!studentToDelete}
         onClose={() => setStudentToDelete(null)}
         onConfirm={executeDeleteStudent}
-        title="Удалить профиль ученика?"
-        message={`Вы действительно хотите удалить профиль ученика ${studentToDelete?.name}? Это действие сотрет все связанные отчеты и удалит канал в Discord.`}
-        confirmLabel="Да, удалить профиль"
+        title="Исключить ученика из академии?"
+        message={`Вы действительно хотите исключить ученика ${studentToDelete?.name}? Бот удалит его личный канал в Discord, снимет роль академика/рекрута и очистит базу данных.`}
+        confirmLabel="Исключить и снять роли"
         variant="danger"
         loading={deletingStudent}
+      />
+
+      {/* Confirm Dialog: Expel All Inactive Students */}
+      <ConfirmDialog
+        isOpen={confirmExpelAllInactive}
+        onClose={() => setConfirmExpelAllInactive(false)}
+        onConfirm={handleExpelAllInactive}
+        title="Исключить всех неактивных академиков?"
+        message={`Вы действительно хотите исключить всех ${channels.filter(c => c.isInactiveWeek).length} неактивных учеников (нет отчетов за 7+ дней)? У них будут удалены личные каналы в Discord, сняты роли академиков, а профили удалены.`}
+        confirmLabel="Исключить всех неактивных"
+        variant="danger"
+        loading={expellingAllInactive}
       />
 
       {/* Confirm Dialog: Delete Report */}

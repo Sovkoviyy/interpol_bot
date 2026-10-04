@@ -5,6 +5,8 @@ import config from '../../config';
 import prisma from '../../database/client';
 import bot from '../../bot/client';
 import { AcademyService } from '../../bot/modules/academy/academyService';
+import { AuditLogger } from '../../bot/modules/logging/auditLogger';
+import { PayrollService } from '../../bot/modules/payroll/payrollService';
 import { asyncHandler } from "../middlewares/asyncHandler";
 import { requireGuildId } from "../middlewares/requireGuildId";
 import { requireBot } from "../middlewares/requireBot";
@@ -50,7 +52,40 @@ router.get('/channels', requirePermission('manageAcademy', 'manageRecruiting', '
             },
         },
     });
-    res.json({ channels });
+
+    const week = PayrollService.getWeekRange(new Date());
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const weekStartMs = week.start.getTime();
+    const sevenDaysAgoMs = sevenDaysAgo.getTime();
+
+    const enrichedChannels = channels.map(ch => {
+        const reports = ch.reports || [];
+        const reportsThisWeek = reports.filter(r => new Date(r.createdAt).getTime() >= weekStartMs).length;
+        const reportsLast7Days = reports.filter(r => new Date(r.createdAt).getTime() >= sevenDaysAgoMs).length;
+        const lastReportAt = reports.length > 0 ? reports[0].createdAt : null;
+
+        // Reference date is latest report date or channel creation date
+        const refDate = lastReportAt ? new Date(lastReportAt) : new Date(ch.createdAt);
+        const daysWithoutReports = Math.max(0, Math.floor((Date.now() - refDate.getTime()) / (24 * 3600 * 1000)));
+
+        // Academician is inactive if status is ACTIVE and no reports for 7 or more days (since last report or since joining)
+        const isInactiveWeek = ch.status === 'ACTIVE' && daysWithoutReports >= 7;
+
+        return {
+            ...ch,
+            reportsThisWeek,
+            reportsLast7Days,
+            lastReportAt,
+            daysWithoutReports,
+            isInactiveWeek,
+        };
+    });
+
+    res.json({
+        channels: enrichedChannels,
+        weekStart: week.start,
+        weekEnd: week.end,
+    });
 
 }));
 
@@ -166,8 +201,60 @@ router.put('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting
 }));
 
 /**
+ * POST /api/academy/channels/expel-inactive
+ * Expel all inactive academicians (no reports for 7+ days)
+ */
+router.post('/channels/expel-inactive', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const guildId = (req as any).guildId;
+    const { channelIds } = req.body;
+
+    const channels = await prisma.academyChannel.findMany({
+        where: {
+            guildId,
+            status: 'ACTIVE',
+            ...(Array.isArray(channelIds) && channelIds.length > 0 ? { id: { in: channelIds } } : {}),
+        },
+        include: {
+            reports: { orderBy: { createdAt: 'desc' } },
+        },
+    });
+
+    const now = Date.now();
+    const sevenDaysMs = 7 * 24 * 3600 * 1000;
+    const inactive = channels.filter(ch => {
+        const lastReportAt = ch.reports && ch.reports.length > 0 ? ch.reports[0].createdAt : null;
+        const refDate = lastReportAt ? new Date(lastReportAt).getTime() : new Date(ch.createdAt).getTime();
+        return (now - refDate) >= sevenDaysMs;
+    });
+
+    const userTag = req.user?.username || (req.user as any)?.tag;
+    const userId = req.user?.userId || (req.user as any)?.id;
+
+    let expelledCount = 0;
+    for (const ch of inactive) {
+        try {
+            await AcademyService.expelAcademician(
+                guildId,
+                ch.id,
+                { id: userId, tag: userTag },
+                'Исключение за неактивность (нет отчетов 7+ дней)'
+            );
+            expelledCount++;
+        } catch (e) {
+            console.error(`[Academy] Error expelling inactive student ${ch.id}:`, e);
+        }
+    }
+
+    res.json({
+        success: true,
+        expelledCount,
+        message: `Успешно исключено ${expelledCount} неактивных академиков`,
+    });
+}));
+
+/**
  * DELETE /api/academy/channels/:id
- * Delete an academy student profile (and its reports)
+ * Delete an academy student profile (revokes roles, deletes Discord channel, clears DB)
  */
 router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
@@ -175,37 +262,21 @@ router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruit
     const existing = await prisma.academyChannel.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Профиль ученика не найден' });
 
-    // Delete reports first
-    await prisma.mpReport.deleteMany({
-        where: {
-            OR: [
-                { academyChannelId: id },
-                { channelId: existing.channelId },
-            ]
-        }
-    }).catch(() => null);
+    const userTag = req.user?.username || (req.user as any)?.tag;
+    const userId = req.user?.userId || (req.user as any)?.id;
 
-    // Delete channel from Discord if still exists (graceful, never blocks DB deletion)
-    try {
-        const client = (req as any).botClient || bot;
-        const targetGuildId = existing.guildId || guildId;
-        if (client?.isReady() && targetGuildId && existing.channelId) {
-            const guild = client.guilds.cache.get(targetGuildId) || await client.guilds.fetch(targetGuildId).catch(() => null);
-            if (guild) {
-                const ch = guild.channels.cache.get(existing.channelId) || await guild.channels.fetch(existing.channelId).catch(() => null);
-                if (ch) {
-                    await ch.delete('Удаление профиля ученика через панель управления').catch(() => null);
-                }
-            }
-        }
-    } catch (e) {
-        console.warn('[Academy] Warning deleting Discord channel on profile delete:', e);
+    const result = await AcademyService.expelAcademician(
+        guildId,
+        id,
+        { id: userId, tag: userTag },
+        'Удаление профиля через панель управления'
+    );
+
+    if (!result.success) {
+        return res.status(400).json({ error: result.error || 'Ошибка удаления профиля' });
     }
 
-    // Delete from DB
-    await prisma.academyChannel.delete({ where: { id } });
-
-    res.json({ success: true, message: 'Профиль ученика успешно удален' });
+    res.json({ success: true, message: 'Профиль ученика успешно удален, роли сняты' });
 }));
 
 /**

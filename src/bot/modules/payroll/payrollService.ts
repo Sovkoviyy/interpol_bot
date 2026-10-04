@@ -6,44 +6,47 @@ import { ensureDatabaseSchema } from '../../../database/ensureSchema';
 
 export class PayrollService {
   /**
-   * Calculates Monday 00:00:00.000 to Sunday 23:59:59.999 for the given date's week
+   * Calculates Monday 00:00:00.000 to Sunday 23:59:59.999 in Moscow Time (Europe/Moscow, UTC+3).
+   * Ensures the week transitions precisely at 00:00 MSK on Monday, regardless of VPS timezone.
    */
   public static getWeekRange(referenceDate: Date = new Date()): { start: Date; end: Date } {
-    const d = new Date(referenceDate);
-    const day = d.getDay(); // 0 is Sunday, 1 is Monday ... 6 is Saturday
-    // In Russia / Europe, week starts on Monday
+    const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
+    const msk = new Date(referenceDate.getTime() + MSK_OFFSET_MS);
+
+    const day = msk.getUTCDay(); // 0 is Sunday, 1 is Monday ... 6 is Saturday
     const diffToMonday = day === 0 ? -6 : 1 - day;
-    
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + diffToMonday);
-    monday.setHours(0, 0, 0, 0);
 
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
+    const mskYear = msk.getUTCFullYear();
+    const mskMonth = msk.getUTCMonth();
+    const mskDate = msk.getUTCDate() + diffToMonday;
 
-    return { start: monday, end: sunday };
+    // Monday 00:00:00.000 MSK expressed in UTC Date
+    const mondayUtcMs = Date.UTC(mskYear, mskMonth, mskDate, 0, 0, 0, 0) - MSK_OFFSET_MS;
+    // Sunday 23:59:59.999 MSK expressed in UTC Date
+    const sundayUtcMs = Date.UTC(mskYear, mskMonth, mskDate + 6, 23, 59, 59, 999) - MSK_OFFSET_MS;
+
+    return {
+      start: new Date(mondayUtcMs),
+      end: new Date(sundayUtcMs),
+    };
   }
 
   /**
-   * Calculates the previous completed week (previous Monday to previous Sunday)
+   * Calculates the previous completed week (previous Monday to previous Sunday in MSK)
    */
   public static getPreviousWeekRange(referenceDate: Date = new Date()): { start: Date; end: Date } {
     const currentWeek = this.getWeekRange(referenceDate);
-    const prevMonday = new Date(currentWeek.start);
-    prevMonday.setDate(prevMonday.getDate() - 7);
-
-    const prevSunday = new Date(currentWeek.start);
-    prevSunday.setMilliseconds(-1);
+    const prevMonday = new Date(currentWeek.start.getTime() - 7 * 24 * 3600 * 1000);
+    const prevSunday = new Date(currentWeek.start.getTime() - 1);
 
     return { start: prevMonday, end: prevSunday };
   }
 
   /**
-   * Formats a date range like "28.09 — 04.10"
+   * Formats a date range like "28.09 — 04.10" according to Moscow Time
    */
   public static formatRangeString(start: Date, end: Date): string {
-    const f = (d: Date) => d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+    const f = (d: Date) => d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' });
     return `${f(start)} — ${f(end)}`;
   }
 
@@ -193,7 +196,7 @@ export class PayrollService {
       recruiterResets = {};
     }
 
-    // 1. Accepted candidates (fallback to updatedAt if closedAt was not populated)
+    // 1. Accepted candidates (fallback to createdAt if closedAt was not populated)
     const acceptedCandidates = await prisma.recruitmentApplication.findMany({
       where: {
         guildId,
@@ -201,12 +204,12 @@ export class PayrollService {
         recruiterId: { not: null },
         OR: [
           { closedAt: { gte: effectiveStart, lte: periodEnd } },
-          { closedAt: null, updatedAt: { gte: effectiveStart, lte: periodEnd } },
+          { closedAt: null, createdAt: { gte: effectiveStart, lte: periodEnd } },
         ],
       },
     });
 
-    // 2. Rejected candidates (fallback to updatedAt if closedAt was not populated)
+    // 2. Rejected candidates (fallback to createdAt if closedAt was not populated)
     const rejectedCandidates = await prisma.recruitmentApplication.findMany({
       where: {
         guildId,
@@ -214,7 +217,7 @@ export class PayrollService {
         recruiterId: { not: null },
         OR: [
           { closedAt: { gte: effectiveStart, lte: periodEnd } },
-          { closedAt: null, updatedAt: { gte: effectiveStart, lte: periodEnd } },
+          { closedAt: null, createdAt: { gte: effectiveStart, lte: periodEnd } },
         ],
       },
     });
@@ -284,7 +287,7 @@ export class PayrollService {
     for (const app of acceptedCandidates) {
       if (app.recruiterId) {
         const recResetTime = this.toTimestamp(recruiterResets[app.recruiterId]);
-        const appTime = this.toTimestamp(app.closedAt || app.updatedAt);
+        const appTime = this.toTimestamp(app.closedAt || app.createdAt);
         if (recResetTime > 0 && appTime <= recResetTime) continue;
         const r = getOrInit(app.recruiterId, app.recruiterTag);
         r.acceptedCount += 1;
@@ -294,7 +297,7 @@ export class PayrollService {
     for (const app of rejectedCandidates) {
       if (app.recruiterId) {
         const recResetTime = this.toTimestamp(recruiterResets[app.recruiterId]);
-        const appTime = this.toTimestamp(app.closedAt || app.updatedAt);
+        const appTime = this.toTimestamp(app.closedAt || app.createdAt);
         if (recResetTime > 0 && appTime <= recResetTime) continue;
         const r = getOrInit(app.recruiterId, app.recruiterTag);
         r.rejectedCandidatesCount += 1;

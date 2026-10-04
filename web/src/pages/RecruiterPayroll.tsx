@@ -336,8 +336,12 @@ export const RecruiterPayroll: React.FC = () => {
     );
   });
 
-  const periodStartStr = payrollData?.periodStart ? new Date(payrollData.periodStart).toLocaleDateString('ru-RU') : '';
-  const periodEndStr = payrollData?.periodEnd ? new Date(payrollData.periodEnd).toLocaleDateString('ru-RU') : '';
+  const periodStartStr = payrollData?.periodStart
+    ? new Date(payrollData.periodStart).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })
+    : '';
+  const periodEndStr = payrollData?.periodEnd
+    ? new Date(payrollData.periodEnd).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })
+    : '';
 
   return (
     <div className="space-y-6">
@@ -462,7 +466,7 @@ export const RecruiterPayroll: React.FC = () => {
             {payrollData?.lastResetAt && (
               <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 px-3 py-1.5 rounded-xl self-start md:self-auto">
                 <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                <span>Отсчет с: {new Date(payrollData.lastResetAt).toLocaleString('ru-RU')}</span>
+                <span>Отсчет с: {new Date(payrollData.lastResetAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} (МСК)</span>
                 <button
                   onClick={() => handleClearReset()}
                   className="ml-1 text-[11px] underline hover:text-white"
