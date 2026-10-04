@@ -19,7 +19,9 @@ import {
   Info,
   Sparkles,
   HelpCircle,
-  X
+  X,
+  GripVertical,
+  ArrowLeftRight
 } from 'lucide-react';
 import api from '../api/client';
 import { useModal } from '../context/ModalContext';
@@ -75,6 +77,26 @@ export const Events: React.FC = () => {
   });
 
   const [defaultSettings, setDefaultSettings] = useState<any>(null);
+
+  // Drag and Drop State
+  const [draggedItem, setDraggedItem] = useState<{
+    eventId: string;
+    userId: string;
+    fromStatus: 'CONFIRMED' | 'RESERVE';
+    userTag: string;
+  } | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<{
+    eventId: string;
+    col: 'CONFIRMED' | 'RESERVE';
+  } | null>(null);
+  const [dragOverUserId, setDragOverUserId] = useState<string | null>(null);
+
+  // Quick Swap Modal State
+  const [swapModal, setSwapModal] = useState<{
+    eventId: string;
+    user: any;
+    targetOptions: any[];
+  } | null>(null);
 
   const fetchData = async () => {
     try {
@@ -272,6 +294,61 @@ export const Events: React.FC = () => {
     }
   };
 
+  const handleSwapParticipants = async (eventId: string, userId1: string, userId2: string) => {
+    try {
+      await api.post(`/events/${eventId}/swap`, { userId1, userId2 });
+      fetchData();
+    } catch (err: any) {
+      modal.alert({
+        title: 'Ошибка обмена',
+        message: err.response?.data?.error || 'Не удалось поменять участников местами',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, eventId: string, p: any, status: 'CONFIRMED' | 'RESERVE') => {
+    setDraggedItem({
+      eventId,
+      userId: p.userId,
+      fromStatus: status,
+      userTag: p.userTag || p.userId,
+    });
+    e.dataTransfer.setData('text/plain', p.userId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverCol(null);
+    setDragOverUserId(null);
+  };
+
+  const handleDropOnColumn = async (e: React.DragEvent, eventId: string, targetStatus: 'CONFIRMED' | 'RESERVE') => {
+    e.preventDefault();
+    if (!draggedItem || draggedItem.eventId !== eventId) return;
+    if (draggedItem.fromStatus === targetStatus) {
+      handleDragEnd();
+      return;
+    }
+    const { userId } = draggedItem;
+    handleDragEnd();
+    await handleMoveParticipant(eventId, userId, targetStatus);
+  };
+
+  const handleDropOnUser = async (e: React.DragEvent, eventId: string, targetUserId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedItem || draggedItem.eventId !== eventId) return;
+    if (draggedItem.userId === targetUserId) {
+      handleDragEnd();
+      return;
+    }
+    const { userId: sourceUserId } = draggedItem;
+    handleDragEnd();
+    await handleSwapParticipants(eventId, sourceUserId, targetUserId);
+  };
+
   const handleRebalance = async (eventId: string) => {
     try {
       const res = await api.post(`/events/${eventId}/rebalance`);
@@ -293,7 +370,7 @@ export const Events: React.FC = () => {
   const handleKickParticipant = async (eventId: string, userId: string, tag: string) => {
     const confirmed = await modal.confirm({
       title: 'Исключение из состава',
-      message: `Исключить участника ${tag} из состава?\nЕсли в резерве есть люди, участник с наивысшим приоритетом автоматически перейдет в основу.`,
+      message: `Исключить участника ${tag} из состава? Слот останется свободным для ручного распределения (автоматического добавления из резерва не будет).`,
       confirmText: 'Исключить',
       type: 'danger',
     });
@@ -729,99 +806,273 @@ export const Events: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Roster list for LIMITED */}
+                  {/* Roster list for LIMITED with Drag & Drop */}
                   {isLimited && (
-                    <div className="space-y-3 mb-4">
-                      {/* Confirmed / Main */}
-                      <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F]">
-                        <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
-                          <span className="flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5 text-pink-400" />
-                            Основной состав ({confirmed.length}/{ev.participantLimit})
-                          </span>
+                    <div className="mb-4">
+                      {ev.status === 'ACTIVE' && (
+                        <div className="flex items-center gap-1.5 mb-2 px-1 text-[11px] text-slate-400">
+                          <Sparkles className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                          <span>Перетаскивайте участников мышкой (Drag & Drop) между колонками или бросайте друг на друга для обмена местами!</span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* 1. Confirmed / Main Column */}
+                        <div
+                          onDragOver={(e) => {
+                            if (draggedItem && draggedItem.eventId === ev.id && draggedItem.fromStatus !== 'CONFIRMED') {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                              if (dragOverCol?.col !== 'CONFIRMED' || dragOverCol?.eventId !== ev.id) {
+                                setDragOverCol({ eventId: ev.id, col: 'CONFIRMED' });
+                              }
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverCol?.eventId === ev.id && dragOverCol?.col === 'CONFIRMED') {
+                              setDragOverCol(null);
+                            }
+                          }}
+                          onDrop={(e) => handleDropOnColumn(e, ev.id, 'CONFIRMED')}
+                          className={`p-3 rounded-xl bg-[#0B0E14] border transition-all flex flex-col justify-between ${
+                            dragOverCol?.eventId === ev.id && dragOverCol?.col === 'CONFIRMED'
+                              ? 'border-pink-500 bg-pink-500/10 shadow-lg shadow-pink-500/10 ring-1 ring-pink-500/40'
+                              : 'border-[#1E232F]'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+                              <span className="flex items-center gap-1.5">
+                                <Users className="w-3.5 h-3.5 text-pink-400" />
+                                Основной состав ({confirmed.length}/{ev.participantLimit})
+                              </span>
+                              {confirmed.length >= ev.participantLimit ? (
+                                <span className="text-[10px] text-pink-400 bg-pink-500/10 px-1.5 py-0.5 rounded font-medium border border-pink-500/20">
+                                  Заполнен
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-medium border border-emerald-500/20">
+                                  Свободно {ev.participantLimit - confirmed.length}
+                                </span>
+                              )}
+                            </div>
+
+                            {confirmed.length === 0 ? (
+                              <div className="p-4 rounded-lg border border-dashed border-slate-800 text-center text-xs text-slate-500 italic">
+                                {draggedItem && draggedItem.eventId === ev.id && draggedItem.fromStatus === 'RESERVE'
+                                  ? '🎯 Бросьте сюда, чтобы добавить в основу'
+                                  : 'Пока никто не записался'}
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                                {confirmed.map((p: any, idx: number) => {
+                                  const isItemDragged = draggedItem?.userId === p.userId;
+                                  const isOver = dragOverUserId === p.userId && draggedItem?.userId !== p.userId;
+
+                                  return (
+                                    <div
+                                      key={p.id}
+                                      draggable={ev.status === 'ACTIVE'}
+                                      onDragStart={(e) => handleDragStart(e, ev.id, p, 'CONFIRMED')}
+                                      onDragEnd={handleDragEnd}
+                                      onDragOver={(e) => {
+                                        if (draggedItem && draggedItem.eventId === ev.id && draggedItem.userId !== p.userId) {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setDragOverUserId(p.userId);
+                                        }
+                                      }}
+                                      onDragLeave={() => {
+                                        if (dragOverUserId === p.userId) setDragOverUserId(null);
+                                      }}
+                                      onDrop={(e) => handleDropOnUser(e, ev.id, p.userId)}
+                                      className={`flex items-center justify-between text-xs p-1.5 rounded-lg border transition-all select-none ${
+                                        isOver
+                                          ? 'border-cyan-400 bg-cyan-500/20 scale-[1.02] shadow-md shadow-cyan-500/20'
+                                          : isItemDragged
+                                          ? 'opacity-40 border-dashed border-pink-500 bg-[#151921]'
+                                          : 'bg-[#151921] border-[#1E232F] hover:border-pink-500/30'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        {ev.status === 'ACTIVE' && (
+                                          <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing shrink-0" />
+                                        )}
+                                        <span className="text-slate-200 truncate">
+                                          <strong className="text-slate-500 mr-1">{idx + 1}.</strong>
+                                          {p.userTag || p.userId}
+                                        </span>
+                                      </div>
+
+                                      {isOver ? (
+                                        <span className="text-[10px] text-cyan-300 font-semibold flex items-center gap-1 bg-cyan-500/20 px-1.5 py-0.5 rounded">
+                                          <ArrowLeftRight className="w-3 h-3" />
+                                          Поменять местами
+                                        </span>
+                                      ) : ev.status === 'ACTIVE' ? (
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {reserve.length > 0 && (
+                                            <button
+                                              onClick={() => setSwapModal({ eventId: ev.id, user: p, targetOptions: reserve })}
+                                              title="Поменять местами с участником из резерва 🔄"
+                                              className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
+                                            >
+                                              <ArrowLeftRight className="w-3 h-3" />
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={() => handleMoveParticipant(ev.id, p.userId, 'RESERVE')}
+                                            title="Переместить в резерв ⬇️ (слот останется свободным)"
+                                            className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-colors flex items-center gap-0.5 text-[10px]"
+                                          >
+                                            <ArrowDown className="w-3 h-3 text-amber-400" />
+                                            <span className="hidden sm:inline">В резерв</span>
+                                          </button>
+                                          <button
+                                            onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
+                                            title="Исключить из состава"
+                                            className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                          >
+                                            <UserMinus className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          {draggedItem && draggedItem.eventId === ev.id && draggedItem.fromStatus === 'RESERVE' && (
+                            <div className="mt-2 p-1.5 rounded-lg border border-dashed border-pink-500/40 text-center text-[10px] text-pink-300 bg-pink-500/5">
+                              ⬇️ Бросьте сюда, чтобы перевести {draggedItem.userTag} в основу
+                            </div>
+                          )}
                         </div>
 
-                        {confirmed.length === 0 ? (
-                          <p className="text-xs text-slate-500 italic">Пока никто не записался</p>
-                        ) : (
-                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                            {confirmed.map((p: any, idx: number) => (
-                              <div
-                                key={p.id}
-                                className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-[#151921] border border-[#1E232F] hover:border-pink-500/20 transition-all"
-                              >
-                                <span className="text-slate-200 truncate">
-                                  <strong className="text-slate-500 mr-1.5">{idx + 1}.</strong>
-                                  {p.userTag || p.userId}
-                                </span>
+                        {/* 2. Reserve Column */}
+                        <div
+                          onDragOver={(e) => {
+                            if (draggedItem && draggedItem.eventId === ev.id && draggedItem.fromStatus !== 'RESERVE') {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                              if (dragOverCol?.col !== 'RESERVE' || dragOverCol?.eventId !== ev.id) {
+                                setDragOverCol({ eventId: ev.id, col: 'RESERVE' });
+                              }
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverCol?.eventId === ev.id && dragOverCol?.col === 'RESERVE') {
+                              setDragOverCol(null);
+                            }
+                          }}
+                          onDrop={(e) => handleDropOnColumn(e, ev.id, 'RESERVE')}
+                          className={`p-3 rounded-xl bg-[#0B0E14] border transition-all flex flex-col justify-between ${
+                            dragOverCol?.eventId === ev.id && dragOverCol?.col === 'RESERVE'
+                              ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/40'
+                              : 'border-[#1E232F]'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between text-xs font-semibold text-amber-400 mb-2">
+                              <span>🪑 Резерв ({reserve.length})</span>
+                              <span className="text-[10px] text-slate-500 font-normal">Свободная очередь</span>
+                            </div>
 
-                                {ev.status === 'ACTIVE' && (
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => handleMoveParticipant(ev.id, p.userId, 'RESERVE')}
-                                      title="Переместить в резерв ⬇️"
-                                      className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-colors flex items-center gap-0.5 text-[10px]"
-                                    >
-                                      <ArrowDown className="w-3 h-3 text-amber-400" />
-                                      <span className="hidden sm:inline">В резерв</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
-                                      title="Исключить из состава"
-                                      className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                                    >
-                                      <UserMinus className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
+                            {reserve.length === 0 ? (
+                              <div className="p-4 rounded-lg border border-dashed border-slate-800 text-center text-xs text-slate-500 italic">
+                                {draggedItem && draggedItem.eventId === ev.id && draggedItem.fromStatus === 'CONFIRMED'
+                                  ? '🎯 Бросьте сюда, чтобы перевести в резерв'
+                                  : 'Резерв пуст'}
                               </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                            ) : (
+                              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                                {reserve.map((p: any, idx: number) => {
+                                  const isItemDragged = draggedItem?.userId === p.userId;
+                                  const isOver = dragOverUserId === p.userId && draggedItem?.userId !== p.userId;
 
-                      {/* Reserve */}
-                      <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#1E232F]">
-                        <p className="text-xs font-semibold text-amber-400 mb-2">
-                          🪑 Резерв ({reserve.length})
-                        </p>
-                        {reserve.length === 0 ? (
-                          <p className="text-xs text-slate-500 italic">Резерв пуст</p>
-                        ) : (
-                          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                            {reserve.map((p: any, idx: number) => (
-                              <div
-                                key={p.id}
-                                className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-[#151921] border border-[#1E232F] hover:border-amber-500/20 transition-all"
-                              >
-                                <span className="text-slate-300 truncate">
-                                  <strong className="text-slate-500 mr-1.5">{idx + 1}.</strong>
-                                  {p.userTag || p.userId}
-                                </span>
+                                  return (
+                                    <div
+                                      key={p.id}
+                                      draggable={ev.status === 'ACTIVE'}
+                                      onDragStart={(e) => handleDragStart(e, ev.id, p, 'RESERVE')}
+                                      onDragEnd={handleDragEnd}
+                                      onDragOver={(e) => {
+                                        if (draggedItem && draggedItem.eventId === ev.id && draggedItem.userId !== p.userId) {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setDragOverUserId(p.userId);
+                                        }
+                                      }}
+                                      onDragLeave={() => {
+                                        if (dragOverUserId === p.userId) setDragOverUserId(null);
+                                      }}
+                                      onDrop={(e) => handleDropOnUser(e, ev.id, p.userId)}
+                                      className={`flex items-center justify-between text-xs p-1.5 rounded-lg border transition-all select-none ${
+                                        isOver
+                                          ? 'border-cyan-400 bg-cyan-500/20 scale-[1.02] shadow-md shadow-cyan-500/20'
+                                          : isItemDragged
+                                          ? 'opacity-40 border-dashed border-amber-500 bg-[#151921]'
+                                          : 'bg-[#151921] border-[#1E232F] hover:border-amber-500/30'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        {ev.status === 'ACTIVE' && (
+                                          <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing shrink-0" />
+                                        )}
+                                        <span className="text-slate-300 truncate">
+                                          <strong className="text-slate-500 mr-1">{idx + 1}.</strong>
+                                          {p.userTag || p.userId}
+                                        </span>
+                                      </div>
 
-                                {ev.status === 'ACTIVE' && (
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => handleMoveParticipant(ev.id, p.userId, 'CONFIRMED')}
-                                      title="Переместить в основной состав ⬆️"
-                                      className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors flex items-center gap-0.5 text-[10px]"
-                                    >
-                                      <ArrowUp className="w-3 h-3 text-emerald-400" />
-                                      <span className="hidden sm:inline">В основу</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
-                                      title="Исключить из состава"
-                                      className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                                    >
-                                      <UserMinus className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
+                                      {isOver ? (
+                                        <span className="text-[10px] text-cyan-300 font-semibold flex items-center gap-1 bg-cyan-500/20 px-1.5 py-0.5 rounded">
+                                          <ArrowLeftRight className="w-3 h-3" />
+                                          Поменять местами
+                                        </span>
+                                      ) : ev.status === 'ACTIVE' ? (
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {confirmed.length > 0 && (
+                                            <button
+                                              onClick={() => setSwapModal({ eventId: ev.id, user: p, targetOptions: confirmed })}
+                                              title="Поменять местами с участником из основы 🔄"
+                                              className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
+                                            >
+                                              <ArrowLeftRight className="w-3 h-3" />
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={() => handleMoveParticipant(ev.id, p.userId, 'CONFIRMED')}
+                                            title="Переместить в основной состав ⬆️"
+                                            className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors flex items-center gap-0.5 text-[10px]"
+                                          >
+                                            <ArrowUp className="w-3 h-3 text-emerald-400" />
+                                            <span className="hidden sm:inline">В основу</span>
+                                          </button>
+                                          <button
+                                            onClick={() => handleKickParticipant(ev.id, p.userId, p.userTag || p.userId)}
+                                            title="Исключить из состава"
+                                            className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                          >
+                                            <UserMinus className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            ))}
+                            )}
                           </div>
-                        )}
+
+                          {draggedItem && draggedItem.eventId === ev.id && draggedItem.fromStatus === 'CONFIRMED' && (
+                            <div className="mt-2 p-1.5 rounded-lg border border-dashed border-amber-500/40 text-center text-[10px] text-amber-300 bg-amber-500/5">
+                              ⬇️ Бросьте сюда, чтобы перевести {draggedItem.userTag} в резерв (слот в основе освободится)
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1068,6 +1319,66 @@ export const Events: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Quick Swap Modal */}
+      {swapModal && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setSwapModal(null)}
+        >
+          <div
+            className="relative w-full max-w-md bg-[#151921] border border-[#1E232F] rounded-2xl shadow-2xl p-5 overflow-hidden animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#1E232F] mb-3">
+              <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                <ArrowLeftRight className="w-4 h-4 text-cyan-400" />
+                Обмен местами в составе
+              </h4>
+              <button
+                type="button"
+                onClick={() => setSwapModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-[#1E232F] transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-3">
+              С кем поменять местами участника <span className="text-cyan-300 font-semibold">{swapModal.user.userTag || swapModal.user.userId}</span> ({swapModal.user.status === 'CONFIRMED' ? 'Основной состав' : 'Резерв'})?
+            </p>
+
+            {swapModal.targetOptions.length === 0 ? (
+              <p className="text-xs text-slate-500 italic p-3 text-center">Нет доступных участников для обмена в противоположном списке.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                {swapModal.targetOptions.map((targetUser: any, i: number) => (
+                  <button
+                    key={targetUser.id}
+                    onClick={async () => {
+                      const eventId = swapModal.eventId;
+                      const u1 = swapModal.user.userId;
+                      const u2 = targetUser.userId;
+                      setSwapModal(null);
+                      await handleSwapParticipants(eventId, u1, u2);
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-xl bg-[#0B0E14] border border-[#1E232F] hover:border-cyan-400 hover:bg-cyan-500/10 text-xs text-slate-200 transition-all text-left group"
+                  >
+                    <span className="truncate">
+                      <strong className="text-slate-500 mr-1.5">{i + 1}.</strong>
+                      {targetUser.userTag || targetUser.userId}
+                    </span>
+                    <span className="text-[10px] text-cyan-400 font-medium group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Обменять ➔
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>,
         document.body

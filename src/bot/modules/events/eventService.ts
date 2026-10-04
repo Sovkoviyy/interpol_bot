@@ -733,6 +733,77 @@ export class EventService {
   }
 
   /**
+   * Swap two participants between CONFIRMED and RESERVE
+   */
+  public static async swapParticipants(
+    guildId: string,
+    eventId: string,
+    userId1: string,
+    userId2: string,
+    operatorId?: string
+  ): Promise<{ success: boolean; user1: any; user2: any }> {
+    const event = await prisma.eventGathering.findUnique({
+      where: { id: eventId },
+      include: { participants: true },
+    });
+    if (!event) throw new Error('Мероприятие не найдено');
+
+    const p1 = event.participants.find(p => p.userId === userId1);
+    const p2 = event.participants.find(p => p.userId === userId2);
+    if (!p1 || !p2) throw new Error('Один или оба участника не найдены в списке');
+
+    if (p1.status === p2.status) {
+      return { success: true, user1: p1, user2: p2 };
+    }
+
+    const newStatus1 = p2.status;
+    const newStatus2 = p1.status;
+
+    const [updated1, updated2] = await prisma.$transaction([
+      prisma.eventParticipant.update({
+        where: { id: p1.id },
+        data: { status: newStatus1 },
+      }),
+      prisma.eventParticipant.update({
+        where: { id: p2.id },
+        data: { status: newStatus2 },
+      }),
+    ]);
+
+    const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+    if (guild) {
+      await this.refreshAnnouncement(guild, eventId);
+
+      const mem1 = await guild.members.fetch(userId1).catch(() => null);
+      if (mem1) {
+        mem1.send({
+          content: `🔄 Организатор перевёл вас в **${newStatus1 === 'CONFIRMED' ? 'основной состав' : 'резерв'}** на мероприятии **${event.title}**.`,
+        }).catch(() => null);
+      }
+      const mem2 = await guild.members.fetch(userId2).catch(() => null);
+      if (mem2) {
+        mem2.send({
+          content: `🔄 Организатор перевёл вас в **${newStatus2 === 'CONFIRMED' ? 'основной состав' : 'резерв'}** на мероприятии **${event.title}**.`,
+        }).catch(() => null);
+      }
+
+      const swapEmbed = new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setTitle(`🔄 Обмен местами участников: ${event.title}`)
+        .setDescription(
+          `Организатор ${operatorId ? `<@${operatorId}>` : 'Панель'} поменял местами участников:\n` +
+          `• <@${userId1}> (${p1.userTag || userId1}) ➔ **${newStatus1 === 'CONFIRMED' ? 'Основной состав' : 'Резерв'}**\n` +
+          `• <@${userId2}> (${p2.userTag || userId2}) ➔ **${newStatus2 === 'CONFIRMED' ? 'Основной состав' : 'Резерв'}**\n` +
+          `Мероприятие: **«${event.title}»**`
+        )
+        .setTimestamp();
+      await AuditLogger.sendLog(guild, 'EVENTS', swapEmbed);
+    }
+
+    return { success: true, user1: updated1, user2: updated2 };
+  }
+
+  /**
    * Move participant between CONFIRMED (Main) and RESERVE
    */
   public static async moveParticipant(
@@ -753,6 +824,20 @@ export class EventService {
     const participant = event.participants.find(p => p.userId === userId);
     if (!participant) throw new Error('Участник не найден в списке');
 
+    // If swap target is specified and statuses differ, perform clean swap
+    if (swapWithUserId && swapWithUserId !== userId) {
+      const swapTarget = event.participants.find(p => p.userId === swapWithUserId);
+      if (swapTarget && swapTarget.status !== participant.status) {
+        const swapRes = await this.swapParticipants(guildId, eventId, userId, swapWithUserId, operatorId);
+        return {
+          success: true,
+          movedUser: swapRes.user1,
+          demotedUser: participant.status === 'CONFIRMED' ? swapRes.user1 : swapRes.user2,
+          promotedUser: participant.status === 'RESERVE' ? swapRes.user1 : swapRes.user2,
+        };
+      }
+    }
+
     if (participant.status === targetStatus) {
       return { success: true, movedUser: participant };
     }
@@ -762,38 +847,24 @@ export class EventService {
     const confirmedParticipants = event.participants.filter(p => p.status === 'CONFIRMED');
 
     let demotedUser: any = null;
-    let promotedUser: any = null;
 
     if (targetStatus === 'CONFIRMED') {
       if (confirmedParticipants.length >= limit) {
-        if (swapWithUserId) {
-          const swapTarget = event.participants.find(p => p.userId === swapWithUserId && p.status === 'CONFIRMED');
-          if (swapTarget) {
-            await prisma.eventParticipant.update({
-              where: { id: swapTarget.id },
-              data: { status: 'RESERVE' },
-            });
-            demotedUser = swapTarget;
+        let lowestPart: any = null;
+        let lowestScore = 9999999;
+        for (const cp of confirmedParticipants) {
+          const { score } = await this.getUserPriorityScore(guild, guildId, cp.userId);
+          if (score < lowestScore) {
+            lowestScore = score;
+            lowestPart = cp;
           }
         }
-        
-        if (!demotedUser) {
-          let lowestPart: any = null;
-          let lowestScore = 9999999;
-          for (const cp of confirmedParticipants) {
-            const { score } = await this.getUserPriorityScore(guild, guildId, cp.userId);
-            if (score < lowestScore) {
-              lowestScore = score;
-              lowestPart = cp;
-            }
-          }
-          if (lowestPart) {
-            await prisma.eventParticipant.update({
-              where: { id: lowestPart.id },
-              data: { status: 'RESERVE' },
-            });
-            demotedUser = lowestPart;
-          }
+        if (lowestPart) {
+          await prisma.eventParticipant.update({
+            where: { id: lowestPart.id },
+            data: { status: 'RESERVE' },
+          });
+          demotedUser = lowestPart;
         }
       }
 
@@ -833,60 +904,35 @@ export class EventService {
 
       return { success: true, movedUser: updated, demotedUser };
     } else {
-      // Move to RESERVE
+      // Move to RESERVE: Do NOT auto-promote people from reserve! Slot stays open for manual filling.
       const updated = await prisma.eventParticipant.update({
         where: { id: participant.id },
         data: { status: 'RESERVE' },
       });
 
-      // Auto-promote top reserve player
-      const otherReserves = event.participants.filter(p => p.status === 'RESERVE' && p.userId !== userId);
-      if (otherReserves.length > 0) {
-        let bestReserve: any = null;
-        let bestScore = -1;
-
-        for (const rp of otherReserves) {
-          const { score } = await this.getUserPriorityScore(guild, guildId, rp.userId);
-          if (score > bestScore) {
-            bestScore = score;
-            bestReserve = rp;
-          }
-        }
-
-        if (bestReserve) {
-          await prisma.eventParticipant.update({
-            where: { id: bestReserve.id },
-            data: { status: 'CONFIRMED' },
-          });
-          promotedUser = bestReserve;
-
-          if (guild) {
-            const promMem = await guild.members.fetch(bestReserve.userId).catch(() => null);
-            if (promMem) {
-              promMem.send({
-                content: `🔔 На мероприятие **${event.title}** освободилось место! Вы автоматически переведены в **основной состав**!`,
-              }).catch(() => null);
-            }
-          }
-        }
-      }
-
       if (guild) {
         await this.refreshAnnouncement(guild, eventId);
+
+        const mem = await guild.members.fetch(userId).catch(() => null);
+        if (mem) {
+          mem.send({
+            content: `⚠️ Организатор перевёл вас в **резерв** на мероприятие **${event.title}**.`,
+          }).catch(() => null);
+        }
 
         const logEmbed = new EmbedBuilder()
           .setColor(0xFEE75C)
           .setTitle(`🔄 Перемещение в резерв: ${event.title}`)
           .setDescription(
             `Организатор ${operatorId ? `<@${operatorId}>` : 'Панель'} перевёл участника <@${userId}> в **резерв**.\n` +
-            (promotedUser ? `⬆️ Из резерва в основу переведён: <@${promotedUser.userId}>.\n` : '') +
+            `Слот в основном составе освобождён для ручного распределения.\n` +
             `Мероприятие: **«${event.title}»**`
           )
           .setTimestamp();
         await AuditLogger.sendLog(guild, 'EVENTS', logEmbed);
       }
 
-      return { success: true, movedUser: updated, promotedUser };
+      return { success: true, movedUser: updated };
     }
   }
 
@@ -1193,44 +1239,10 @@ export class EventService {
       return;
     }
 
-    const wasConfirmed = targetParticipant.status === 'CONFIRMED';
     await prisma.eventParticipant.delete({ where: { id: targetParticipant.id } });
 
-    let promotedUserId: string | null = null;
-    if (wasConfirmed) {
-      const reserveParticipants = event.participants.filter(p => p.status === 'RESERVE' && p.userId !== targetUserId);
-      if (reserveParticipants.length > 0) {
-        const guild = await this.resolveGuild(interaction);
-        let bestReserve = reserveParticipants[0];
-        let bestScore = -1;
-
-        for (const rp of reserveParticipants) {
-          const { score } = await this.getUserPriorityScore(guild, event.guildId, rp.userId);
-          if (score > bestScore) {
-            bestScore = score;
-            bestReserve = rp;
-          }
-        }
-
-        await prisma.eventParticipant.update({
-          where: { id: bestReserve.id },
-          data: { status: 'CONFIRMED' },
-        });
-        promotedUserId = bestReserve.userId;
-
-        if (guild) {
-          const targetMember = await guild.members.fetch(bestReserve.userId).catch(() => null);
-          if (targetMember) {
-            targetMember.send({
-              content: `🔔 Вы переведены из резерва в основной состав на мероприятие **${event.title}**!`,
-            }).catch(() => null);
-          }
-        }
-      }
-    }
-
     await interaction.reply({
-      content: `✅ <@${targetUserId}> был исключен из состава.${promotedUserId ? `\n⬆️ Из резерва добавлен: <@${promotedUserId}>.` : ''}`,
+      content: `✅ <@${targetUserId}> был исключен из состава. Слот свободен для ручного распределения.`,
       flags: MessageFlags.Ephemeral,
     });
 
@@ -1243,7 +1255,7 @@ export class EventService {
         .setTitle(`❌ Исключение с мероприятия: ${event.title}`)
         .setDescription(
           `Администратор/организатор <@${interaction.user.id}> исключил участника <@${targetUserId}> из мероприятия **«${event.title}»**.\n` +
-          (promotedUserId ? `⬆️ Из резерва в основной состав переведен: <@${promotedUserId}>.` : '')
+          `Слот в составе освобождён для ручного распределения.`
         )
         .setTimestamp();
       await AuditLogger.sendLog(guild, 'EVENTS', kickEmbed);

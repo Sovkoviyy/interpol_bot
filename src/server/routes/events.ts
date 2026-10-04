@@ -292,21 +292,9 @@ eventsRouter.post('/:id/participants/:userId/kick', requireAuth, requirePermissi
   const targetParticipant = event.participants.find((p: any) => p.userId === userId);
   if (!targetParticipant) return res.status(404).json({ error: 'Participant not in list' });
 
-  const wasConfirmed = targetParticipant.status === 'CONFIRMED';
   await prisma.eventParticipant.delete({ where: { id: targetParticipant.id } });
 
-  let promotedUserId: string | null = null;
-  if (wasConfirmed) {
-    const firstReserve = event.participants.find((p: any) => p.status === 'RESERVE' && p.userId !== userId);
-    if (firstReserve) {
-      await prisma.eventParticipant.update({
-        where: { id: firstReserve.id },
-        data: { status: 'CONFIRMED' },
-      });
-      promotedUserId = firstReserve.userId;
-    }
-  }
-
+  // Manual kick by admin: DO NOT auto-promote from reserve! Slot stays open for manual filling.
   const guild = await getDiscordGuild(event.guildId);
   if (guild) {
     await EventService.refreshAnnouncement(guild, event.id);
@@ -316,13 +304,31 @@ eventsRouter.post('/:id/participants/:userId/kick', requireAuth, requirePermissi
       .setTitle(`❌ Исключение с мероприятия: ${event.title}`)
       .setDescription(
         `Участник <@${userId}> был исключен из мероприятия **${event.title}** администратором <@${req.user!.userId}>.\n` +
-        (promotedUserId ? `⬆️ Из резерва в основной состав переведен: <@${promotedUserId}>.` : '')
+        `Слот в составе освобожден для ручного распределения.`
       )
       .setTimestamp();
     await AuditLogger.sendLog(guild, 'EVENTS', kickEmbed);
   }
 
-  return res.json({ success: true, promotedUserId });
+  return res.json({ success: true });
+});
+
+// Swap two participants directly
+eventsRouter.post('/:id/swap', requireAuth, requirePermission('manageEvents'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const guildId = resolveGuildId(req);
+    const id = req.params.id as string;
+    const { userId1, userId2 } = req.body;
+
+    if (!userId1 || !userId2) {
+      return res.status(400).json({ error: 'userId1 and userId2 are required' });
+    }
+
+    const result = await EventService.swapParticipants(guildId, id, userId1, userId2, req.user!.userId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // Move participant between CONFIRMED (Main) and RESERVE (or swap)
