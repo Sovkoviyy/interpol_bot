@@ -134,30 +134,69 @@ logsRouter.get('/entries', requireAuth, requirePermission('viewLogs', 'manageSet
     const guildId = (req as any).guildId;
     const search = ((req.query.search as string) || '').trim().toLowerCase();
     const actionFilter = (req.query.action as string) || 'ALL';
-    const limit = Math.min(150, parseInt(req.query.limit as string, 10) || 100);
+    const categoryFilter = (req.query.category as string) || 'ALL';
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(200, parseInt(req.query.limit as string, 10) || 100);
+
+    const moderationActions = [
+        'MEMBER_TIMEOUT',
+        'MEMBER_UNTIMEOUT',
+        'MEMBER_KICK',
+        'MEMBER_BAN',
+        'MEMBER_UNBAN',
+        'VOICE_SERVER_MUTE',
+        'VOICE_SERVER_UNMUTE',
+        'VOICE_SERVER_DEAF',
+        'VOICE_SERVER_UNDEAF',
+        'VOICE_DISCONNECT_MOD',
+        'VOICE_MOVE_MOD',
+        'MESSAGE_DELETE_MOD',
+        'PENALTY_ADDED',
+        'PENALTY_REMOVED',
+    ];
+
+    // Build DB query conditions
+    const whereClause: any = { guildId };
+
+    if (actionFilter !== 'ALL') {
+        whereClause.action = actionFilter;
+    } else if (categoryFilter === 'MODERATION') {
+        whereClause.OR = [
+            { action: { in: moderationActions } },
+            { category: 'MODERATION' },
+        ];
+    } else if (categoryFilter !== 'ALL') {
+        whereClause.category = categoryFilter;
+    }
 
     // 1. Fetch DB Bot Logs
     const dbLogs = await prisma.auditLogEntry.findMany({
-        where: {
-            guildId,
-            ...(actionFilter !== 'ALL' ? { action: actionFilter } : {}),
-        },
+        where: whereClause,
         orderBy: { createdAt: 'desc' },
-        take: limit,
+        take: 300,
     });
 
-    const formattedBotLogs = dbLogs.map((log) => ({
-        id: log.id,
-        source: 'BOT',
-        category: log.category,
-        action: log.action,
-        executorId: log.executorId,
-        executorTag: log.executorTag || log.executorId || 'Система',
-        targetId: log.targetId,
-        details: log.description || log.title,
-        title: log.title,
-        createdAt: log.createdAt,
-    }));
+    const formattedBotLogs = dbLogs.map((log) => {
+        let meta: any = {};
+        try {
+            meta = JSON.parse(log.metadataJson || '{}');
+        } catch {}
+
+        return {
+            id: log.id,
+            source: 'BOT',
+            category: log.category,
+            action: log.action,
+            executorId: log.executorId,
+            executorTag: log.executorTag || log.executorId || 'Система',
+            targetId: log.targetId,
+            targetTag: log.targetTag || null,
+            details: log.description || log.title,
+            title: log.title,
+            metadata: meta,
+            createdAt: log.createdAt,
+        };
+    });
 
     // 2. Fetch Native Discord Audit Logs
     const guild = await getDiscordGuild(guildId);
@@ -165,14 +204,16 @@ logsRouter.get('/entries', requireAuth, requirePermission('viewLogs', 'manageSet
 
     if (guild) {
         try {
-            const audit = await guild.fetchAuditLogs({ limit: 50 });
+            const audit = await guild.fetchAuditLogs({ limit: 100 });
             for (const entry of audit.entries.values()) {
                 let actionName = 'DISCORD_ACTION';
                 let category = 'DISCORD';
                 let details = '';
+                const extra = entry.extra as any;
+                const reason = entry.reason || '';
 
                 // Determine action type from Discord AuditLogEvent
-                const actionType = entry.action;
+                const actionType = entry.action as any;
                 if (actionType === AuditLogEvent.ChannelCreate) {
                     actionName = 'CHANNEL_CREATE';
                     category = 'CHANNELS';
@@ -185,76 +226,219 @@ logsRouter.get('/entries', requireAuth, requirePermission('viewLogs', 'manageSet
                     actionName = 'CHANNEL_UPDATE';
                     category = 'CHANNELS';
                     details = `Изменен канал: #${(entry.target as any)?.name || entry.targetId}`;
-                } else if (actionType === 20) {
+                } else if (actionType === 20 || actionType === AuditLogEvent.MemberKick) {
                     actionName = 'MEMBER_KICK';
                     category = 'MEMBERS';
-                    details = `Кикнут участник: ${(entry.target as any)?.tag || (entry.target as any)?.username || entry.targetId}${entry.reason ? `. Причина: ${entry.reason}` : ''}`;
-                } else if (actionType === 22) {
+                    details = `Кикнут участник: ${(entry.target as any)?.tag || (entry.target as any)?.username || entry.targetId}${reason ? `. Причина: ${reason}` : ''}`;
+                } else if (actionType === 22 || actionType === AuditLogEvent.MemberBanAdd) {
                     actionName = 'MEMBER_BAN';
                     category = 'MEMBERS';
-                    details = `Забанен участник: ${(entry.target as any)?.tag || (entry.target as any)?.username || entry.targetId}${entry.reason ? `. Причина: ${entry.reason}` : ''}`;
-                } else if (actionType === 23) {
+                    details = `Забанен участник: ${(entry.target as any)?.tag || (entry.target as any)?.username || entry.targetId}${reason ? `. Причина: ${reason}` : ''}`;
+                } else if (actionType === 23 || actionType === AuditLogEvent.MemberBanRemove) {
                     actionName = 'MEMBER_UNBAN';
                     category = 'MEMBERS';
                     details = `Разбанен участник: ${(entry.target as any)?.tag || (entry.target as any)?.username || entry.targetId}`;
-                } else if (actionType === 25) {
-                    actionName = 'ROLE_UPDATE';
+                } else if (actionType === 24 || actionType === AuditLogEvent.MemberUpdate) {
+                    const timeoutChange = entry.changes?.find(c => c.key === 'communication_disabled_until');
+                    const nickChange = entry.changes?.find(c => c.key === 'nick');
+                    const muteChange = entry.changes?.find(c => c.key === 'mute');
+                    const deafChange = entry.changes?.find(c => c.key === 'deaf');
+
+                    if (timeoutChange) {
+                        const isMuted = Boolean(timeoutChange.new);
+                        actionName = isMuted ? 'MEMBER_TIMEOUT' : 'MEMBER_UNTIMEOUT';
+                        category = 'MEMBERS';
+                        details = isMuted
+                            ? `Тайм-аут (мут) участнику ${(entry.target as any)?.tag || entry.targetId}${reason ? `. Причина: ${reason}` : ''}`
+                            : `Снят тайм-аут с участника ${(entry.target as any)?.tag || entry.targetId}`;
+                    } else if (muteChange) {
+                        actionName = muteChange.new ? 'VOICE_SERVER_MUTE' : 'VOICE_SERVER_UNMUTE';
+                        category = 'VOICE';
+                        details = `Серверный мут микрофона ${muteChange.new ? 'выдан' : 'снят'} для ${(entry.target as any)?.tag || entry.targetId}`;
+                    } else if (deafChange) {
+                        actionName = deafChange.new ? 'VOICE_SERVER_DEAF' : 'VOICE_SERVER_UNDEAF';
+                        category = 'VOICE';
+                        details = `Серверный деф (отключение звука) ${deafChange.new ? 'выдан' : 'снят'} для ${(entry.target as any)?.tag || entry.targetId}`;
+                    } else if (nickChange) {
+                        actionName = 'MEMBER_NICKNAME_UPDATE';
+                        category = 'MEMBERS';
+                        details = `Никнейм изменен: «${nickChange.old || '—'}» ➔ «${nickChange.new || '—'}»`;
+                    } else {
+                        actionName = 'MEMBER_UPDATE';
+                        category = 'MEMBERS';
+                        details = `Обновление данных участника ${(entry.target as any)?.tag || entry.targetId}`;
+                    }
+                } else if (actionType === 25 || actionType === AuditLogEvent.MemberRoleUpdate) {
+                    actionName = 'MEMBER_ROLES_UPDATE';
                     category = 'ROLES';
-                    const changes = entry.changes.map(c => `${c.key}: ${JSON.stringify(c.new || c.old)}`).join(', ');
-                    details = `Обновлены роли участника: ${changes}`;
-                } else if (actionType === 30) {
+                    const changes = entry.changes?.map(c => `${c.key === '$add' ? 'Выдано' : 'Снято'}: ${Array.isArray(c.new) ? c.new.map((r: any) => r.name || r.id).join(', ') : ''}`).join(' | ') || '';
+                    details = `Изменение ролей участника ${(entry.target as any)?.tag || entry.targetId}: ${changes}`;
+                } else if (actionType === 26 || actionType === AuditLogEvent.MemberMove) {
+                    actionName = 'VOICE_MOVE_MOD';
+                    category = 'VOICE';
+                    details = `Участник ${(entry.target as any)?.tag || entry.targetId} перемещен в войс #${extra?.channel?.name || extra?.channel?.id || ''}`;
+                } else if (actionType === 27 || actionType === AuditLogEvent.MemberDisconnect) {
+                    actionName = 'VOICE_DISCONNECT_MOD';
+                    category = 'VOICE';
+                    details = `Участник ${(entry.target as any)?.tag || entry.targetId} принудительно отключен из войса`;
+                } else if (actionType === 30 || actionType === AuditLogEvent.RoleCreate) {
                     actionName = 'ROLE_CREATE';
                     category = 'ROLES';
                     details = `Создана роль: @${(entry.target as any)?.name || entry.targetId}`;
-                } else if (actionType === 32) {
+                } else if (actionType === 31 || actionType === AuditLogEvent.RoleUpdate) {
+                    actionName = 'ROLE_UPDATE';
+                    category = 'ROLES';
+                    details = `Обновлена роль: @${(entry.target as any)?.name || entry.targetId}`;
+                } else if (actionType === 32 || actionType === AuditLogEvent.RoleDelete) {
                     actionName = 'ROLE_DELETE';
                     category = 'ROLES';
                     details = `Удалена роль: @${(entry.target as any)?.name || entry.targetId}`;
-                } else if (actionType === 72) {
-                    actionName = 'MESSAGE_DELETE';
+                } else if (actionType === 40 || actionType === AuditLogEvent.InviteCreate) {
+                    actionName = 'INVITE_CREATE';
+                    category = 'INVITES';
+                    details = `Создано приглашение: code ${(entry.target as any)?.code || entry.targetId}`;
+                } else if (actionType === 42 || actionType === AuditLogEvent.InviteDelete) {
+                    actionName = 'INVITE_DELETE';
+                    category = 'INVITES';
+                    details = `Удалено приглашение: code ${(entry.target as any)?.code || entry.targetId}`;
+                } else if (actionType === 60 || actionType === AuditLogEvent.EmojiCreate) {
+                    actionName = 'EMOJI_CREATE';
+                    category = 'CHANNELS';
+                    details = `Создано эмодзи: :${(entry.target as any)?.name || entry.targetId}:`;
+                } else if (actionType === 62 || actionType === AuditLogEvent.EmojiDelete) {
+                    actionName = 'EMOJI_DELETE';
+                    category = 'CHANNELS';
+                    details = `Удалено эмодзи: :${(entry.target as any)?.name || entry.targetId}:`;
+                } else if (actionType === 72 || actionType === AuditLogEvent.MessageDelete) {
+                    actionName = 'MESSAGE_DELETE_MOD';
                     category = 'MESSAGES';
-                    details = `Удалено сообщение в канале ${(entry.extra as any)?.channel?.name ? `#${(entry.extra as any)?.channel?.name}` : ''}`;
+                    details = `Удалено сообщение в канале ${extra?.channel?.name ? `#${extra.channel.name}` : ''}`;
+                } else if (actionType === 73 || actionType === AuditLogEvent.MessageBulkDelete) {
+                    actionName = 'MESSAGE_BULK_DELETE';
+                    category = 'MESSAGES';
+                    details = `Очистка ${extra?.count || ''} сообщений в #${extra?.channel?.name || ''}`;
+                } else if (actionType === 1 || actionType === AuditLogEvent.GuildUpdate) {
+                    actionName = 'GUILD_UPDATE';
+                    category = 'CHANNELS';
+                    details = `Обновление параметров сервера Discord`;
                 } else {
                     actionName = `DISCORD_${entry.action}`;
                     details = `Действие в Discord (Event #${entry.action})`;
                 }
 
-                if (actionFilter === 'ALL' || actionFilter === actionName) {
-                    discordLogs.push({
-                        id: `discord_${entry.id}`,
-                        source: 'DISCORD',
-                        category,
-                        action: actionName,
-                        executorId: entry.executorId,
-                        executorTag: entry.executor?.tag || entry.executor?.username || entry.executorId || 'Discord',
-                        targetId: entry.targetId,
-                        targetTag: (entry.target as any)?.tag || (entry.target as any)?.name || entry.targetId,
-                        details,
-                        createdAt: entry.createdAt,
-                    });
+                // Check category filter
+                if (categoryFilter === 'MODERATION' && !moderationActions.includes(actionName)) {
+                    continue;
                 }
+                if (categoryFilter !== 'ALL' && categoryFilter !== 'MODERATION' && category !== categoryFilter) {
+                    continue;
+                }
+                if (actionFilter !== 'ALL' && actionFilter !== actionName) {
+                    continue;
+                }
+
+                discordLogs.push({
+                    id: `discord_${entry.id}`,
+                    source: 'DISCORD',
+                    category,
+                    action: actionName,
+                    executorId: entry.executorId,
+                    executorTag: entry.executor?.tag || entry.executor?.username || entry.executorId || 'Discord',
+                    targetId: entry.targetId,
+                    targetTag: (entry.target as any)?.tag || (entry.target as any)?.name || (entry.target as any)?.username || entry.targetId,
+                    details,
+                    metadata: {
+                        reason: entry.reason || null,
+                        changes: entry.changes || [],
+                        extra: entry.extra || null,
+                    },
+                    createdAt: entry.createdAt,
+                });
             }
         } catch (auditErr: any) {
-            // Bot might lack VIEW_AUDIT_LOG permission; fallback gracefully
             console.warn('Could not fetch Discord audit logs:', auditErr.message);
         }
     }
 
-    // 3. Merge & Sort by date descending
-    let combined = [...formattedBotLogs, ...discordLogs].sort(
+    // 3. Deduplicate (if both bot logged to DB and native Discord has it, keep DB log as primary)
+    // and sort descending by timestamp
+    const allLogs = [...formattedBotLogs, ...discordLogs];
+    const uniqueLogsMap = new Map<string, any>();
+    for (const item of allLogs) {
+        // create a key based on action, target, executor, and time proximity (within 3s)
+        const timeKey = Math.floor(new Date(item.createdAt).getTime() / 4000);
+        const dedupeKey = `${item.action}_${item.targetId || ''}_${item.executorId || ''}_${timeKey}`;
+        if (!uniqueLogsMap.has(dedupeKey)) {
+            uniqueLogsMap.set(dedupeKey, item);
+        }
+    }
+
+    let combined = Array.from(uniqueLogsMap.values()).sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-    // 4. Apply text search if specified
+    // 4. Apply text search
     if (search) {
         combined = combined.filter((item) => {
-            const textToSearch = `${item.action} ${item.executorTag} ${item.executorId} ${item.targetTag || ''} ${item.details || ''} ${item.category}`.toLowerCase();
+            const textToSearch = `${item.action} ${item.executorTag} ${item.executorId || ''} ${item.targetTag || ''} ${item.targetId || ''} ${item.details || ''} ${item.category} ${JSON.stringify(item.metadata || {})}`.toLowerCase();
             return textToSearch.includes(search);
         });
     }
 
-    return res.json({ entries: combined.slice(0, limit) });
+    const totalCount = combined.length;
+    const startIndex = (page - 1) * limit;
+    const pagedEntries = combined.slice(startIndex, startIndex + limit);
 
+    return res.json({
+        entries: pagedEntries,
+        total: totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit) || 1,
+    });
+
+}));
+
+/**
+ * GET /api/logs/export
+ * Export audit logs in JSON or CSV
+ */
+logsRouter.get('/export', requireAuth, requirePermission('viewLogs', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const guildId = (req as any).guildId;
+    const format = req.query.format === 'csv' ? 'csv' : 'json';
+    const limit = Math.min(1000, parseInt(req.query.limit as string, 10) || 500);
+
+    const logs = await prisma.auditLogEntry.findMany({
+        where: { guildId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+    });
+
+    if (format === 'json') {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="audit_logs_${guildId}.json"`);
+        return res.json(logs);
+    }
+
+    // CSV format
+    const headers = ['ID', 'Date (MSK)', 'Category', 'Action', 'Title', 'Description', 'ExecutorTag', 'ExecutorID', 'TargetTag', 'TargetID'];
+    const rows = logs.map(l => [
+        l.id,
+        new Date(l.createdAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }),
+        l.category,
+        l.action,
+        `"${(l.title || '').replace(/"/g, '""')}"`,
+        `"${(l.description || '').replace(/"/g, '""')}"`,
+        l.executorTag || '',
+        l.executorId || '',
+        l.targetTag || '',
+        l.targetId || '',
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="audit_logs_${guildId}.csv"`);
+    return res.send(csvContent);
 }));
 
 export default logsRouter;

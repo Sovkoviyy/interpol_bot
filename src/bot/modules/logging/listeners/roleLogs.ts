@@ -27,7 +27,15 @@ export function registerRoleLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendHumanOrBotLog(role.guild, 'ROLES', executor, embed);
+    await AuditLogger.sendHumanOrBotLog(role.guild, 'ROLES', executor, embed, {
+      action: 'ROLE_CREATE',
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: role.id,
+      targetTag: role.name,
+      details: `Создана роль @${role.name} (${executor ? `создал @${executor.tag}` : 'неизвестно'})`,
+      metadata: { roleId: role.id, roleName: role.name, color: role.hexColor },
+    });
   });
 
   // Role Delete
@@ -48,7 +56,15 @@ export function registerRoleLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendHumanOrBotLog(role.guild, 'ROLES', executor, embed);
+    await AuditLogger.sendHumanOrBotLog(role.guild, 'ROLES', executor, embed, {
+      action: 'ROLE_DELETE',
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: role.id,
+      targetTag: role.name,
+      details: `Удалена роль @${role.name} (${executor ? `удалил @${executor.tag}` : 'неизвестно'})`,
+      metadata: { roleId: role.id, roleName: role.name },
+    });
   });
 
   // Role Update
@@ -84,6 +100,14 @@ export function registerRoleLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendHumanOrBotLog(newRole.guild, 'ROLES', executor, embed);
+    await AuditLogger.sendHumanOrBotLog(newRole.guild, 'ROLES', executor, embed, {
+      action: 'ROLE_UPDATE',
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: newRole.id,
+      targetTag: newRole.name,
+      details: `Обновлена роль @${newRole.name}: ${changes.join(', ')} (${executor ? `изменил @${executor.tag}` : 'неизвестно'})`,
+      metadata: { roleId: newRole.id, roleName: newRole.name, changes },
+    });
   });
 }

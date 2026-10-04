@@ -89,7 +89,18 @@ export function registerMessageLogs() {
 
       embed.setFooter({ text: `ID сообщения: ${message.id}` }).setTimestamp();
 
-      await AuditLogger.sendLog(message.guild, 'MESSAGES', embed);
+      await AuditLogger.sendLog(message.guild, 'MESSAGES', embed, {
+        action: 'MESSAGE_SEND',
+        executorId: message.author.id,
+        executorTag: message.author.tag,
+        targetId: message.channelId,
+        details: `Отправлено сообщение в #${(message.channel as any)?.name || message.channelId}: «${message.content?.slice(0, 100) || 'Вложение'}»`,
+        metadata: {
+          channelId: message.channelId,
+          content: message.content,
+          attachments,
+        },
+      });
     }
   });
 
@@ -117,19 +128,22 @@ export function registerMessageLogs() {
     const content = message.content || cached?.content || '';
     const attachments = cached?.attachments || (message.attachments ? Array.from(message.attachments.values()).map(a => a.url) : []);
 
-    const executor = await AuditLogger.getAuditLogExecutor(
+    const deleteEntry = await AuditLogger.getAuditLogEntry(
       guild, 
       AuditLogEvent.MessageDelete, 
       authorId
     );
 
+    const isDeletedByMod = Boolean(deleteEntry?.executor && deleteEntry.executor.id !== authorId);
+    const executor = isDeletedByMod ? deleteEntry?.executor : null;
+
     const embed = new EmbedBuilder()
       .setColor(0xED4245) // Red
-      .setTitle('🗑️ Сообщение удалено')
+      .setTitle(isDeletedByMod ? '🗑️ Сообщение удалено модератором' : '🗑️ Сообщение удалено')
       .setDescription(
         `**Канал:** <#${message.channelId}>\n` +
         `**Автор сообщения:** ${authorId ? `<@${authorId}> (\`${authorTag || authorId}\`)` : 'Неизвестно (не было в кэше)'}\n` +
-        `**Удалил:** ${executor ? `${executor} (\`${executor.tag}\`)` : 'Сам автор или бот без лога'}\n` +
+        `**Удалил:** ${executor ? `${executor} (\`${executor.tag}\`)` : 'Сам автор или бот'}\n` +
         `**Время:** <t:${Math.floor(Date.now() / 1000)}:F>`
       )
       .addFields({
@@ -155,7 +169,21 @@ export function registerMessageLogs() {
     // Clean from cache
     messageCache.delete(message.id);
 
-    await AuditLogger.sendHumanOrBotLog(guild, 'MESSAGES', executor, embed);
+    await AuditLogger.sendHumanOrBotLog(guild, 'MESSAGES', executor, embed, {
+      action: isDeletedByMod ? 'MESSAGE_DELETE_MOD' : 'MESSAGE_DELETE',
+      executorId: executor?.id || authorId,
+      executorTag: executor?.tag || authorTag,
+      targetId: authorId,
+      targetTag: authorTag,
+      details: `Удалено сообщение ${authorTag ? `от @${authorTag}` : ''} в канале <#${message.channelId}> ${isDeletedByMod ? `модератором @${executor?.tag}` : 'автором'}: «${content.slice(0, 120)}»`,
+      metadata: {
+        channelId: message.channelId,
+        content,
+        attachments,
+        isDeletedByMod,
+        moderatorTag: executor?.tag,
+      },
+    });
   });
 
   // Message Edit
@@ -217,7 +245,19 @@ export function registerMessageLogs() {
       .setFooter({ text: `ID: ${newMessage.id}` })
       .setTimestamp();
 
-    await AuditLogger.sendLog(guild, 'MESSAGES', embed);
+    await AuditLogger.sendLog(guild, 'MESSAGES', embed, {
+      action: 'MESSAGE_EDIT',
+      executorId: fullNew.author.id,
+      executorTag: fullNew.author.tag,
+      targetId: fullNew.channelId,
+      targetTag: fullNew.author.tag,
+      details: `Сообщение отредактировано @${fullNew.author.tag} в <#${newMessage.channelId}>: «${oldContent.slice(0, 50)}» ➔ «${newContent.slice(0, 50)}»`,
+      metadata: {
+        channelId: newMessage.channelId,
+        oldContent,
+        newContent,
+      },
+    });
   });
 
   // Bulk Delete
@@ -226,10 +266,11 @@ export function registerMessageLogs() {
     const guild = firstMsg?.guild || ('guild' in channel ? channel.guild : null);
     if (!guild) return;
 
-    const executor = await AuditLogger.getAuditLogExecutor(
+    const bulkEntry = await AuditLogger.getAuditLogEntry(
       guild, 
       AuditLogEvent.MessageBulkDelete
     );
+    const executor = bulkEntry?.executor || null;
 
     const embed = new EmbedBuilder()
       .setColor(0xED4245)
@@ -242,7 +283,18 @@ export function registerMessageLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(guild, 'MESSAGES', embed);
+    await AuditLogger.sendLog(guild, 'MESSAGES', embed, {
+      action: 'MESSAGE_BULK_DELETE',
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: channel.id,
+      targetTag: channel.name,
+      details: `Массовая очистка ${messages.size} сообщений в <#${channel.id}> модератором @${executor?.tag || 'Неизвестно'}`,
+      metadata: {
+        count: messages.size,
+        channelId: channel.id,
+      },
+    });
   });
 }
 

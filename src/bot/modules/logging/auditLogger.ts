@@ -124,12 +124,21 @@ export class AuditLogger {
   }
 
   /**
-   * Dispatch a log embed to the configured channel
+   * Dispatch a log embed to the configured channel and save full metadata to the database
    */
   public static async sendLog(
     guild: Guild,
     categoryType: LogCategoryType,
-    embed: EmbedBuilder
+    embed: EmbedBuilder,
+    meta?: {
+      action?: string;
+      executorId?: string | null;
+      executorTag?: string | null;
+      targetId?: string | null;
+      targetTag?: string | null;
+      details?: string | null;
+      metadata?: any;
+    }
   ): Promise<void> {
     if (!guild || !guild.id) return;
     try {
@@ -183,34 +192,39 @@ export class AuditLogger {
           break;
       }
 
-      if (!targetChannelId) return;
+      if (targetChannelId) {
+        const channel = (guild.channels.cache.get(targetChannelId) || 
+          await guild.channels.fetch(targetChannelId).catch(() => null)) as TextChannel | null;
 
-      const channel = (guild.channels.cache.get(targetChannelId) || 
-        await guild.channels.fetch(targetChannelId).catch(() => null)) as TextChannel | null;
-
-      if (channel && channel.isTextBased()) {
-        const botMember = guild.members.me;
-        if (botMember && !channel.permissionsFor(botMember)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) {
-          console.warn(`[AuditLogger] Missing permissions in log channel #${channel.name} (${channel.id})`);
-          return;
+        if (channel && channel.isTextBased()) {
+          const botMember = guild.members.me;
+          if (!botMember || channel.permissionsFor(botMember)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) {
+            await channel.send({ embeds: [embed] }).catch(err => {
+              console.error(`[AuditLogger] Failed to send embed to #${channel.name}:`, err);
+            });
+          }
         }
-        await channel.send({ embeds: [embed] }).catch(err => {
-          console.error(`[AuditLogger] Failed to send embed to #${channel.name}:`, err);
-        });
       }
 
-      // Automatically persist to DB for website audit logs without duplicate Discord dispatch
+      // Persist to DB for website audit logs with FULL metadata
       const title = embed.data.title || `${categoryType} Log`;
-      const description = embed.data.description || '';
+      const description = meta?.details || embed.data.description || '';
       await prisma.auditLogEntry.create({
         data: {
           guildId: guild.id,
           category: categoryType,
-          action: categoryType,
+          action: meta?.action || categoryType,
           title,
           description,
+          executorId: meta?.executorId || null,
+          executorTag: meta?.executorTag || null,
+          targetId: meta?.targetId || null,
+          targetTag: meta?.targetTag || null,
+          metadataJson: JSON.stringify(meta?.metadata || {}),
         },
-      }).catch(() => null);
+      }).catch(err => {
+        console.error('[AuditLogger DB Save Error]:', err);
+      });
     } catch (error) {
       console.error(`[AuditLogger Error] Failed to send log for ${categoryType}:`, error);
     }
@@ -224,15 +238,30 @@ export class AuditLogger {
     guild: Guild,
     humanCategory: LogCategoryType,
     executor: { id?: string; bot?: boolean; tag?: string | null } | null | undefined,
-    embed: EmbedBuilder
+    embed: EmbedBuilder,
+    meta?: {
+      action?: string;
+      executorId?: string | null;
+      executorTag?: string | null;
+      targetId?: string | null;
+      targetTag?: string | null;
+      details?: string | null;
+      metadata?: any;
+    }
   ): Promise<void> {
     const botId = bot.user?.id;
     const isBot = Boolean(executor?.bot || (executor?.id && executor.id === botId));
 
+    const finalMeta = {
+      ...meta,
+      executorId: meta?.executorId !== undefined ? meta.executorId : (executor?.id || null),
+      executorTag: meta?.executorTag !== undefined ? meta.executorTag : (executor?.tag || null),
+    };
+
     if (isBot) {
-      await this.sendLog(guild, 'BOT', embed);
+      await this.sendLog(guild, 'BOT', embed, finalMeta);
     } else {
-      await this.sendLog(guild, humanCategory, embed);
+      await this.sendLog(guild, humanCategory, embed, finalMeta);
     }
   }
 
@@ -330,24 +359,55 @@ export class AuditLogger {
   }
 
   /**
+   * Helper to fetch full audit log entry details (executor, reason, changes, extra)
+   */
+  public static async getAuditLogEntry(
+    guild: Guild,
+    action: AuditLogEvent,
+    targetId?: string,
+    filterFn?: (entry: import('discord.js').GuildAuditLogsEntry) => boolean
+  ): Promise<{
+    executor: import('discord.js').User | import('discord.js').PartialUser | null;
+    reason: string | null;
+    changes: readonly import('discord.js').AuditLogChange[];
+    extra: any;
+    createdAt: Date;
+    raw: import('discord.js').GuildAuditLogsEntry;
+  } | null> {
+    try {
+      const logs = await guild.fetchAuditLogs({ limit: 6, type: action });
+      const now = Date.now();
+      const entry = logs.entries.find(e => {
+        // Must be recent (e.g. within 30 seconds)
+        const isRecent = now - e.createdTimestamp < 30000;
+        if (!isRecent) return false;
+        if (targetId && e.targetId && e.targetId !== targetId) return false;
+        if (filterFn && !filterFn(e)) return false;
+        return true;
+      });
+      if (!entry) return null;
+      return {
+        executor: entry.executor || null,
+        reason: entry.reason || null,
+        changes: entry.changes || [],
+        extra: entry.extra || null,
+        createdAt: entry.createdAt,
+        raw: entry,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Helper to fetch the executor of an audit log event
    */
   public static async getAuditLogExecutor(
     guild: Guild,
     action: AuditLogEvent,
     targetId?: string
-  ) {
-    try {
-      const logs = await guild.fetchAuditLogs({ limit: 5, type: action });
-      const entry = logs.entries.find(e => {
-        const isRecent = Date.now() - e.createdTimestamp < 15000;
-        if (!isRecent) return false;
-        if (targetId && e.targetId && e.targetId !== targetId) return false;
-        return true;
-      });
-      return entry?.executor || null;
-    } catch {
-      return null;
-    }
+  ): Promise<import('discord.js').User | import('discord.js').PartialUser | null> {
+    const res = await this.getAuditLogEntry(guild, action, targetId);
+    return res?.executor || null;
   }
 }

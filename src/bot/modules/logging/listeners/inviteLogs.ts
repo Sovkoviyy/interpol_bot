@@ -125,7 +125,15 @@ export function registerInviteLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendHumanOrBotLog(guild, 'INVITES', invite.inviter, embed);
+    await AuditLogger.sendHumanOrBotLog(guild, 'INVITES', invite.inviter, embed, {
+      action: 'INVITE_CREATE',
+      executorId: invite.inviter?.id,
+      executorTag: invite.inviter?.tag,
+      targetId: invite.code,
+      targetTag: invite.code,
+      details: `Создано приглашение discord.gg/${invite.code} (${invite.inviter ? `создал @${invite.inviter.tag}` : 'неизвестно'})`,
+      metadata: { code: invite.code, channelId: invite.channelId, maxUses: invite.maxUses },
+    });
   });
 
   // Invite Delete
@@ -148,6 +156,12 @@ export function registerInviteLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendLog(guild, 'INVITES', embed);
+    await AuditLogger.sendLog(guild, 'INVITES', embed, {
+      action: 'INVITE_DELETE',
+      targetId: invite.code,
+      targetTag: invite.code,
+      details: `Удалено или истекло приглашение discord.gg/${invite.code}`,
+      metadata: { code: invite.code, channelId: invite.channelId },
+    });
   });
 }

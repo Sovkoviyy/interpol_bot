@@ -30,7 +30,15 @@ export function registerChannelLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendHumanOrBotLog(channel.guild, 'CHANNELS', executor, embed);
+    await AuditLogger.sendHumanOrBotLog(channel.guild, 'CHANNELS', executor, embed, {
+      action: 'CHANNEL_CREATE',
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: channel.id,
+      targetTag: channel.name,
+      details: `Создан канал #${channel.name} (${executor ? `создал @${executor.tag}` : 'неизвестно'})`,
+      metadata: { channelId: channel.id, channelName: channel.name, type: ChannelType[channel.type] },
+    });
   });
 
   // Channel Delete
@@ -54,7 +62,15 @@ export function registerChannelLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendHumanOrBotLog(channel.guild, 'CHANNELS', executor, embed);
+    await AuditLogger.sendHumanOrBotLog(channel.guild, 'CHANNELS', executor, embed, {
+      action: 'CHANNEL_DELETE',
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: channel.id,
+      targetTag: channel.name,
+      details: `Удален канал #${channel.name || channel.id} (${executor ? `удалил @${executor.tag}` : 'неизвестно'})`,
+      metadata: { channelId: channel.id, channelName: channel.name },
+    });
   });
 
   // Channel Update
@@ -89,6 +105,14 @@ export function registerChannelLogs() {
       )
       .setTimestamp();
 
-    await AuditLogger.sendHumanOrBotLog(newChannel.guild, 'CHANNELS', executor, embed);
+    await AuditLogger.sendHumanOrBotLog(newChannel.guild, 'CHANNELS', executor, embed, {
+      action: 'CHANNEL_UPDATE',
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: newChannel.id,
+      targetTag: newChannel.name,
+      details: `Обновлен канал #${newChannel.name}: ${changes.join(', ')} (${executor ? `изменил @${executor.tag}` : 'неизвестно'})`,
+      metadata: { channelId: newChannel.id, channelName: newChannel.name, changes },
+    });
   });
 }
