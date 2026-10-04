@@ -21,7 +21,7 @@ router.get('/config', requireGuildId, asyncHandler(async (req: AuthenticatedRequ
 /**
  * POST /api/payroll/config
  */
-router.post('/config', requirePermission('manageRecruiting', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/config', requirePermission('manageRecruiting', 'manageSettings', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const updated = await PayrollService.saveConfig(guildId, req.body);
     res.json({ config: updated });
@@ -31,7 +31,7 @@ router.post('/config', requirePermission('manageRecruiting', 'manageSettings'), 
  * GET /api/payroll/calculate
  * Calculates live recruiter payroll activity (defaults to current week Monday-Sunday)
  */
-router.get('/calculate', requirePermission('manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.get('/calculate', requirePermission('manageRecruiting', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const startStr = req.query.start as string;
     const endStr = req.query.end as string;
@@ -47,7 +47,7 @@ router.get('/calculate', requirePermission('manageRecruiting'), requireGuildId, 
  * GET /api/payroll/export
  * Returns the strictly formatted bank payout CSV (staticId;amount;comment)
  */
-router.get('/export', requirePermission('manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.get('/export', requirePermission('manageRecruiting', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const comment = (req.query.comment as string) || 'Премия';
     const source = (req.query.source as string) || 'current';
@@ -73,7 +73,7 @@ router.get('/export', requirePermission('manageRecruiting'), requireGuildId, asy
  * POST /api/payroll/archive-week
  * Explicitly finalize the current week, save payout records, announce in Discord, and reset for new week
  */
-router.post('/archive-week', requirePermission('manageRecruiting', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/archive-week', requirePermission('manageRecruiting', 'manageSettings', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const executor = {
         id: req.user?.userId || 'unknown',
@@ -89,11 +89,13 @@ router.post('/archive-week', requirePermission('manageRecruiting', 'manageSettin
 
 /**
  * POST /api/payroll/reset
- * Legacy/generic reset endpoint: if recruiterId is passed, resets single recruiter. Otherwise archives and resets week.
+ * If recruiterId is passed, resets single recruiter.
+ * If archive=true, archives week and creates payouts.
+ * Otherwise resets active stats cleanly to zero.
  */
-router.post('/reset', requirePermission('manageRecruiting', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/reset', requirePermission('manageRecruiting', 'manageSettings', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
-    const { recruiterId } = req.body;
+    const { recruiterId, archive } = req.body;
     const executor = {
         id: req.user?.userId || 'unknown',
         tag: req.user?.username || 'Web Admin',
@@ -107,9 +109,17 @@ router.post('/reset', requirePermission('manageRecruiting', 'manageSettings'), r
         });
     }
 
-    const result = await PayrollService.archiveAndResetWeek(guildId, { executor, isAutomatic: false });
+    if (archive) {
+        const result = await PayrollService.archiveAndResetWeek(guildId, { executor, isAutomatic: false });
+        return res.json({
+            message: 'Неделя успешно закрыта, выплаты сформированы',
+            ...result,
+        });
+    }
+
+    const result = await PayrollService.resetActiveStats(guildId, executor);
     return res.json({
-        message: 'Статистика всех рекрутеров обнулена, выплаты сформированы',
+        message: 'Статистика всех рекрутеров за текущую неделю успешно обнулена',
         ...result,
     });
 }));
@@ -118,7 +128,7 @@ router.post('/reset', requirePermission('manageRecruiting', 'manageSettings'), r
  * POST /api/payroll/reset-clear
  * Clear reset checkpoint (reverts to standard period filtering)
  */
-router.post('/reset-clear', requirePermission('manageRecruiting', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/reset-clear', requirePermission('manageRecruiting', 'manageSettings', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const { recruiterId } = req.body;
 
@@ -130,7 +140,7 @@ router.post('/reset-clear', requirePermission('manageRecruiting', 'manageSetting
  * GET /api/payroll/history
  * List archived payout records
  */
-router.get('/history', requirePermission('manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.get('/history', requirePermission('manageRecruiting', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const status = req.query.status as string;
     const limit = parseInt(req.query.limit as string, 10) || 100;
@@ -143,7 +153,7 @@ router.get('/history', requirePermission('manageRecruiting'), requireGuildId, as
  * PATCH /api/payroll/payouts/:id
  * Mark a payout record as PAID or PENDING
  */
-router.patch('/payouts/:id', requirePermission('manageRecruiting', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.patch('/payouts/:id', requirePermission('manageRecruiting', 'manageSettings', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const id = req.params.id as string;
     const { status } = req.body;
@@ -160,7 +170,7 @@ router.patch('/payouts/:id', requirePermission('manageRecruiting', 'manageSettin
  * DELETE /api/payroll/payouts/:id
  * Delete a specific payout record
  */
-router.delete('/payouts/:id', requirePermission('manageRecruiting', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/payouts/:id', requirePermission('manageRecruiting', 'manageSettings', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const id = req.params.id as string;
 

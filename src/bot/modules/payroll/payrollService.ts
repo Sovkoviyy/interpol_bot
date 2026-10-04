@@ -164,6 +164,13 @@ export class PayrollService {
     });
   }
 
+  private static toTimestamp(val: any): number {
+    if (!val) return 0;
+    if (val instanceof Date) return val.getTime();
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+
   /**
    * Calculate activity and payouts for recruiters within a given time period (defaults to current week Monday-Sunday)
    */
@@ -174,10 +181,10 @@ export class PayrollService {
     const periodStart = requestedStart || week.start;
     const periodEnd = requestedEnd || week.end;
 
-    // Respect lastResetAt so resets take immediate effect
-    const effectiveStart = config.lastResetAt && config.lastResetAt > periodStart
-      ? config.lastResetAt
-      : periodStart;
+    // Respect lastResetAt safely via timestamps so resets take immediate effect regardless of Date/string types
+    const resetTime = this.toTimestamp(config.lastResetAt);
+    const startTime = this.toTimestamp(periodStart);
+    const effectiveStart = resetTime > startTime ? new Date(resetTime) : periodStart;
 
     let recruiterResets: Record<string, string> = {};
     try {
@@ -186,23 +193,29 @@ export class PayrollService {
       recruiterResets = {};
     }
 
-    // 1. Accepted candidates
+    // 1. Accepted candidates (fallback to updatedAt if closedAt was not populated)
     const acceptedCandidates = await prisma.recruitmentApplication.findMany({
       where: {
         guildId,
         status: 'ACCEPTED',
         recruiterId: { not: null },
-        closedAt: { gte: effectiveStart, lte: periodEnd },
+        OR: [
+          { closedAt: { gte: effectiveStart, lte: periodEnd } },
+          { closedAt: null, updatedAt: { gte: effectiveStart, lte: periodEnd } },
+        ],
       },
     });
 
-    // 2. Rejected candidates
+    // 2. Rejected candidates (fallback to updatedAt if closedAt was not populated)
     const rejectedCandidates = await prisma.recruitmentApplication.findMany({
       where: {
         guildId,
         status: 'REJECTED',
         recruiterId: { not: null },
-        closedAt: { gte: effectiveStart, lte: periodEnd },
+        OR: [
+          { closedAt: { gte: effectiveStart, lte: periodEnd } },
+          { closedAt: null, updatedAt: { gte: effectiveStart, lte: periodEnd } },
+        ],
       },
     });
 
@@ -270,8 +283,9 @@ export class PayrollService {
     // Credit candidates
     for (const app of acceptedCandidates) {
       if (app.recruiterId) {
-        const recReset = recruiterResets[app.recruiterId];
-        if (recReset && app.closedAt && app.closedAt <= new Date(recReset)) continue;
+        const recResetTime = this.toTimestamp(recruiterResets[app.recruiterId]);
+        const appTime = this.toTimestamp(app.closedAt || app.updatedAt);
+        if (recResetTime > 0 && appTime <= recResetTime) continue;
         const r = getOrInit(app.recruiterId, app.recruiterTag);
         r.acceptedCount += 1;
       }
@@ -279,8 +293,9 @@ export class PayrollService {
 
     for (const app of rejectedCandidates) {
       if (app.recruiterId) {
-        const recReset = recruiterResets[app.recruiterId];
-        if (recReset && app.closedAt && app.closedAt <= new Date(recReset)) continue;
+        const recResetTime = this.toTimestamp(recruiterResets[app.recruiterId]);
+        const appTime = this.toTimestamp(app.closedAt || app.updatedAt);
+        if (recResetTime > 0 && appTime <= recResetTime) continue;
         const r = getOrInit(app.recruiterId, app.recruiterTag);
         r.rejectedCandidatesCount += 1;
       }
@@ -289,8 +304,9 @@ export class PayrollService {
     // Credit reports
     for (const rep of approvedReports) {
       if (rep.reviewerId) {
-        const recReset = recruiterResets[rep.reviewerId];
-        if (recReset && rep.reviewedAt && rep.reviewedAt <= new Date(recReset)) continue;
+        const recResetTime = this.toTimestamp(recruiterResets[rep.reviewerId]);
+        const repTime = this.toTimestamp(rep.reviewedAt || rep.createdAt);
+        if (recResetTime > 0 && repTime <= recResetTime) continue;
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
         r.approvedReportsCount += 1;
       }
@@ -298,8 +314,9 @@ export class PayrollService {
 
     for (const rep of rejectedReports) {
       if (rep.reviewerId) {
-        const recReset = recruiterResets[rep.reviewerId];
-        if (recReset && rep.reviewedAt && rep.reviewedAt <= new Date(recReset)) continue;
+        const recResetTime = this.toTimestamp(recruiterResets[rep.reviewerId]);
+        const repTime = this.toTimestamp(rep.reviewedAt || rep.createdAt);
+        if (recResetTime > 0 && repTime <= recResetTime) continue;
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
         r.rejectedReportsCount += 1;
       }
@@ -309,8 +326,9 @@ export class PayrollService {
     for (const promo of promotions) {
       const promoterId = promo.promotedById;
       if (promoterId) {
-        const recReset = recruiterResets[promoterId];
-        if (recReset && promo.archivedAt && promo.archivedAt <= new Date(recReset)) continue;
+        const recResetTime = this.toTimestamp(recruiterResets[promoterId]);
+        const promoTime = this.toTimestamp(promo.archivedAt || promo.updatedAt);
+        if (recResetTime > 0 && promoTime <= recResetTime) continue;
         const r = getOrInit(promoterId, promo.promotedByTag);
         r.promotionsCount += 1;
       }
@@ -406,7 +424,8 @@ export class PayrollService {
 
     // 1. Calculate the active payroll up to now
     const week = this.getWeekRange(now);
-    const periodStart = config.lastResetAt || week.start;
+    const resetDate = config.lastResetAt ? new Date(config.lastResetAt) : null;
+    const periodStart = resetDate || week.start;
     const periodEnd = now;
     const periodString = this.formatRangeString(periodStart, periodEnd);
 
@@ -441,9 +460,15 @@ export class PayrollService {
 
     // 3. Update config with reset timestamp and current week Monday
     const nextWeekRange = this.getWeekRange(now);
-    await prisma.recruiterSalaryConfig.update({
+    await prisma.recruiterSalaryConfig.upsert({
       where: { guildId },
-      data: {
+      update: {
+        lastResetAt: now,
+        currentWeekMonday: nextWeekRange.start,
+        recruiterResetsJson: '{}',
+      },
+      create: {
+        guildId,
         lastResetAt: now,
         currentWeekMonday: nextWeekRange.start,
         recruiterResetsJson: '{}',
@@ -552,6 +577,42 @@ export class PayrollService {
   }
 
   /**
+   * Reset all recruiters' active counters without creating permanent payouts (clean slate for current week)
+   */
+  public static async resetActiveStats(guildId: string, executor?: { id: string; tag: string }) {
+    const config = await this.getConfig(guildId);
+    const now = new Date();
+    const nextWeekRange = this.getWeekRange(now);
+
+    await prisma.recruiterSalaryConfig.upsert({
+      where: { guildId },
+      update: {
+        lastResetAt: now,
+        currentWeekMonday: nextWeekRange.start,
+        recruiterResetsJson: '{}',
+      },
+      create: {
+        guildId,
+        lastResetAt: now,
+        currentWeekMonday: nextWeekRange.start,
+        recruiterResetsJson: '{}',
+      },
+    });
+
+    await AuditLogger.recordEntry({
+      guildId,
+      category: 'RECRUIT',
+      action: 'RECRUITER_STATS_RESET_ALL',
+      title: 'Обнуление текущей статистики рекрутеров',
+      description: `Счетчики текущей недели обнулены администратором ${executor?.tag || 'Администратор'}.`,
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+    }).catch(() => null);
+
+    return { success: true, resetAt: now };
+  }
+
+  /**
    * Reset stats for an individual recruiter (checkpoint)
    */
   public static async resetSingleRecruiter(guildId: string, recruiterId: string, executor?: { id: string; tag: string }) {
@@ -566,9 +627,13 @@ export class PayrollService {
     }
     resets[recruiterId] = now.toISOString();
 
-    await prisma.recruiterSalaryConfig.update({
+    await prisma.recruiterSalaryConfig.upsert({
       where: { guildId },
-      data: {
+      update: {
+        recruiterResetsJson: JSON.stringify(resets),
+      },
+      create: {
+        guildId,
         recruiterResetsJson: JSON.stringify(resets),
       },
     });
@@ -594,10 +659,16 @@ export class PayrollService {
     const config = await this.getConfig(guildId);
 
     if (!recruiterId) {
-      await prisma.recruiterSalaryConfig.update({
+      await prisma.recruiterSalaryConfig.upsert({
         where: { guildId },
-        data: {
+        update: {
           lastResetAt: null,
+          recruiterResetsJson: '{}',
+        },
+        create: {
+          guildId,
+          lastResetAt: null,
+          recruiterResetsJson: '{}',
         },
       });
       return { success: true };
@@ -610,9 +681,13 @@ export class PayrollService {
       }
       delete resets[recruiterId];
 
-      await prisma.recruiterSalaryConfig.update({
+      await prisma.recruiterSalaryConfig.upsert({
         where: { guildId },
-        data: {
+        update: {
+          recruiterResetsJson: JSON.stringify(resets),
+        },
+        create: {
+          guildId,
           recruiterResetsJson: JSON.stringify(resets),
         },
       });

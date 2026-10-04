@@ -33,6 +33,7 @@ import {
   EmptyState, 
   SearchInput, 
   Modal, 
+  ConfirmDialog,
   ChannelSelect 
 } from '../components';
 
@@ -50,6 +51,11 @@ export const RecruiterPayroll: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [channels, setChannels] = useState<any[]>([]);
+
+  // Confirmation Dialog States
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [resetAllConfirmOpen, setResetAllConfirmOpen] = useState(false);
+  const [resetSingleTarget, setResetSingleTarget] = useState<any | null>(null);
 
   // Recruiter applications view/delete modal
   const [selectedRecruiterForApps, setSelectedRecruiterForApps] = useState<any | null>(null);
@@ -130,19 +136,12 @@ export const RecruiterPayroll: React.FC = () => {
   };
 
   // Archive & Reset Week (Finalize week, create payout records, post in Discord)
-  const handleArchiveWeek = async () => {
-    const confirmed = await modal.confirm({
-      title: 'Завершить неделю и сформировать выплаты?',
-      message: 'Будет произведен расчет за текущую неделю, созданы постоянные ведомости выплат в истории, статистика обнулится на новую неделю, а отчет со списками будет отправлен в настроенный Discord-канал.',
-      confirmText: 'Завершить неделю',
-      type: 'warning',
-    });
-    if (!confirmed) return;
-
+  const executeArchiveWeek = async () => {
     try {
       setActionLoading(true);
-      const res = await api.post('/payroll/archive-week', {});
+      const res = await api.post('/payroll/archive-week', { guildId: config?.guildId });
       toast.success(res.data?.message || 'Неделя завершена, выплаты сформированы!');
+      setArchiveConfirmOpen(false);
       await fetchData();
       setTab('history');
     } catch (err: any) {
@@ -152,20 +151,32 @@ export const RecruiterPayroll: React.FC = () => {
     }
   };
 
-  // Reset single recruiter
-  const handleResetSingleRecruiter = async (recruiter: any) => {
-    const confirmed = await modal.confirm({
-      title: 'Обнуление статистики рекрутера',
-      message: `Обнулить текущую статистику для рекрутера ${recruiter.displayName || recruiter.recruiterTag}? Его счетчики за текущую неделю будут обнулены.`,
-      confirmText: 'Обнулить',
-      type: 'danger',
-    });
-    if (!confirmed) return;
-
+  // Reset all active weekly counters cleanly without archiving
+  const executeResetAll = async () => {
     try {
       setActionLoading(true);
-      await api.post('/payroll/reset', { recruiterId: recruiter.recruiterId });
-      toast.success(`Статистика рекрутера ${recruiter.displayName} обнулена!`);
+      const res = await api.post('/payroll/reset', { archive: false, guildId: config?.guildId });
+      toast.success(res.data?.message || 'Статистика текущей недели успешно обнулена!');
+      setResetAllConfirmOpen(false);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Не удалось обнулить статистику');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Reset single recruiter
+  const executeResetSingle = async () => {
+    if (!resetSingleTarget) return;
+    try {
+      setActionLoading(true);
+      const res = await api.post('/payroll/reset', {
+        recruiterId: resetSingleTarget.recruiterId,
+        guildId: config?.guildId,
+      });
+      toast.success(res.data?.message || `Статистика рекрутера ${resetSingleTarget.displayName} обнулена!`);
+      setResetSingleTarget(null);
       await fetchData();
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Не удалось обнулить');
@@ -178,7 +189,7 @@ export const RecruiterPayroll: React.FC = () => {
   const handleClearReset = async (recruiterId?: string) => {
     try {
       setActionLoading(true);
-      await api.post('/payroll/reset-clear', { recruiterId });
+      await api.post('/payroll/reset-clear', { recruiterId, guildId: config?.guildId });
       toast.success('Точка обнуления сброшена. Отображаются данные за полный период недели.');
       await fetchData();
     } catch (err: any) {
@@ -357,7 +368,16 @@ export const RecruiterPayroll: React.FC = () => {
               <span>Экспорт (банк)</span>
             </button>
             <button
-              onClick={handleArchiveWeek}
+              onClick={() => setResetAllConfirmOpen(true)}
+              disabled={actionLoading}
+              className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-semibold rounded-xl border border-rose-500/20 transition-all disabled:opacity-50"
+              title="Сбросить текущие счетчики недели без создания ведомостей в истории"
+            >
+              <RotateCcw className={`w-4 h-4 ${actionLoading ? 'animate-spin' : ''}`} />
+              <span>Обнулить неделю</span>
+            </button>
+            <button
+              onClick={() => setArchiveConfirmOpen(true)}
               disabled={actionLoading}
               className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-pink-500/20 transition-all disabled:opacity-50"
             >
@@ -609,7 +629,7 @@ export const RecruiterPayroll: React.FC = () => {
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => handleResetSingleRecruiter(rec)}
+                                onClick={() => setResetSingleTarget(rec)}
                                 className="p-1.5 rounded-lg bg-[#0B0E14] hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-[#1E232F] transition-all"
                                 title="Индивидуально обнулить статистику"
                               >
@@ -1132,6 +1152,42 @@ export const RecruiterPayroll: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Confirm Dialog: Archive Week */}
+      <ConfirmDialog
+        isOpen={archiveConfirmOpen}
+        onClose={() => setArchiveConfirmOpen(false)}
+        onConfirm={executeArchiveWeek}
+        title="Завершить неделю и сформировать выплаты?"
+        message="Будет произведен расчет за текущую неделю, созданы постоянные ведомости выплат в истории, статистика обнулится на новую неделю, а отчет со списками будет отправлен в настроенный Discord-канал."
+        confirmLabel="Завершить неделю"
+        variant="warning"
+        loading={actionLoading}
+      />
+
+      {/* Confirm Dialog: Reset All Active Stats */}
+      <ConfirmDialog
+        isOpen={resetAllConfirmOpen}
+        onClose={() => setResetAllConfirmOpen(false)}
+        onConfirm={executeResetAll}
+        title="Обнулить статистику текущей недели?"
+        message="Текущие счетчики принятых заявок, отчетов и повышений для всех рекрутеров будут сброшены в 0. Новые данные будут учитываться с этого момента. Ведомости в историю выплат создаваться НЕ будут."
+        confirmLabel="Обнулить неделю"
+        variant="danger"
+        loading={actionLoading}
+      />
+
+      {/* Confirm Dialog: Reset Single Recruiter */}
+      <ConfirmDialog
+        isOpen={!!resetSingleTarget}
+        onClose={() => setResetSingleTarget(null)}
+        onConfirm={executeResetSingle}
+        title="Обнуление статистики рекрутера"
+        message={`Обнулить текущую статистику для рекрутера ${resetSingleTarget?.displayName || resetSingleTarget?.recruiterTag || ''}? Его счетчики за текущую неделю будут обнулены с этого момента.`}
+        confirmLabel="Обнулить"
+        variant="danger"
+        loading={actionLoading}
+      />
     </div>
   );
 };
