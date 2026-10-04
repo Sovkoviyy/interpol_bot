@@ -44,6 +44,32 @@ router.get('/calculate', requirePermission('manageRecruiting'), requireGuildId, 
 }));
 
 /**
+ * GET /api/payroll/export
+ * Returns the strictly formatted bank payout CSV (staticId;amount;comment)
+ */
+router.get('/export', requirePermission('manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const guildId = (req as any).guildId;
+    const comment = (req.query.comment as string) || 'Премия';
+    const source = (req.query.source as string) || 'current';
+    const onlyPositive = req.query.onlyPositive !== 'false';
+
+    let records: Array<{ staticId?: string | null; totalPayout: number }> = [];
+
+    if (source === 'history') {
+        const history = await PayrollService.getPayoutHistory(guildId, { status: req.query.status as string, limit: 500 });
+        records = history.map(h => ({ staticId: h.staticId, totalPayout: h.totalPayout }));
+    } else {
+        const report = await PayrollService.calculatePayroll(guildId);
+        records = report.recruiters.map(r => ({ staticId: r.staticId, totalPayout: r.totalPayout }));
+    }
+
+    const csvContent = PayrollService.generateBankExport(records, comment, onlyPositive);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="payout_template.csv"');
+    res.send('\uFEFF' + csvContent);
+}));
+
+/**
  * POST /api/payroll/archive-week
  * Explicitly finalize the current week, save payout records, announce in Discord, and reset for new week
  */

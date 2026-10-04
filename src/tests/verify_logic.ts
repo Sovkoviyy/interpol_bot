@@ -6,6 +6,7 @@
  */
 import { RecruitmentService } from '../bot/modules/recruitment/recruitmentService';
 import { EventService } from '../bot/modules/events/eventService';
+import { PayrollService } from '../bot/modules/payroll/payrollService';
 
 async function runTests() {
   console.log('🧪 Starting core system logic verification...');
@@ -491,9 +492,22 @@ async function runTests() {
   appList = appList.filter(a => a.id !== 'app_1');
   const remainingAccepted = appList.filter(a => a.recruiterId === 'recruiter_1' && a.status === 'ACCEPTED').length;
   console.assert(remainingAccepted === 1, `Remaining accepted should be 1 after deleting app_1, got ${remainingAccepted}`);
-  console.log('✅ Test 29: Recruiter stats reset and application deletion logic verified');
+  // Test 30: Recruiter payroll strict bank export format (staticId;amount;comment)
+  const testRecruiters = [
+    { staticId: '265', totalPayout: 5000 },
+    { staticId: '#142055', totalPayout: 12500 },
+    { staticId: null, totalPayout: 3000 }, // missing static
+    { staticId: '999', totalPayout: 0 }, // zero payout
+  ];
+  const exportedStrict = PayrollService.generateBankExport(testRecruiters, 'Премия');
+  const exportLines = exportedStrict.split('\r\n');
+  console.assert(exportLines[0] === 'staticId;amount;comment', `Header must be staticId;amount;comment, got: ${exportLines[0]}`);
+  console.assert(exportLines[1] === '265;5000;Премия', `First row must be 265;5000;Премия, got: ${exportLines[1]}`);
+  console.assert(exportLines[2] === '142055;12500;Премия', `Second row must strip hash: 142055;12500;Премия, got: ${exportLines[2]}`);
+  console.assert(exportLines.length === 3, `Export must contain exactly 3 lines (header + 2 valid rows), got: ${exportLines.length}`);
+  console.log('✅ Test 30: Strict bank payout export template (staticId;amount;comment) verified');
 
-  console.log('🎉 ALL 29 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
+  console.log('🎉 ALL 30 SYSTEM LOGIC VERIFICATIONS PASSED SUCCESSFULLY!');
 }
 
 runTests().catch(err => {

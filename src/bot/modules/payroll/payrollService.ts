@@ -355,13 +355,14 @@ export class PayrollService {
           rec.recruiterId
         );
 
+        const cleanStatic = staticId ? String(staticId).replace(/^#/, '').trim() : '';
         rec.totalPayout = payout;
         return {
           ...rec,
           displayName,
-          staticId,
+          staticId: cleanStatic || null,
           characterName,
-          exportRow: `${staticId || 'БЕЗ_СТАТИКА'};${payout};Зарплата рекрутера (${displayName})`,
+          exportRow: cleanStatic ? `${cleanStatic};${Math.round(payout)};Премия` : '',
         };
       })
     );
@@ -677,6 +678,31 @@ export class PayrollService {
     return await prisma.recruiterPayoutRecord.delete({
       where: { id: payoutId },
     });
+  }
+
+  /**
+   * Generates a strict bank template for bulk payout imports in Majestic RP:
+   * 
+   * staticId;amount;comment
+   * 265;5000;Премия
+   */
+  public static generateBankExport(
+    records: Array<{ staticId?: string | null; totalPayout: number }>,
+    comment: string = 'Премия',
+    onlyPositive: boolean = true
+  ): string {
+    const cleanComment = (comment || 'Премия').replace(/[;\r\n]/g, ' ').trim() || 'Премия';
+    const lines = ['staticId;amount;comment'];
+
+    for (const r of records) {
+      const cleanStatic = String(r.staticId || '').replace(/^#/, '').trim();
+      const amount = Math.round(Number(r.totalPayout) || 0);
+      if (!cleanStatic) continue;
+      if (onlyPositive && amount <= 0) continue;
+      lines.push(`${cleanStatic};${amount};${cleanComment}`);
+    }
+
+    return lines.join('\r\n');
   }
 
   /**

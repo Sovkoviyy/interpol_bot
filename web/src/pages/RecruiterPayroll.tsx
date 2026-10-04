@@ -59,7 +59,8 @@ export const RecruiterPayroll: React.FC = () => {
 
   // Export Modal
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportComment, setExportComment] = useState('Зарплата рекрутера');
+  const [exportComment, setExportComment] = useState('Премия');
+  const [exportSource, setExportSource] = useState<'current' | 'history'>('current');
   const [exportOnlyPositive, setExportOnlyPositive] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -237,21 +238,63 @@ export const RecruiterPayroll: React.FC = () => {
     }
   };
 
-  // Export copy
+  // Export helpers - Strict bank format: staticId;amount;comment
+  const getExportData = () => {
+    if (exportSource === 'history') {
+      return filteredHistory.map((h) => ({
+        staticId: h.staticId,
+        totalPayout: h.totalPayout,
+        displayName: h.recruiterName || h.recruiterTag || h.recruiterId,
+      }));
+    }
+    return (payrollData?.recruiters || []).map((r: any) => ({
+      staticId: r.staticId,
+      totalPayout: r.totalPayout,
+      displayName: r.displayName || r.recruiterTag || r.recruiterId,
+    }));
+  };
+
+  const generateStrictExportText = () => {
+    const list = getExportData();
+    const comment = (exportComment || 'Премия').replace(/[;\r\n]/g, ' ').trim() || 'Премия';
+
+    // First line is strictly required by the bank template
+    const lines: string[] = ['staticId;amount;comment'];
+
+    for (const r of list) {
+      const cleanStatic = String(r.staticId || '').replace(/^#/, '').trim();
+      const amount = Math.round(Number(r.totalPayout) || 0);
+
+      // Must have staticId and if exportOnlyPositive must have amount > 0
+      if (!cleanStatic) continue;
+      if (exportOnlyPositive && amount <= 0) continue;
+
+      lines.push(`${cleanStatic};${amount};${comment}`);
+    }
+
+    return lines.join('\n');
+  };
+
   const handleCopyExport = () => {
-    if (!payrollData?.recruiters) return;
-    const list = exportOnlyPositive
-      ? payrollData.recruiters.filter((r: any) => r.totalPayout > 0)
-      : payrollData.recruiters;
-
-    const text = list
-      .map((r: any) => `${r.staticId || 'БЕЗ_СТАТИКА'};${r.totalPayout};${exportComment} (${r.displayName})`)
-      .join('\n');
-
+    const text = generateStrictExportText();
     navigator.clipboard.writeText(text);
     setCopied(true);
-    toast.success('Ведомость скопирована в буфер обмена!');
+    toast.success('Строгий шаблон выплат скопирован в буфер обмена!');
     setTimeout(() => setCopied(false), 3000);
+  };
+
+  const handleDownloadExport = () => {
+    const text = generateStrictExportText();
+    const blob = new Blob(['\uFEFF' + text], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `payouts_${exportSource === 'history' ? 'history' : 'current'}_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('Файл шаблона выплат скачан (.csv)!');
   };
 
   if (loading) {
@@ -303,11 +346,15 @@ export const RecruiterPayroll: React.FC = () => {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-pink-400' : ''}`} />
             </button>
             <button
-              onClick={() => setShowExportModal(true)}
+              onClick={() => {
+                setExportSource('current');
+                setShowExportModal(true);
+              }}
               className="flex items-center gap-1.5 px-3 py-2 bg-[#151921] hover:bg-[#1E232F] text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-[#1E232F] transition-all"
+              title="Экспорт ведомости текущей недели в строгий банковский шаблон"
             >
               <Download className="w-4 h-4 text-emerald-400" />
-              <span>Экспорт</span>
+              <span>Экспорт (банк)</span>
             </button>
             <button
               onClick={handleArchiveWeek}
@@ -620,12 +667,25 @@ export const RecruiterPayroll: React.FC = () => {
               </button>
             </div>
 
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Поиск по истории выплат..."
-              className="w-full sm:w-72"
-            />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  setExportSource('history');
+                  setShowExportModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#151921] hover:bg-[#1E232F] text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-[#1E232F] transition-all"
+                title="Экспорт ведомости из истории выплат в строгий банковский шаблон"
+              >
+                <Download className="w-4 h-4 text-emerald-400" />
+                <span>Экспорт (банк)</span>
+              </button>
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Поиск по истории выплат..."
+                className="w-full sm:w-72"
+              />
+            </div>
           </div>
 
           <div className="bg-[#151921] border border-[#1E232F] rounded-2xl overflow-hidden">
@@ -957,23 +1017,37 @@ export const RecruiterPayroll: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Export Modal */}
+      {/* Export Modal - Strict Bank Template (staticId;amount;comment) */}
       <Modal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        title="Экспорт ведомости выплат"
-        description="Формат для выдачи средств в игре / банке Majestic RP"
+        title="Экспорт выплат в банк Majestic RP"
+        description="Строгий CSV-шаблон для выплат премий в планшете организации"
         maxWidth="max-w-lg"
       >
         <div className="space-y-4 text-xs">
+          {/* Source indicator */}
+          <div className="flex items-center justify-between p-2.5 bg-[#0B0E14] border border-[#1E232F] rounded-xl text-xs">
+            <span className="text-slate-400">Источник данных:</span>
+            <span className="font-bold text-pink-400">
+              {exportSource === 'history' ? 'История выплат (архив)' : 'Текущая неделя (актуальные)'}
+            </span>
+          </div>
+
           <div>
-            <label className="block text-slate-400 font-medium mb-1">Комментарий к переводу</label>
+            <label className="block text-slate-300 font-semibold mb-1">
+              Комментарий к выплате (comment):
+            </label>
             <input
               type="text"
               value={exportComment}
               onChange={(e) => setExportComment(e.target.value)}
-              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-pink-500"
+              placeholder="Премия"
+              className="w-full bg-[#0B0E14] border border-[#1E232F] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-pink-500 font-mono text-sm"
             />
+            <p className="text-[11px] text-slate-500 mt-1">
+              Символ «;» и переносы строк автоматически заменяются на пробелы, чтобы не нарушать структуру файла.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -984,28 +1058,76 @@ export const RecruiterPayroll: React.FC = () => {
               onChange={(e) => setExportOnlyPositive(e.target.checked)}
               className="rounded text-pink-600 bg-slate-800 border-slate-700"
             />
-            <label htmlFor="exportPos" className="text-slate-300">
+            <label htmlFor="exportPos" className="text-slate-300 cursor-pointer select-none">
               Выгружать только тех, у кого сумма &gt; 0
             </label>
           </div>
 
-          <div className="bg-[#0B0E14] border border-[#1E232F] rounded-xl p-3 font-mono text-[11px] text-slate-300 max-h-48 overflow-y-auto">
-            {(payrollData?.recruiters || [])
-              .filter((r: any) => !exportOnlyPositive || r.totalPayout > 0)
-              .map((r: any) => (
-                <div key={r.recruiterId}>
-                  {r.staticId || 'БЕЗ_СТАТИКА'};{r.totalPayout};{exportComment} ({r.displayName})
+          {/* Missing static alert */}
+          {(() => {
+            const missing = getExportData().filter((r: any) => {
+              const cleanStatic = String(r.staticId || '').replace(/^#/, '').trim();
+              const amount = Math.round(Number(r.totalPayout) || 0);
+              return !cleanStatic && (!exportOnlyPositive || amount > 0);
+            });
+            if (missing.length === 0) return null;
+            return (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl space-y-1.5">
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Не привязан статик ID ({missing.length})</span>
                 </div>
-              ))}
-          </div>
+                <p className="text-[11px] text-slate-400">
+                  Следующие рекрутеры имеют выплату, но у них нет статика в профиле. Они исключены из шаблона, так как банковский модуль не принимает строки без статика:
+                </p>
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {missing.map((m: any, i: number) => (
+                    <span key={i} className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-mono text-[10px] border border-amber-500/30">
+                      {m.displayName}: {config?.currencySymbol || '$'}{m.totalPayout}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Strict template preview */}
+          {(() => {
+            const text = generateStrictExportText();
+            const linesCount = text.split('\n').length;
+            return (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                  <span>Предпросмотр строгого шаблона:</span>
+                  <span className="font-mono text-emerald-400 font-semibold">
+                    Строк: {linesCount}
+                  </span>
+                </div>
+                <pre className="bg-[#0B0E14] border border-[#1E232F] rounded-xl p-3 font-mono text-[11px] text-emerald-400 whitespace-pre overflow-x-auto max-h-48 custom-scrollbar select-all leading-relaxed">
+                  {text}
+                </pre>
+                <p className="text-[10px] text-slate-500 italic">
+                  * Первая строка «staticId;amount;comment» обязательна — без нее шаблон не принимается банком.
+                </p>
+              </div>
+            );
+          })()}
 
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleCopyExport}
               className="flex-1 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 transition-all"
             >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              <span>{copied ? 'Скопировано!' : 'Скопировать в буфер'}</span>
+              {copied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+              <span>{copied ? 'Скопировано!' : 'Скопировать шаблон'}</span>
+            </button>
+            <button
+              onClick={handleDownloadExport}
+              className="px-4 py-2.5 rounded-xl bg-[#151921] hover:bg-[#1E232F] text-slate-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 border border-[#1E232F] transition-all"
+              title="Скачать файл CSV с кодировкой UTF-8 BOM"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              <span>Скачать .csv</span>
             </button>
           </div>
         </div>
