@@ -14,12 +14,12 @@ import { RolePersistenceService } from '../../roles/rolePersistenceService';
 import { buildCustomTemplateEmbed } from '../../../utils/templateEmbed';
 import { NicknameService } from '../../nicknames/nicknameService';
 import { BotMessageManager } from '../../../utils/botMessageManager';
+import { RecruitmentService } from '../../recruitment/recruitmentService';
 
 export function registerMemberLogs() {
   // Member Join
   bot.on(Events.GuildMemberAdd, async (member: GuildMember) => {
-    // Restore roles if member was previously in server
-    await RolePersistenceService.restoreMemberRoles(member);
+    // Role restoration has been disabled per user request
 
     // Track invite link used to join
     const inviteInfo = await import('./inviteLogs').then(m => m.trackMemberJoinInvite(member)).catch(() => null);
@@ -100,8 +100,10 @@ export function registerMemberLogs() {
 
   // Member Leave / Kick
   bot.on(Events.GuildMemberRemove, async (member: GuildMember | PartialGuildMember) => {
-    // Save roles before member leaves
-    await RolePersistenceService.saveMemberRoles(member);
+    // Cleanup recruitment application
+    await RecruitmentService.handleApplicantLeave(member.guild.id, member.id).catch(() => null);
+
+    // Role saving has been disabled per user request
 
     const kickEntry = await AuditLogger.getAuditLogEntry(
       member.guild, 

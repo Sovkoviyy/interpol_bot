@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import bot from '../../bot/client';
 import config from '../../config';
-import prisma from '../../database/client';
+
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { EventService } from '../../bot/modules/events/eventService';
@@ -18,9 +18,7 @@ export const eventsRouter = Router();
 eventsRouter.get('/config', requireAuth, requirePermission('manageEvents', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
     const guildId = (req as any).guildId;
-    const guildConfig = await prisma.guildConfig.findUnique({
-        where: { guildId },
-    });
+    const guildConfig = await EventService.getGuildConfig(guildId);
 
     let eventRoleHierarchy: any[] = [];
     try {
@@ -47,20 +45,20 @@ eventsRouter.post('/config', requireAuth, requirePermission('manageEvents'), req
 
     const hierarchyJson = JSON.stringify(Array.isArray(eventRoleHierarchy) ? eventRoleHierarchy : []);
 
-    const updated = await prisma.guildConfig.upsert({
-        where: { guildId },
-        update: {
+    const updated = await EventService.upsertGuildConfig(
+        guildId,
+        {
             eventPriorityRoleId: eventPriorityRoleId || null,
             eventPriorityMinRank: parseInt(eventPriorityMinRank, 10) || 0,
             eventRoleHierarchyJson: hierarchyJson,
         },
-        create: {
+        {
             guildId,
             eventPriorityRoleId: eventPriorityRoleId || null,
             eventPriorityMinRank: parseInt(eventPriorityMinRank, 10) || 0,
             eventRoleHierarchyJson: hierarchyJson,
-        },
-    });
+        }
+    );
     return res.json({ config: updated });
 
 }));
@@ -69,9 +67,7 @@ eventsRouter.post('/config', requireAuth, requirePermission('manageEvents'), req
 eventsRouter.get('/defaults', requireAuth, requirePermission('manageEvents', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
     const guildId = (req as any).guildId;
-    const guildConfig = await prisma.guildConfig.findUnique({
-        where: { guildId },
-    });
+    const guildConfig = await EventService.getGuildConfig(guildId);
 
     return res.json({
         channelId: guildConfig?.defaultEventChannelId || '',
@@ -91,14 +87,7 @@ eventsRouter.get('/', requireAuth, requirePermission('manageEvents', 'manageSett
         whereClause.status = status;
     }
 
-    const events = await prisma.eventGathering.findMany({
-        where: whereClause,
-        include: {
-            participants: { orderBy: { joinedAt: 'asc' } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-    });
+    const events = await EventService.getEvents(whereClause);
 
     const guild = await getDiscordGuild(guildId);
     const memberNicknames = new Map<string, string>();
@@ -130,10 +119,7 @@ eventsRouter.get('/', requireAuth, requirePermission('manageEvents', 'manageSett
         // Fallback: check UserProfile if any user wasn't fetched
         const remainingIds = allUserIds.filter(id => !memberNicknames.has(id));
         if (remainingIds.length > 0) {
-            const profiles = await prisma.userProfile.findMany({
-                where: { guildId, userId: { in: remainingIds } },
-                select: { userId: true, characterName: true, userTag: true },
-            });
+            const profiles = await EventService.getUserProfiles(guildId, remainingIds);
             for (const prof of profiles) {
                 if (prof.characterName) {
                     memberNicknames.set(prof.userId, prof.characterName);
@@ -192,24 +178,22 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), requireGu
     // All events are LIMITED with a participant limit
     const limit = Math.max(1, parseInt(participantLimit, 10) || 10);
 
-    const event = await prisma.eventGathering.create({
-        data: {
-            guildId,
-            title,
-            description,
-            type: 'LIMITED',
-            checkInTime: new Date(checkInTime),
-            eventTime: new Date(eventTime),
-            partyCode,
-            voiceChannelId,
-            targetRoleId,
-            channelId,
-            participantLimit: limit,
-            status: 'ACTIVE',
-            createdById: req.user!.userId,
-            createdByTag: req.user!.username,
-            pingIntervalsJson: JSON.stringify(pingIntervals || [15, 10, 5, 3, 1]),
-        },
+    const event = await EventService.createEvent({
+        guildId,
+        title,
+        description,
+        type: 'LIMITED',
+        checkInTime: new Date(checkInTime),
+        eventTime: new Date(eventTime),
+        partyCode,
+        voiceChannelId,
+        targetRoleId,
+        channelId,
+        participantLimit: limit,
+        status: 'ACTIVE',
+        createdById: req.user!.userId,
+        createdByTag: req.user!.username,
+        pingIntervalsJson: JSON.stringify(pingIntervals || [15, 10, 5, 3, 1]),
     });
 
     // Post announcement
@@ -233,26 +217,23 @@ eventsRouter.post('/', requireAuth, requirePermission('manageEvents'), requireGu
         components,
     });
 
-    await prisma.eventGathering.update({
-        where: { id: event.id },
-        data: { messageId: msg.id },
-    });
+    await EventService.updateEvent(event.id, { messageId: msg.id });
 
     // Remember chosen channels and role for future events
-    await prisma.guildConfig.upsert({
-        where: { guildId },
-        update: {
+    await EventService.upsertGuildConfig(
+        guildId,
+        {
             defaultEventChannelId: channelId,
             defaultVoiceChannelId: voiceChannelId || null,
             defaultMentionRoleId: targetRoleId || null,
         },
-        create: {
+        {
             guildId,
             defaultEventChannelId: channelId,
             defaultVoiceChannelId: voiceChannelId || null,
             defaultMentionRoleId: targetRoleId || null,
-        },
-    }).catch(() => null);
+        }
+    ).catch(() => null);
 
     let mentionDisplay = 'Без упоминания';
     if (targetRoleId === 'everyone') mentionDisplay = '@everyone';
@@ -284,12 +265,9 @@ eventsRouter.post('/:id/status', requireAuth, requirePermission('manageEvents'),
     const { status } = req.body; // FINISHED or CANCELLED
 
     const now = new Date();
-    const event = await prisma.eventGathering.update({
-        where: { id },
-        data: {
-            status,
-            finishedAt: (status === 'FINISHED' || status === 'CANCELLED') ? now : undefined,
-        },
+    const event = await EventService.updateEvent(id, {
+        status,
+        finishedAt: (status === 'FINISHED' || status === 'CANCELLED') ? now : undefined,
     });
 
     const guild = await getDiscordGuild(event.guildId);
@@ -339,17 +317,14 @@ eventsRouter.post('/:id/participants/:userId/kick', requireAuth, requirePermissi
     const id = req.params.id as string;
     const userId = req.params.userId as string;
 
-    const event = await prisma.eventGathering.findUnique({
-        where: { id },
-        include: { participants: { orderBy: { joinedAt: 'asc' } } },
-    });
+    const event = await EventService.getEventByIdWithParticipants(id);
 
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     const targetParticipant = event.participants.find((p: any) => p.userId === userId);
     if (!targetParticipant) return res.status(404).json({ error: 'Participant not in list' });
 
-    await prisma.eventParticipant.delete({ where: { id: targetParticipant.id } });
+    await EventService.deleteParticipant(targetParticipant.id);
 
     // Manual kick by admin: DO NOT auto-promote from reserve! Slot stays open for manual filling.
     const guild = await getDiscordGuild(event.guildId);

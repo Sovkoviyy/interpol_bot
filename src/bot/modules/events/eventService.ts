@@ -1245,4 +1245,50 @@ export class EventService {
       await AuditLogger.sendLog(guild, 'EVENTS', kickEmbed);
     }
   }
+
+  // --- API Server Database Abstractions ---
+  static async getGuildConfig(guildId: string) {
+    return await prisma.guildConfig.findUnique({ where: { guildId } });
+  }
+
+  static async upsertGuildConfig(guildId: string, update: any, create: any) {
+    return await prisma.guildConfig.upsert({ where: { guildId }, update, create });
+  }
+
+  static async getEvents(whereClause: any) {
+    return await prisma.eventGathering.findMany({
+      where: whereClause,
+      include: {
+        participants: { orderBy: { joinedAt: 'asc' } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  static async getUserProfiles(guildId: string, userIds: string[]) {
+    return await prisma.userProfile.findMany({
+      where: { guildId, userId: { in: userIds } },
+      select: { userId: true, characterName: true, userTag: true },
+    });
+  }
+
+  static async createEvent(data: any) {
+    return await prisma.eventGathering.create({ data });
+  }
+
+  static async updateEvent(id: string, data: any) {
+    return await prisma.eventGathering.update({ where: { id }, data });
+  }
+
+  static async getEventByIdWithParticipants(id: string) {
+    return await prisma.eventGathering.findUnique({
+      where: { id },
+      include: { participants: { orderBy: { joinedAt: 'asc' } } },
+    });
+  }
+
+  static async deleteParticipant(id: string) {
+    return await prisma.eventParticipant.delete({ where: { id } });
+  }
 }

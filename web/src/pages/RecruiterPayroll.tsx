@@ -16,7 +16,7 @@ import {
   AlertTriangle,
   RotateCcw,
   Trash2,
-  Eye,
+  Eye, EyeOff,
   RefreshCw,
   History,
   Send,
@@ -56,6 +56,7 @@ export const RecruiterPayroll: React.FC = () => {
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [resetAllConfirmOpen, setResetAllConfirmOpen] = useState(false);
   const [resetSingleTarget, setResetSingleTarget] = useState<any | null>(null);
+  const [hideSingleTarget, setHideSingleTarget] = useState<any | null>(null);
 
   // Recruiter applications view/delete modal
   const [selectedRecruiterForApps, setSelectedRecruiterForApps] = useState<any | null>(null);
@@ -180,6 +181,25 @@ export const RecruiterPayroll: React.FC = () => {
       await fetchData();
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅСѓР»РёС‚СЊ');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Hide single recruiter
+  const executeHideSingle = async () => {
+    if (!hideSingleTarget) return;
+    try {
+      setActionLoading(true);
+      const res = await api.post('/payroll/hide', {
+        recruiterId: hideSingleTarget.recruiterId,
+        guildId: config?.guildId,
+      });
+      toast.success(res.data?.message || `??????? ${hideSingleTarget.displayName} ????? ?? ?????????!`);
+      setHideSingleTarget(null);
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || '? ??????? ?????? ????????');
     } finally {
       setActionLoading(false);
     }
@@ -638,6 +658,13 @@ export const RecruiterPayroll: React.FC = () => {
                                 title="РРЅРґРёРІРёРґСѓР°Р»СЊРЅРѕ РѕР±РЅСѓР»РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ"
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setHideSingleTarget(rec)}
+                                className="p-1.5 rounded-lg bg-[#0B0E14] hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-[#1E232F] transition-all"
+                                title="Скрыть рекрутера"
+                              >
+                                <EyeOff className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </td>
@@ -1192,8 +1219,24 @@ export const RecruiterPayroll: React.FC = () => {
         variant="danger"
         loading={actionLoading}
       />
+      {/* Confirm Dialog: Hide Single Recruiter */}
+      <ConfirmDialog
+        isOpen={!!hideSingleTarget}
+        onClose={() => setHideSingleTarget(null)}
+        onConfirm={executeHideSingle}
+        title="Скрыть рекрутера из ведомости"
+        message={Вы уверены, что хотите скрыть \${hideSingleTarget?.displayName || ''}\ из текущей зарплатной ведомости?}
+        confirmLabel="Скрыть"
+        variant="danger"
+        loading={actionLoading}
+      />
     </div>
   );
 };
 
 export default RecruiterPayroll;
+
+
+
+
+

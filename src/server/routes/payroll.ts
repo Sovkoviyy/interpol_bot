@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+﻿import { Router, Response } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import { PayrollService } from '../../bot/modules/payroll/payrollService';
@@ -125,6 +125,27 @@ router.post('/reset', requirePermission('manageRecruiting', 'manageSettings', 'm
 }));
 
 /**
+ * POST /api/payroll/hide
+ * Completely hide/exclude a recruiter from the payroll active list
+ */
+router.post('/hide', requirePermission('manageRecruiting', 'manageSettings', 'managePayroll'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const guildId = (req as any).guildId;
+    const { recruiterId } = req.body;
+    const executor = {
+        id: req.user?.userId || 'unknown',
+        tag: req.user?.username || 'Web Admin',
+    };
+
+    if (!recruiterId) return res.status(400).json({ error: 'recruiterId is required' });
+
+    const result = await PayrollService.hideRecruiter(guildId, recruiterId, executor);
+    res.json({
+        message: 'Recruiter successfully hidden from payroll',
+        ...result,
+    });
+}));
+
+/**
  * POST /api/payroll/reset-clear
  * Clear reset checkpoint (reverts to standard period filtering)
  */
@@ -179,3 +200,4 @@ router.delete('/payouts/:id', requirePermission('manageRecruiting', 'manageSetti
 }));
 
 export default router;
+

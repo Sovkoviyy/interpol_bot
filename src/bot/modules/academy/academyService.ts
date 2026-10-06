@@ -883,4 +883,78 @@ export class AcademyService {
 
     return { success: true };
   }
+
+  // --- API Server Database Abstractions ---
+  
+  static async getChannelById(id: string) {
+    return await prisma.academyChannel.findUnique({ where: { id } });
+  }
+
+  static async getReportById(id: string) {
+    return await prisma.mpReport.findUnique({ where: { id } });
+  }
+  
+  static async getChannels(guildId: string) {
+    return await prisma.academyChannel.findMany({
+      where: { guildId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        reports: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+  }
+
+  static async getReports(guildId: string, status?: string) {
+    return await prisma.mpReport.findMany({
+      where: {
+        guildId,
+        ...(status && status !== 'ALL' ? { status } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  static async updateChannel(guildId: string, id: string, data: any) {
+    return await prisma.academyChannel.update({
+      where: { id },
+      data: {
+        ...(data.staticId !== undefined ? { staticId: data.staticId ? String(data.staticId).trim() : null } : {}),
+        ...(data.approvedMpCount !== undefined ? { approvedMpCount: parseInt(data.approvedMpCount, 10) || 0 } : {}),
+        ...(data.requiredMp !== undefined ? { requiredMp: parseInt(data.requiredMp, 10) || 10 } : {}),
+        ...(data.penaltyMp !== undefined ? { penaltyMp: parseInt(data.penaltyMp, 10) || 0 } : {}),
+        ...(data.status ? { status: data.status } : {}),
+      },
+      include: {
+        reports: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+  }
+
+  static async getInactiveChannels(guildId: string, specificChannelIds?: string[]) {
+    const channels = await prisma.academyChannel.findMany({
+      where: {
+        guildId,
+        status: 'ACTIVE',
+        ...(Array.isArray(specificChannelIds) && specificChannelIds.length > 0 ? { id: { in: specificChannelIds } } : {}),
+      },
+      include: {
+        reports: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    const now = Date.now();
+    const sevenDaysMs = 7 * 24 * 3600 * 1000;
+    return channels.filter(ch => {
+      const lastReportAt = ch.reports && ch.reports.length > 0 ? ch.reports[0].createdAt : null;
+      const refDate = lastReportAt ? new Date(lastReportAt).getTime() : new Date(ch.createdAt).getTime();
+      return (now - refDate) >= sevenDaysMs;
+    });
+  }
+
+  static async deleteReport(id: string) {
+    return await prisma.mpReport.delete({ where: { id } });
+  }
 }

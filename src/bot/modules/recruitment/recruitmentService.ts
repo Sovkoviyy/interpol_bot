@@ -44,9 +44,9 @@ export class RecruitmentService {
     guild: Guild,
     embed: EmbedBuilder,
     files: any[] = []
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
-      if (!guild) return;
+      if (!guild) return false;
       const config = await prisma.recruitmentConfig.findUnique({
         where: { guildId: guild.id },
       }).catch(() => null);
@@ -72,12 +72,12 @@ export class RecruitmentService {
       }
 
       if (logChannel && logChannel.isTextBased()) {
-        await logChannel.send({ embeds: [embed], files }).catch(e => {
-          console.error('[Recruitment] Error sending log to recruitReviewChannel:', e);
-        });
+        await logChannel.send({ embeds: [embed], files });
       }
+      return true;
     } catch (err) {
       console.error('[Recruitment] sendRecruitmentLog error:', err);
+      return false;
     }
   }
 
@@ -1081,7 +1081,7 @@ export class RecruitmentService {
       footerText: 'INTERPOL • Набор в семью',
     });
 
-    await this.sendRecruitmentLog(guild, logEmbed, transcriptAttachment ? [transcriptAttachment] : []);
+    const logSuccess = await this.sendRecruitmentLog(guild, logEmbed, transcriptAttachment ? [transcriptAttachment] : []);
 
     // Bot log
     const botEmbed = createThemedEmbed({
@@ -1110,19 +1110,28 @@ export class RecruitmentService {
       }).catch(() => null);
     }
 
-    await interaction.editReply({
-      content: `Заявка одобрена. Роль выдана. Канал будет удален через 5 секунд...`,
-    });
+    if (logSuccess) {
+      await interaction.editReply({
+        content: `Заявка одобрена. Роль выдана. Канал будет удален через 5 секунд...`,
+      });
 
-    setTimeout(async () => {
-      if (application.interviewVoiceId) {
-        const vCh = guild.channels.cache.get(application.interviewVoiceId);
-        if (vCh) await vCh.delete('Application approved').catch(() => null);
+      setTimeout(async () => {
+        if (application.interviewVoiceId) {
+          const vCh = guild.channels.cache.get(application.interviewVoiceId);
+          if (vCh) await vCh.delete('Application approved').catch(() => null);
+        }
+        if (channel && typeof channel.delete === 'function') {
+          await channel.delete('Application approved').catch(() => null);
+        }
+      }, 5000);
+    } else {
+      await interaction.editReply({
+        content: `Заявка одобрена. Роль выдана.`,
+      });
+      if (channel) {
+        await channel.send('Ошибка сохранения транскрипта. Канал не будет удален во избежание потери данных.').catch(() => null);
       }
-      if (channel && typeof channel.delete === 'function') {
-        await channel.delete('Application approved').catch(() => null);
-      }
-    }, 5000);
+    }
   }
 
   /**
@@ -1226,7 +1235,7 @@ export class RecruitmentService {
       footerText: 'INTERPOL • Набор в семью',
     });
 
-    await this.sendRecruitmentLog(guild, logEmbed, transcriptAttachment ? [transcriptAttachment] : []);
+    const logSuccess = await this.sendRecruitmentLog(guild, logEmbed, transcriptAttachment ? [transcriptAttachment] : []);
 
     // Bot log
     const botEmbed = createThemedEmbed({
@@ -1256,18 +1265,71 @@ export class RecruitmentService {
       }).catch(() => null);
     }
 
-    await interaction.editReply({
-      content: `Заявка отклонена. Пользователю отправлено уведомление в ЛС. Канал будет удален через 5 секунд...`,
-    });
+    if (logSuccess) {
+      await interaction.editReply({
+        content: `Заявка отклонена. Пользователю отправлено уведомление в ЛС. Канал будет удален через 5 секунд...`,
+      });
 
-    setTimeout(async () => {
-      if (application.interviewVoiceId) {
-        const vCh = guild.channels.cache.get(application.interviewVoiceId);
-        if (vCh) await vCh.delete('Application rejected').catch(() => null);
+      setTimeout(async () => {
+        if (application.interviewVoiceId) {
+          const vCh = guild.channels.cache.get(application.interviewVoiceId);
+          if (vCh) await vCh.delete('Application rejected').catch(() => null);
+        }
+        if (channel && typeof channel.delete === 'function') {
+          await channel.delete('Application rejected').catch(() => null);
+        }
+      }, 5000);
+    } else {
+      await interaction.editReply({
+        content: `Заявка отклонена. Пользователю отправлено уведомление в ЛС.`,
+      });
+      if (channel) {
+        await channel.send('Ошибка сохранения транскрипта. Канал не будет удален во избежание потери данных.').catch(() => null);
       }
-      if (channel && typeof channel.delete === 'function') {
-        await channel.delete('Application rejected').catch(() => null);
+    }
+  }
+
+  /**
+   * Cleanup application when an applicant leaves the server
+   */
+  public static async handleApplicantLeave(guildId: string, userId: string): Promise<void> {
+    try {
+      const application = await prisma.recruitmentApplication.findFirst({
+        where: {
+          guildId,
+          userId,
+          status: { in: ['PENDING', 'UNDER_REVIEW'] },
+        },
+      });
+
+      if (application) {
+        await prisma.recruitmentApplication.update({
+          where: { id: application.id },
+          data: {
+            status: 'REJECTED',
+            rejectionReason: 'Applicant left server',
+            closedAt: new Date(),
+          },
+        });
+
+        const guild = bot.guilds.cache.get(guildId) || await bot.guilds.fetch(guildId).catch(() => null);
+        if (guild) {
+          if (application.channelId) {
+            const channel = guild.channels.cache.get(application.channelId) || await guild.channels.fetch(application.channelId).catch(() => null);
+            if (channel) {
+              await channel.delete('Applicant left server').catch(() => null);
+            }
+          }
+          if (application.interviewVoiceId) {
+            const voiceChannel = guild.channels.cache.get(application.interviewVoiceId) || await guild.channels.fetch(application.interviewVoiceId).catch(() => null);
+            if (voiceChannel) {
+              await voiceChannel.delete('Applicant left server').catch(() => null);
+            }
+          }
+        }
       }
-    }, 5000);
+    } catch (err) {
+      console.error('[Recruitment] handleApplicantLeave error:', err);
+    }
   }
 }

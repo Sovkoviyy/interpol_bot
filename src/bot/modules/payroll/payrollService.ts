@@ -265,6 +265,7 @@ export class PayrollService {
     }>();
 
     const getOrInit = (id: string, tag?: string | null) => {
+      if (recruiterResets[id] === 'HIDDEN') return null;
       if (!recruitersMap.has(id)) {
         const recReset = recruiterResets[id] || null;
         recruitersMap.set(id, {
@@ -290,7 +291,7 @@ export class PayrollService {
         const appTime = this.toTimestamp(app.closedAt || app.createdAt);
         if (recResetTime > 0 && appTime <= recResetTime) continue;
         const r = getOrInit(app.recruiterId, app.recruiterTag);
-        r.acceptedCount += 1;
+        if (r) r.acceptedCount += 1;
       }
     }
 
@@ -300,7 +301,7 @@ export class PayrollService {
         const appTime = this.toTimestamp(app.closedAt || app.createdAt);
         if (recResetTime > 0 && appTime <= recResetTime) continue;
         const r = getOrInit(app.recruiterId, app.recruiterTag);
-        r.rejectedCandidatesCount += 1;
+        if (r) r.rejectedCandidatesCount += 1;
       }
     }
 
@@ -311,7 +312,7 @@ export class PayrollService {
         const repTime = this.toTimestamp(rep.reviewedAt || rep.createdAt);
         if (recResetTime > 0 && repTime <= recResetTime) continue;
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
-        r.approvedReportsCount += 1;
+        if (r) r.approvedReportsCount += 1;
       }
     }
 
@@ -321,7 +322,7 @@ export class PayrollService {
         const repTime = this.toTimestamp(rep.reviewedAt || rep.createdAt);
         if (recResetTime > 0 && repTime <= recResetTime) continue;
         const r = getOrInit(rep.reviewerId, rep.reviewerTag);
-        r.rejectedReportsCount += 1;
+        if (r) r.rejectedReportsCount += 1;
       }
     }
 
@@ -333,11 +334,12 @@ export class PayrollService {
         const promoTime = this.toTimestamp(promo.archivedAt || promo.updatedAt);
         if (recResetTime > 0 && promoTime <= recResetTime) continue;
         const r = getOrInit(promoterId, promo.promotedByTag);
-        r.promotionsCount += 1;
+        if (r) r.promotionsCount += 1;
       }
     }
 
     for (const [recId, recReset] of Object.entries(recruiterResets)) {
+      if (recReset === 'HIDDEN') continue;
       if (!recruitersMap.has(recId)) {
         getOrInit(recId);
       }
@@ -653,6 +655,39 @@ export class PayrollService {
     }).catch(() => null);
 
     return { success: true, recruiterId, resetAt: now };
+  }
+
+  /**
+   * Hide a recruiter from the payroll list entirely
+   */
+  public static async hideRecruiter(guildId: string, recruiterId: string, executor?: { id: string; tag: string }) {
+    const config = await this.getConfig(guildId);
+    let resets: Record<string, string> = {};
+    try {
+      resets = JSON.parse(config.recruiterResetsJson || '{}');
+    } catch {
+      resets = {};
+    }
+    resets[recruiterId] = 'HIDDEN';
+
+    await prisma.recruiterSalaryConfig.upsert({
+      where: { guildId },
+      update: { recruiterResetsJson: JSON.stringify(resets) },
+      create: { guildId, recruiterResetsJson: JSON.stringify(resets) },
+    });
+
+    await AuditLogger.recordEntry({
+      guildId,
+      category: 'RECRUIT',
+      action: 'RECRUITER_HIDDEN',
+      title: 'Скрыт из ведомости',
+      description: `Рекрутер <@${recruiterId}> был скрыт из ведомости.`,
+      executorId: executor?.id,
+      executorTag: executor?.tag,
+      targetId: recruiterId,
+    }).catch(() => null);
+
+    return { success: true };
   }
 
   /**

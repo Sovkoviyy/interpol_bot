@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middlewares/auth';
 import { requirePermission } from '../middlewares/rbac';
 import config from '../../config';
-import prisma from '../../database/client';
+
 import bot from '../../bot/client';
 import { AcademyService } from '../../bot/modules/academy/academyService';
 import { AuditLogger } from '../../bot/modules/logging/auditLogger';
@@ -43,15 +43,7 @@ router.post('/config', requirePermission('manageAcademy', 'manageSettings'), req
 router.get('/channels', requirePermission('manageAcademy', 'manageRecruiting', 'manageSettings'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
 
     const guildId = (req as any).guildId;
-    const channels = await prisma.academyChannel.findMany({
-        where: { guildId },
-        orderBy: { createdAt: 'desc' },
-        include: {
-            reports: {
-                orderBy: { createdAt: 'desc' },
-            },
-        },
-    });
+    const channels = await AcademyService.getChannels(guildId);
 
     const week = PayrollService.getWeekRange(new Date());
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
@@ -97,14 +89,7 @@ router.get('/reports', requirePermission('manageAcademy', 'manageRecruiting', 'm
     const guildId = (req as any).guildId;
     const status = req.query.status as string;
 
-    const reports = await prisma.mpReport.findMany({
-        where: {
-            guildId,
-            ...(status && status !== 'ALL' ? { status } : {}),
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-    });
+    const reports = await AcademyService.getReports(guildId, status);
 
     res.json({ reports });
 
@@ -179,22 +164,10 @@ router.put('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting
     const id = String(req.params.id);
     const { staticId, approvedMpCount, requiredMp, penaltyMp, status } = req.body;
 
-    const existing = await prisma.academyChannel.findUnique({ where: { id } });
+    const existing = await AcademyService.getChannelById(id);
     if (!existing || existing.guildId !== guildId) return res.status(404).json({ error: 'Профиль ученика не найден' });
 
-    const updated = await prisma.academyChannel.update({
-        where: { id },
-        data: {
-            ...(staticId !== undefined ? { staticId: staticId ? String(staticId).trim() : null } : {}),
-            ...(approvedMpCount !== undefined ? { approvedMpCount: parseInt(approvedMpCount, 10) || 0 } : {}),
-            ...(requiredMp !== undefined ? { requiredMp: parseInt(requiredMp, 10) || 10 } : {}),
-            ...(penaltyMp !== undefined ? { penaltyMp: parseInt(penaltyMp, 10) || 0 } : {}),
-            ...(status ? { status } : {}),
-        },
-        include: {
-            reports: { orderBy: { createdAt: 'desc' } },
-        },
-    });
+    const updated = await AcademyService.updateChannel(guildId, id, req.body);
 
     res.json({ channel: updated });
 
@@ -208,24 +181,7 @@ router.post('/channels/expel-inactive', requirePermission('manageAcademy', 'mana
     const guildId = (req as any).guildId;
     const { channelIds } = req.body;
 
-    const channels = await prisma.academyChannel.findMany({
-        where: {
-            guildId,
-            status: 'ACTIVE',
-            ...(Array.isArray(channelIds) && channelIds.length > 0 ? { id: { in: channelIds } } : {}),
-        },
-        include: {
-            reports: { orderBy: { createdAt: 'desc' } },
-        },
-    });
-
-    const now = Date.now();
-    const sevenDaysMs = 7 * 24 * 3600 * 1000;
-    const inactive = channels.filter(ch => {
-        const lastReportAt = ch.reports && ch.reports.length > 0 ? ch.reports[0].createdAt : null;
-        const refDate = lastReportAt ? new Date(lastReportAt).getTime() : new Date(ch.createdAt).getTime();
-        return (now - refDate) >= sevenDaysMs;
-    });
+    const inactive = await AcademyService.getInactiveChannels(guildId, channelIds);
 
     const userTag = req.user?.username || (req.user as any)?.tag;
     const userId = req.user?.userId || (req.user as any)?.id;
@@ -259,7 +215,7 @@ router.post('/channels/expel-inactive', requirePermission('manageAcademy', 'mana
 router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const guildId = (req as any).guildId;
     const id = String(req.params.id);
-    const existing = await prisma.academyChannel.findUnique({ where: { id } });
+    const existing = await AcademyService.getChannelById(id);
     if (!existing) return res.status(404).json({ error: 'Профиль ученика не найден' });
 
     const userTag = req.user?.username || (req.user as any)?.tag;
@@ -285,12 +241,10 @@ router.delete('/channels/:id', requirePermission('manageAcademy', 'manageRecruit
  */
 router.delete('/reports/:id', requirePermission('manageAcademy', 'manageRecruiting'), requireGuildId, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const id = String(req.params.id);
-    const report = await prisma.mpReport.findUnique({
-        where: { id },
-    });
+    const report = await AcademyService.getReportById(id);
     if (!report) return res.status(404).json({ error: 'Отчет не найден' });
 
-    await prisma.mpReport.delete({ where: { id } });
+    await AcademyService.deleteReport(id);
     res.json({ success: true, message: 'Отчет успешно удален' });
 }));
 
